@@ -5,80 +5,6 @@ import {
   Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car
 } from 'lucide-react';
 
-// --- COMPOSANT LOGOS (SVG VECTORISÉS PRÉCIS) ---
-const BrandLogo = ({ brand }) => {
-  // Style normalisé pour tous les logos : 
-  // Ils s'adaptent à la boite parente sans déformation (contain)
-  const style = {
-    width: '100%',
-    height: '100%',
-    maxHeight: '100%',
-    maxWidth: '100%',
-    display: 'block',
-    margin: '0 auto'
-  };
-
-  switch (brand) {
-    case 'ZEISS':
-      return (
-        <svg viewBox="0 0 900 450" style={style} xmlns="http://www.w3.org/2000/svg">
-          <path d="M0 0 C297 0 594 0 900 0 C900 148.5 900 297 900 450 C603 450 306 450 0 450 C0 301.5 0 153 0 0 Z" fill="#F8F8F8"/>
-          <path d="M226.5 137.8 C226.5 137.8 226.5 137.8 226.5 137.8 C243.1 137.8 259.7 137.8 276.3 137.8 L276.3 163.4 C259.7 163.4 243.1 163.4 226.5 163.4 L226.5 248.6 C243.1 248.6 259.7 248.6 276.3 248.6 L276.3 274.2 C245.9 274.2 215.5 274.2 185.1 274.2 L185.1 137.8 C198.9 137.8 212.7 137.8 226.5 137.8 Z M448.5 137.8 L448.5 163.4 L398.9 163.4 L398.9 193.4 L439.7 193.4 L439.7 219 L398.9 219 L398.9 248.6 L448.5 248.6 L448.5 274.2 L357.5 274.2 L357.5 137.8 L448.5 137.8 Z M522.5 137.8 L522.5 274.2 L481.1 274.2 L481.1 137.8 L522.5 137.8 Z M646.3 167.4 C639.9 164.6 633.1 163.4 626.3 163.4 C614.7 163.4 606.3 169.8 606.3 179.8 C606.3 189 612.3 194.6 623.1 198.2 L633.9 201.8 C650.7 207.4 659.5 217.4 659.5 233.4 C659.5 257.4 641.1 276.6 614.3 276.6 C603.9 276.6 593.9 273.8 584.7 269 L592.3 245.4 C600.3 249.4 608.7 251.4 615.5 251.4 C627.5 251.4 635.1 245.4 635.1 235.4 C635.1 225.4 628.7 219.4 618.3 215.8 L607.1 211.8 C591.1 206.2 581.9 195.4 581.9 179.4 C581.9 154.6 601.1 135.4 627.1 135.4 C636.7 135.4 645.5 137.4 653.9 141.8 L646.3 167.4 Z M733.9 167.4 C727.5 164.6 720.7 163.4 713.9 163.4 C702.3 163.4 693.9 169.8 693.9 179.8 C693.9 189 699.9 194.6 710.7 198.2 L721.5 201.8 C738.3 207.4 747.1 217.4 747.1 233.4 C747.1 257.4 728.7 276.6 701.9 276.6 C691.5 276.6 681.5 273.8 672.3 269 L679.9 245.4 C687.9 249.4 696.3 251.4 703.1 251.4 C715.1 251.4 722.7 245.4 722.7 235.4 C722.7 225.4 716.3 219.4 705.9 215.8 L694.7 211.8 C678.7 206.2 669.5 195.4 669.5 179.4 C669.5 154.6 688.7 135.4 714.7 135.4 C724.3 135.4 733.1 137.4 741.5 141.8 L733.9 167.4 Z" fill="#131313"/>
-          <path d="M0 0 C25.3 0 50.6 0 75.9 0 C75.9 13.1 75.9 26.2 75.9 39.3 C50.6 39.3 25.3 39.3 0 39.3 C0 26.2 0 13.1 0 0 Z" fill="#0072C6" transform="translate(100,300)"/>
-        </svg>
-      );
-    case 'HOYA':
-      return (
-        <svg viewBox="0 0 800 204" style={style} xmlns="http://www.w3.org/2000/svg">
-          <path d="M0 0 C264 0 528 0 800 0 C800 67.32 800 134.64 800 204 C536 204 272 204 0 204 C0 136.68 0 69.36 0 0 Z" fill="#F9FAFA"/>
-          <path d="M230.2 40.8 L276.5 40.8 L276.5 96.3 L329.2 96.3 L329.2 40.8 L375.5 40.8 L375.5 163.2 L329.2 163.2 L329.2 132.6 L276.5 132.6 L276.5 163.2 L230.2 163.2 L230.2 40.8 Z M458.5 165.2 C423.5 165.2 394.5 137.2 394.5 102.2 C394.5 67.2 423.5 39.2 458.5 39.2 C493.5 39.2 522.5 67.2 522.5 102.2 C522.5 137.2 493.5 165.2 458.5 165.2 Z M458.5 75.5 C443.5 75.5 431.5 87.5 431.5 102.2 C431.5 116.9 443.5 128.9 458.5 128.9 C473.5 128.9 485.5 116.9 485.5 102.2 C485.5 87.5 473.5 75.5 458.5 75.5 Z M558.5 40.8 L608.2 40.8 L627.5 88.5 L646.8 40.8 L696.5 40.8 L653.5 128.5 L653.5 163.2 L601.5 163.2 L601.5 128.5 L558.5 40.8 Z M720.5 163.2 L762.5 40.8 L800.5 163.2 L755.5 163.2 L748.5 138.5 L727.5 138.5 L720.5 163.2 Z M738.5 102.5 L730.5 126.5 L745.5 126.5 L738.5 102.5 Z" fill="#005596"/>
-        </svg>
-      );
-    case 'SEIKO':
-      return (
-        <svg viewBox="0 0 371 247" style={style} xmlns="http://www.w3.org/2000/svg">
-           <path d="M0 0 C122.43 0 244.86 0 371 0 C371 81.51 371 163.02 371 247 C248.57 247 126.14 247 0 247 C0 165.49 0 83.98 0 0 Z" fill="#FCFCFC"/>
-           <path d="M45 100 C45 100 55 85 75 85 C90 85 95 95 95 110 C95 130 80 140 65 140 C50 140 45 130 45 120 L25 120 C25 145 50 160 75 160 C100 160 120 140 120 110 C120 80 95 65 70 65 C50 65 40 75 35 80 L45 100 Z M130 160 L210 160 L210 140 L150 140 L150 120 L200 120 L200 100 L150 100 L150 85 L210 85 L210 65 L130 65 L130 160 Z M220 160 L240 160 L240 65 L220 65 L220 160 Z M250 160 L270 160 L270 120 L300 160 L325 160 L290 115 L320 65 L295 65 L270 105 L270 65 L250 65 L250 160 Z M330 112 C330 140 350 160 370 160 C390 160 410 140 410 112 C410 84 390 64 370 64 C350 64 330 84 330 112 Z M350 112 C350 95 360 84 370 84 C380 84 390 95 390 112 C390 129 380 140 370 140 C360 140 350 129 350 112 Z" fill="#000000" transform="scale(0.8) translate(20, 30)"/>
-        </svg>
-      );
-    
-    case 'CODIR':
-      return (
-        <svg viewBox="0 0 425 123" style={style} xmlns="http://www.w3.org/2000/svg">
-          <path d="M0 0 C4.95 0 9.9 0 15 0 C15.068 10.59 15.12 21.19 15.15 31.79 C15.17 36.71 15.19 41.63 15.22 46.55 C15.25 51.31 15.27 56.07 15.28 60.83 C15.29 62.64 15.30 64.44 15.31 66.25 C15.45 82.59 14.39 97.17 2.75 109.75 C-8.76 120.50 -22.37 123.44 -37.64 123.21 C-56.18 122.56 -68.49 112.54 -81 100 C-80.20 96.12 -78.81 94.49 -75.93 91.75 C-74.83 90.69 -74.83 90.69 -73.71 89.60 C-73.14 89.07 -72.58 88.54 -72 88 C-68.71 89.41 -66.72 91.13 -64.31 93.75 C-55.34 102.88 -46.37 107.03 -33.56 107.43 C-24.03 107.22 -15.05 104.67 -8 98 C-2.27 90.57 -0.49 82.88 -1.17 73.60 C-2.55 65.66 -6.72 59.30 -13.25 54.62 C-23.26 48.63 -32.58 47.99 -43.88 50.68 C-55.60 54.43 -64.40 62.93 -72.84 71.56 C-74.25 73.00 -75.67 74.43 -77.10 75.86 C-81.62 80.44 -86.00 85.09 -90.20 89.97 C-93.91 94.17 -97.87 98.13 -101.81 102.12 C-103.07 103.42 -103.07 103.42 -104.35 104.75 C-111.24 111.71 -118.45 117.12 -127.81 120.31 C-129.12 120.77 -129.12 120.77 -130.45 121.23 C-144.64 125.48 -160.57 123.53 -173.55 116.57 C-184.30 109.66 -191.88 100.42 -195 88 C-195.40 84.88 -195.47 81.83 -195.43 78.68 C-195.42 77.86 -195.42 77.03 -195.41 76.18 C-195.04 62.67 -189.90 53.44 -180.25 44.25 C-168.73 34.61 -153.29 32.27 -138.71 33.21 C-124.81 35.15 -112.81 41.36 -104.18 52.56 C-100.05 58.81 -98.06 65.86 -96 73 C-95.61 72.58 -95.22 72.16 -94.82 71.73 C-93.03 69.80 -91.23 67.86 -89.43 65.93 C-88.82 65.28 -88.21 64.62 -87.59 63.94 C-72.11 47.32 -56.95 34.45 -33.42 33.04 C-20.61 32.87 -10.54 36.97 0 44 C0 29.48 0 14.96 0 0 Z" fill="#7A868C" transform="translate(291,0)"/>
-          <path d="M0 0 C7.21 0 14.43 0 21.87 0 C24.13 0 26.39 0 28.71 0 C30.53 0 32.35 0 34.17 0 C35.10 0 36.02 0 36.96 0 C46.06 0 54.43 0.66 62 6 C67.61 11.87 70.96 17.85 71.01 26.05 C70.45 34.88 69.28 41.19 62.68 47.37 C59.47 50.15 56.04 50.89 52 52 C54.38 56.07 56.76 60.15 59.15 64.22 C59.96 65.61 60.77 66.99 61.58 68.38 C62.75 70.37 63.91 72.37 65.08 74.36 C65.62 75.29 65.62 75.29 66.18 76.23 C67.72 78.87 69.30 81.45 71 84 C71 84.99 71 85.98 71 87 C65.25 88.50 59.55 89.65 54 87 C48.36 81.02 44.97 73.23 41.45 65.90 C40.13 63.26 38.70 60.81 37.10 58.34 C35 55 35 55 35 53 C28.4 53 21.8 53 15 53 C15 64.22 15 75.44 15 87 C10.05 87 5.1 87 0 87 C0 58.29 0 29.58 0 0 Z M15 15 C15 22.59 15 30.18 15 38 C19.44 38.06 23.89 38.12 28.34 38.16 C29.85 38.17 31.36 38.20 32.87 38.22 C35.05 38.26 37.23 38.27 39.41 38.29 C40.72 38.30 42.03 38.32 43.38 38.34 C48.25 37.88 51.62 36.50 54.93 32.87 C56.47 28.71 56.26 25.23 55 21 C52.28 17.47 50.34 15.72 46 15 C43.61 14.91 41.21 14.89 38.82 14.90 C37.80 14.90 37.80 14.90 36.76 14.90 C34.59 14.91 32.42 14.92 30.25 14.93 C28.77 14.94 27.29 14.94 25.82 14.95 C22.21 14.96 18.60 14.98 15 15 Z" fill="#7A868C" transform="translate(353,35)"/>
-          <path d="M0 0 C2.22 1.42 4.29 2.92 6.35 4.57 C7.28 5.31 7.28 5.31 8.23 6.07 C9.62 7.21 10.99 8.38 12.35 9.57 C10.96 12.67 9.33 14.93 6.98 17.38 C6.39 18.01 5.81 18.63 5.20 19.28 C3.35 20.57 3.35 20.57 1.39 20.45 C-0.93 19.44 -2.78 18.19 -4.83 16.69 C-14.28 10.33 -23.48 9.59 -34.64 10.57 C-42.81 12.32 -49.42 15.80 -54.14 22.79 C-58.54 30.69 -59.61 38.38 -57.64 47.19 C-54.97 55.52 -50.57 60.88 -42.89 65.07 C-33.89 69.11 -25.03 69.64 -15.64 66.57 C-8.52 63.67 -2.67 60.27 2.73 54.79 C3.26 54.39 3.80 53.98 4.35 53.57 C7.72 54.69 8.72 55.77 11.04 58.38 C11.97 59.41 11.97 59.41 12.92 60.46 C14.35 62.57 14.35 62.57 14.35 66.57 C12.45 68.43 10.67 69.94 8.54 71.51 C7.66 72.17 7.66 72.17 6.76 72.84 C-7.22 83.03 -21.75 84.88 -38.64 83.57 C-42.71 82.78 -46.00 81.54 -49.64 79.57 C-50.49 79.15 -51.35 78.72 -52.23 78.28 C-62.62 72.67 -68.61 64.54 -72.64 53.57 C-75.78 42.69 -75.03 28.62 -70.32 18.37 C-63.09 6.31 -52.15 -1.15 -38.77 -4.95 C-26.32 -7.69 -11.17 -6.02 0 0 Z" fill="#7A868C" transform="translate(73.6,39.4)"/>
-          <path d="M0 0 C4.95 0 9.9 0 15 0 C15 28.71 15 57.42 15 87 C10.05 87 5.1 87 0 87 C0 58.29 0 29.58 0 0 Z" fill="#7A868C" transform="translate(321,35)"/>
-          <path d="M0 0 C4.95 0 9.9 0 15 0 C15 6.6 15 13.2 15 20 C10.05 20 5.1 20 0 20 C0 13.4 0 6.8 0 0 Z" fill="#159CD8" transform="translate(321,0)"/>
-        </svg>
-      );
-
-    // --- LOGO ORUS (SVG SPÉCIFIQUE INTÉGRÉ) ---
-    case 'ORUS':
-      return (
-        <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 63 34" className={className}>
-           <path d="M0 0 C0 0.99 0 1.98 0 3 C-0.66 3.33 -1.32 3.66 -2 4 C-2.65 6.02 -2.65 6.02 -3 8 C-0.52 8.49 -0.52 8.49 2 9 C1.85 10.43 1.71 11.87 1.56 13.31 C1.48 14.11 1.40 14.91 1.31 15.73 C1 18 1 18 0 21 C0.72 21.04 1.44 21.09 2.19 21.14 C7.41 21.55 12.09 22.01 17 24 C17 24.66 17 25.32 17 26 C16.02 25.85 15.05 25.71 14.04 25.56 C-5.79 22.87 -26.21 22.83 -46 26 C-46 25.34 -46 24.68 -46 24 C-41.19 21.59 -36.26 21.38 -31 21 C-30.76 20.28 -30.53 19.57 -30.28 18.84 C-27.04 11.67 -20.00 4.63 -13.16 0.72 C-8.87 -0.71 -4.45 -0.36 0 0 Z M-20 17 C-20.33 17.99 -20.66 18.98 -21 20 C-20.34 20 -19.68 20 -19 20 C-19.33 19.01 -19.66 18.02 -20 17 Z" fill="#0F2C88" transform="translate(46,0)"/>
-           <path d="M13 0 C15 1 15 1 16 3 C17 6 17 9 17 12 C16 15 15 18 14 21 C13 22 13 22 12 23 C11 23 10 23 9 23 C8 23 7 23 6 23 C-1 22 -8 22 -15 22 C-15 16 -15 10 -15 4 C-10 4 -5 4 0 4 C3 4 6 4 9 4 C10 3 10 3 11 2 C11 1 11 1 11 0 Z" fill="#0F2C88" transform="translate(10,0)"/>
-           <text x="20" y="24" fontFamily="Arial" fontWeight="bold" fontSize="24" fill="#0F2C88">RUS</text>
-        </svg>
-      );
-      
-    default:
-      return <span className="text-xs font-bold text-slate-400">{brand}</span>;
-  }
-};
-
-// --- DATA MOCKÉE (FAUX VERRES POUR DÉMO) ---
-const MOCK_LENSES = [
-  { id: 1, name: "PROG HD 1.60 QUATTRO", brand: "CODIR", index_mat: "1.60", purchasePrice: 80, sellingPrice: 240, margin: 160 },
-  { id: 2, name: "PROG MAX 1.67 CLEAN", brand: "CODIR", index_mat: "1.67", purchasePrice: 110, sellingPrice: 310, margin: 200 },
-  { id: 3, name: "ECO 1.50 MISTRAL", brand: "CODIR", index_mat: "1.50", purchasePrice: 25, sellingPrice: 90, margin: 65 },
-  { id: 4, name: "PREMIUM 1.74 ORUS", brand: "ORUS", index_mat: "1.74", purchasePrice: 150, sellingPrice: 420, margin: 270 },
-  { id: 5, name: "HOYALUX ID 1.60", brand: "HOYA", index_mat: "1.60", purchasePrice: 95, sellingPrice: 280, margin: 185 },
-  { id: 6, name: "SEIKO PRIME 1.67", brand: "SEIKO", index_mat: "1.67", purchasePrice: 130, sellingPrice: 350, margin: 220 },
-  { id: 7, name: "MIYOSMART 1.58", brand: "HOYA", index_mat: "1.58", purchasePrice: 100, sellingPrice: 250, margin: 150 },
-];
-
 function App() {
   // --- ETATS ---
   const [lenses, setLenses] = useState([]);
@@ -122,8 +48,10 @@ function App() {
     uvOption: true 
   });
 
-  // URL API (Locale ou Prod)
-  const API_URL = "http://127.0.0.1:8000/lenses";
+  // --- CONFIGURATION URL API ---
+  // En local, on utilise http://127.0.0.1:8000/lenses
+  // Si vous voulez tester depuis un autre appareil sur le même wifi, remplacez 127.0.0.1 par l'IP de votre PC (ex: 192.168.1.15)
+  const PROD_URL = "https://api-podium.onrender.com/lenses";
 
   // --- THEMES VISUELS ---
   const themes = {
@@ -250,7 +178,6 @@ function App() {
     setLoading(true);
     setError(null); 
 
-    // Essai de connexion au backend
     axios.get(API_URL, {
       params: {
         type: formData.type,       
@@ -266,19 +193,12 @@ function App() {
       }
     })
       .then(response => {
-        if (response.data.length > 0) {
-          setLenses(response.data);
-        } else {
-          // Si pas de résultats, on garde la liste vide ou on pourrait montrer des suggestions
-          setLenses([]);
-        }
+        setLenses(response.data);
         setLoading(false);
       })
       .catch(err => {
         console.error("Erreur connexion:", err);
-        // 🚨 FALLBACK : Si l'API est inaccessible (Network Error), on affiche des données de test
-        // Cela permet de voir le design même si le serveur est éteint
-        setLenses(MOCK_LENSES);
+        setError("ERREUR DE CONNEXION AU SERVEUR PYTHON.");
         setLoading(false);
       });
   };
@@ -372,13 +292,19 @@ function App() {
 
   // --- HELPERS D'AFFICHAGE ---
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
+  
+  // Freination Myopie : Unifocal + (Hoya ou Seiko) uniquement
   const isMyopiaEligible = formData.type === 'UNIFOCAL' && (formData.brand === 'HOYA' || formData.brand === 'SEIKO');
+
+  // Option SUV / IP+ : CODIR, HOYA, SEIKO, ORUS
   const isUvOptionVisible = ['CODIR', 'HOYA', 'SEIKO', 'ORUS'].includes(formData.brand);
   
+  // Label dynamique selon la marque
   const uvOptionLabel = (formData.brand === 'CODIR' || formData.brand === 'ORUS') 
     ? 'OPTION SUV (UV 400)' 
     : 'OPTION IP+ (UV)';
     
+  // Obligatoire si pas 1.50
   const isUvOptionMandatory = formData.materialIndex !== '1.50';
 
   return (
@@ -430,10 +356,11 @@ function App() {
       {/* --- CORPS PRINCIPAL --- */}
       <main className="flex-1 flex overflow-hidden relative z-0">
         
-        {/* === COLONNE GAUCHE === */}
+        {/* === COLONNE GAUCHE : FORMULAIRE === */}
         <aside className="w-[420px] bg-white border-r border-slate-200 flex flex-col overflow-y-auto z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
           <div className="p-6 space-y-8">
             
+            {/* 1. Réseau */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2">
                 <Shield className="w-5 h-5" /> RÉSEAU DE SOIN
@@ -459,26 +386,32 @@ function App() {
 
             <hr className="border-slate-100" />
 
+            {/* 2. Marque Verrier (Avec Logos) */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2">
                 <Tag className="w-5 h-5" /> MARQUE VERRIER
               </label>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2 rounded-2xl">
                 {brands.map(b => {
+                  // ORUS n'est visible que si HORS_RESEAU
                   if (b.id === 'ORUS' && formData.network !== 'HORS_RESEAU') return null;
                   return (
                     <button
                       key={b.id}
                       onClick={() => setFormData({...formData, brand: b.id})}
-                      className={`py-3 px-2 rounded-xl transition-all duration-200 flex flex-col items-center gap-2 h-16 ${
+                      className={`py-3 px-2 rounded-xl transition-all duration-200 flex flex-col items-center gap-2 ${
                         formData.brand === b.id 
                         ? `bg-white ${currentTheme.text} shadow-md ring-2 ring-black/5 scale-[1.02]` 
                         : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
                       }`}
                     >
-                      <div className="h-8 w-full flex items-center justify-center mb-1">
-                        <BrandLogo brand={b.id} className="h-full w-auto object-contain opacity-90" />
-                      </div>
+                      {/* Logo Verrier si dispo */}
+                      {userSettings.brandLogos[b.id] ? (
+                        <img src={userSettings.brandLogos[b.id]} alt={b.label} className="h-6 w-auto object-contain opacity-90 mix-blend-multiply" />
+                      ) : (
+                        <div className="h-6 w-full flex items-center justify-center bg-slate-100 rounded text-[10px] text-slate-300">LOGO</div>
+                      )}
+                      <span className="text-sm font-bold tracking-wider">{b.label}</span>
                     </button>
                   )
                 })}
@@ -487,11 +420,14 @@ function App() {
 
             <hr className="border-slate-100" />
 
+            {/* 3. Correction */}
             <div className="space-y-4">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2">
                 <Glasses className="w-5 h-5" /> CORRECTION (OD)
               </label>
+              
               <div className="grid grid-cols-2 gap-4">
+                {/* Sphère */}
                 <div>
                   <label className="text-xs text-slate-400 mb-1.5 block font-bold ml-1">SPHÈRE</label>
                   <div className="relative group">
@@ -503,6 +439,8 @@ function App() {
                     <span className="absolute right-3 top-4 text-xs text-slate-400 font-bold pointer-events-none">D</span>
                   </div>
                 </div>
+
+                {/* Cylindre */}
                 <div>
                   <label className="text-xs text-slate-400 mb-1.5 block font-bold ml-1">CYLINDRE</label>
                   <div className="relative group">
@@ -515,6 +453,8 @@ function App() {
                   </div>
                 </div>
               </div>
+              
+              {/* Addition */}
               <div className={`transition-opacity duration-300 ${isAdditionDisabled ? 'opacity-50' : 'opacity-100'}`}>
                   <label className="text-xs text-slate-400 mb-1.5 block font-bold ml-1">
                     ADDITION {isAdditionDisabled && "(N/A)"}
@@ -537,6 +477,7 @@ function App() {
 
             <hr className="border-slate-100" />
 
+            {/* 4. Géométrie */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2">
                 <Ruler className="w-5 h-5" /> GÉOMÉTRIE
@@ -556,6 +497,8 @@ function App() {
                   </button>
                 ))}
               </div>
+
+              {/* Option Freination Myopie (Hoya/Seiko + Unifocal uniquement) */}
               <div className={`transition-all duration-300 overflow-hidden ${isMyopiaEligible ? 'max-h-24 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
                 <label className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer border-2 transition-colors ${formData.myopiaControl ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                   <div className="relative flex items-center">
@@ -576,6 +519,7 @@ function App() {
               </div>
             </div>
 
+            {/* 5. Indice / Matière */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2">
                 <Layers className="w-5 h-5" /> INDICE
@@ -601,10 +545,12 @@ function App() {
               </div>
             </div>
 
+            {/* 6. Traitements */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2">
                 <Sparkles className="w-5 h-5" /> TRAITEMENTS
               </label>
+              
               <div className="grid grid-cols-2 gap-3">
                 {currentCoatings.map(c => (
                   <button
@@ -623,7 +569,8 @@ function App() {
                   </button>
                 ))}
               </div>
-              
+
+              {/* Option SUV / IP+ (Conditionnelle) */}
               <div className={`transition-all duration-300 overflow-hidden ${isUvOptionVisible ? 'max-h-24 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
                 <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
                   isUvOptionMandatory 
@@ -649,6 +596,7 @@ function App() {
               </div>
             </div>
 
+            {/* BOUTON CALCULER */}
             <div className="pt-4 pb-8">
               <button 
                 onClick={fetchData}
@@ -667,9 +615,10 @@ function App() {
         <section className="flex-1 p-8 overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto">
             
-            {/* Résumé des filtres */}
+            {/* Résumé des filtres actifs */}
             <div className="mb-8 flex flex-wrap gap-3 text-sm items-center font-bold text-slate-500">
                <span>FILTRES :</span>
+               
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2">
                  <Shield className="w-4 h-4"/>
                  {formData.network === 'HORS_RESEAU' ? 'HORS RÉSEAU' : formData.network}
@@ -752,11 +701,13 @@ function App() {
 
                 return (
                   <div key={lens.id} className={`group bg-white rounded-3xl hover:-translate-y-2 border-2 transition-all duration-300 overflow-hidden relative ${style.border}`}>
+                     
                      <div className="absolute top-5 right-5 z-10">
                         <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold border shadow-sm ${style.badge}`}>
                           {style.icon} {style.label}
                         </span>
                      </div>
+
                      <div className="p-8 pt-14 border-b border-slate-50 relative">
                         <h3 className="font-bold text-2xl text-slate-800 mb-2 leading-tight">{lens.name}</h3>
                         <p className="text-sm text-slate-500 font-bold flex items-center gap-3">
@@ -765,7 +716,9 @@ function App() {
                           INDICE {lens.index_mat || formData.materialIndex}
                         </p>
                      </div>
+                     
                      <div className="p-8 bg-slate-50/50 group-hover:bg-white transition-colors space-y-6">
+                        {/* AFFICHAGE CONDITIONNEL DES PRIX / MARGES */}
                         {showMargins ? (
                           <>
                             <div className="grid grid-cols-2 gap-4">
@@ -792,13 +745,17 @@ function App() {
                             </div>
                           </>
                         ) : (
+                          // MODE CLIENT (Masqué)
                           <div className="pt-2 flex flex-col h-full">
+                             {/* Prix en gros, vert sur fond vert */}
                              <div className="bg-green-50 p-6 rounded-2xl border border-green-100 text-center mb-4 flex-1 flex flex-col justify-center items-center">
                                <span className="block text-xs font-bold text-green-600 mb-2 uppercase tracking-wider">PRIX CONSEILLÉ</span>
                                <span className="text-5xl font-bold text-green-600 tracking-tighter">
                                  {lens.sellingPrice} €
                                </span>
                              </div>
+                             
+                             {/* Référence en tout petit en bas à gauche */}
                              <div className="text-left pl-1">
                                <span className="text-[10px] font-mono text-slate-300 tracking-widest">
                                  REF-{Math.floor(lens.margin * 4.2 + 1000)}
@@ -814,7 +771,7 @@ function App() {
           </div>
         </section>
 
-        {/* === MODALE SETTINGS === */}
+        {/* === MODALE DE RÉGLAGES (SETTINGS) === */}
         {showSettings && (
           <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
@@ -841,11 +798,13 @@ function App() {
               {/* Corps Modale */}
               <div className="p-8 overflow-y-auto">
                 <div className="space-y-10">
-                  {/* --- Identité --- */}
+                  
+                  {/* --- SECTION 1 : Identité --- */}
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">
                        IDENTITÉ DU POINT DE VENTE
                     </h4>
+                    
                     <div className="grid grid-cols-1 gap-6">
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-2">NOM DU MAGASIN</label>
@@ -860,6 +819,7 @@ function App() {
                           <Store className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
                         </div>
                       </div>
+
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-2">LOGO DU MAGASIN</label>
                         <div className="flex items-center gap-4">
@@ -874,6 +834,7 @@ function App() {
                                </button>
                             </div>
                           )}
+                          
                           <div className="relative flex-1">
                             <div className="relative">
                                <input 
@@ -893,11 +854,45 @@ function App() {
                     </div>
                   </div>
 
-                  {/* --- Thème --- */}
+                  {/* --- SECTION 2 : LOGOS VERRIERS --- */}
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">
+                       LOGOS VERRIERS (POUR AFFICHAGE)
+                    </h4>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      {brands.map(b => (
+                        <div key={b.id} className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center gap-3">
+                           <div className="h-10 w-10 bg-white rounded-lg border border-slate-200 p-1 flex items-center justify-center flex-shrink-0">
+                             {userSettings.brandLogos[b.id] ? (
+                               <img src={userSettings.brandLogos[b.id]} alt={b.label} className="h-full w-full object-contain" />
+                             ) : (
+                               <Tag className="w-4 h-4 text-slate-300"/>
+                             )}
+                           </div>
+                           <div className="flex-1 relative overflow-hidden">
+                             <label className="block text-[10px] font-bold text-slate-500 mb-1">{b.label}</label>
+                             <input 
+                               type="file"
+                               accept="image/*"
+                               onChange={(e) => handleLogoUpload(e, b.id)}
+                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                             />
+                             <div className="text-[9px] font-bold text-blue-600 uppercase cursor-pointer hover:underline">
+                               {userSettings.brandLogos[b.id] ? "MODIFIER" : "AJOUTER LOGO"}
+                             </div>
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* --- SECTION 3 : Thème --- */}
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">
                        THÈME & COULEURS
                     </h4>
+                    
                     <div className="grid grid-cols-5 gap-3">
                       {Object.keys(themes).map(colorKey => (
                         <button
@@ -916,7 +911,7 @@ function App() {
                     </div>
                   </div>
 
-                  {/* --- Limites Reste à Charge --- */}
+                  {/* --- SECTION 4 : Limites Reste à Charge --- */}
                   <div className="space-y-5">
                     <div className="flex justify-between items-end border-b-2 border-slate-100 pb-2 mb-4">
                       <h4 className="font-bold text-sm text-slate-400">
@@ -926,6 +921,7 @@ function App() {
                         REMBOURSEMENT GÉRÉ PAR BDD
                       </span>
                     </div>
+                    
                     <div className="grid grid-cols-2 gap-6">
                       {lensTypes.map(type => (
                         <div key={type.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
