@@ -5,7 +5,7 @@ import {
   Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car
 } from 'lucide-react';
 
-// --- COMPOSANT LOGOS ---
+// --- COMPOSANT LOGOS (IMAGES PNG) ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const safeBrand = brand || 'unknown';
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
@@ -17,6 +17,7 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
       className={`${className} object-contain`}
       onError={(e) => {
         e.target.style.display = 'none';
+        // Fallback texte si l'image n'existe pas
         const span = document.createElement('span');
         span.innerText = safeBrand;
         span.className = "text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full";
@@ -28,8 +29,11 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
 
 // --- DONNÉES DE SECOURS (Si le serveur est éteint) ---
 const MOCK_LENSES = [
-  { id: 1, name: "MODE HORS LIGNE - SERVEUR INJOIGNABLE", brand: "ERREUR", index_mat: "0.0", purchasePrice: 0, sellingPrice: 0, margin: 0 },
-  { id: 2, name: "VÉRIFIEZ L'URL DANS APP.JSX", brand: "CONFIG", index_mat: "0.0", purchasePrice: 0, sellingPrice: 0, margin: 0 },
+  { id: 1, name: "MODE HORS LIGNE - DÉMO", brand: "CODIR", index_mat: "1.60", purchasePrice: 80, sellingPrice: 240, margin: 160 },
+  { id: 2, name: "EXEMPLE VERRE PROGRESSIF", brand: "CODIR", index_mat: "1.67", purchasePrice: 110, sellingPrice: 310, margin: 200 },
+  { id: 3, name: "ECO MISTRAL 1.50", brand: "CODIR", index_mat: "1.50", purchasePrice: 25, sellingPrice: 90, margin: 65 },
+  { id: 4, name: "PREMIUM ORUS 1.74", brand: "ORUS", index_mat: "1.74", purchasePrice: 150, sellingPrice: 420, margin: 270 },
+  { id: 5, name: "HOYALUX ID 1.60", brand: "HOYA", index_mat: "1.60", purchasePrice: 95, sellingPrice: 280, margin: 185 },
 ];
 
 function App() {
@@ -68,10 +72,10 @@ function App() {
     uvOption: true 
   });
 
-  // --- CONFIGURATION URL API (CRITIQUE) ---
+  // --- CONFIGURATION URL API ---
   const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
   
-  // 👇👇👇 COLLEZ VOTRE VRAIE ADRESSE RENDER ICI (gardez /lenses à la fin) 👇👇👇
+  // ⚠️ REMPLACEZ CECI PAR VOTRE URL RENDER DE PRODUCTION
   const RENDER_URL = "https://api-podium.onrender.com/lenses"; 
   
   const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : RENDER_URL;
@@ -109,6 +113,16 @@ function App() {
   const fetchData = () => {
     setLoading(true);
     setError(null); 
+
+    // 🛡️ SÉCURITÉ : Si l'URL est celle par défaut (non configurée), on utilise les données MOCK directement
+    // Cela évite l'erreur réseau dans la console et permet de tester l'interface
+    if (!isLocal && RENDER_URL.includes("VOTRE-VRAIE-URL")) {
+      console.warn("Mode Démo : URL Backend non configurée. Utilisation des données factices.");
+      setLenses(MOCK_LENSES);
+      setLoading(false);
+      return;
+    }
+
     axios.get(API_URL, {
       params: {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
@@ -123,7 +137,7 @@ function App() {
       })
       .catch(err => {
         console.error("Erreur connexion:", err);
-        // Affichage du MOCK uniquement si erreur réseau
+        // En cas d'erreur réseau réelle, on bascule aussi sur les données de secours pour ne pas bloquer l'UI
         setLenses(MOCK_LENSES);
         setLoading(false);
       });
