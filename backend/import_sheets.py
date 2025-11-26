@@ -1,77 +1,102 @@
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import csv
 from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
 
-# Chargement des variables d'environnement (pour l'URL Neon)
+# 1. Chargement de la configuration
 load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-def import_data_from_sheets():
-    print("🚀 Démarrage de l'importation...")
+if not DATABASE_URL:
+    print("❌ Erreur : Impossible de trouver DATABASE_URL dans le fichier .env")
+    exit()
 
-    # --- 1. CONNEXION À GOOGLE SHEETS ---
-    # Assurez-vous d'avoir le fichier 'google_credentials.json' dans le même dossier
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    
+def clean_price(value):
+    """Nettoie les prix (vire le €, remplace virgule par point)"""
+    if not value:
+        return 0.0
     try:
-        creds = ServiceAccountCredentials.from_json_keyfile_name("google_credentials.json", scope)
-        client = gspread.authorize(creds)
-        
-        # Ouvrir le fichier Sheet par son nom exact
-        sheet = client.open("Catalogue Verres Optique").sheet1 
-        
-        # Récupérer toutes les données
-        data = sheet.get_all_records()
-        print(f"✅ {len(data)} lignes récupérées depuis Google Sheets.")
-        
-    except Exception as e:
-        print(f"❌ Erreur Google Sheets : {e}")
+        # On garde chiffres, points et virgules
+        clean_str = str(value).replace('€', '').replace(' ', '').replace(',', '.')
+        return float(clean_str)
+    except ValueError:
+        return 0.0
+
+def clean_index(value):
+    """Nettoie l'indice (1,60 -> 1.60)"""
+    if not value:
+        return "1.50"
+    return str(value).replace(',', '.')
+
+def import_data_from_csv():
+    print("🚀 Démarrage de l'importation depuis le fichier CSV...")
+    
+    # Nom du fichier que vous devez déposer dans le dossier backend
+    csv_file = "catalogue.csv"
+    
+    if not os.path.exists(csv_file):
+        print(f"❌ Erreur : Le fichier '{csv_file}' est introuvable dans le dossier backend.")
+        print("👉 Exportez votre Sheet en CSV, renommez-le 'catalogue.csv' et placez-le dans ce dossier.")
         return
 
-    # --- 2. CONNEXION À NEON (Base de données) ---
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        print("❌ Erreur : DATABASE_URL introuvable dans le fichier .env")
-        return
+    # --- B. CONNEXION À LA BASE DE DONNÉES (NEON) ---
+    engine = create_engine(DATABASE_URL)
 
-    engine = create_engine(db_url)
-
-    # --- 3. INSERTION DES DONNÉES ---
     try:
         with engine.connect() as conn:
-            # Optionnel : Vider la table avant d'importer (Remise à zéro)
-            # conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY;"))
-            # conn.commit()
-            # print("🗑️  Table 'lenses' vidée.")
-
+            print("🧹 Nettoyage de l'ancien catalogue...")
+            conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY;"))
+            
+            print("📥 Lecture du fichier CSV...")
             count = 0
-            for row in data:
-                # On prépare la requête d'insertion
-                # Assurez-vous que les colonnes de votre Sheet correspondent aux clés ici (Nom, Marque, etc.)
-                stmt = text("""
-                    INSERT INTO lenses (name, brand, type, index_mat, purchase_price, selling_price)
-                    VALUES (:name, :brand, :type, :index, :purchase, :selling)
-                """)
-                
-                # Mapping des colonnes du Sheet -> Colonnes de la BDD
-                params = {
-                    "name": row['Nom Produit'],      # Colonne A dans le Sheet
-                    "brand": row['Marque'],          # Colonne B
-                    "type": row['Type'],             # Colonne C (UNIFOCAL, PROGRESSIF...)
-                    "index": str(row['Indice']),     # Colonne D (1.5, 1.6...)
-                    "purchase": float(row['Prix Achat'] or 0), # Colonne E
-                    "selling": float(row['Prix Vente'] or 0)   # Colonne F (Plafond)
-                }
-                
-                conn.execute(stmt, params)
-                count += 1
+            
+            stmt = text("""
+                INSERT INTO lenses (name, brand, type, index_mat, coating, purchase_price, selling_price)
+                VALUES (:name, :brand, :type, :index, :coating, :purchase, :selling)
+            """)
+
+            # On ouvre le fichier pour détecter son format (virgule ou point-virgule)
+            with open(csv_file, mode='r', encoding='utf-8') as f:
+                # Détection automatique du séparateur (Excel utilise souvent ; et Google ,)
+                sample = f.read(1024)
+                f.seek(0)
+                dialect = csv.Sniffer().sniff(sample)
+                reader = csv.DictReader(f, dialect=dialect)
+
+                for row in reader:
+                    # --- MAPPING DES COLONNES (Nouvelle Structure) ---
+                    
+                    # 1. GESTION DU TYPE DE VERRE (GÉOMETRIE)
+                    # On essaye de normaliser un peu les entrées du fichier
+                    raw_geo = str(row.get('GÉOMETRIE', '')).upper()
+                    lens_type = 'UNIFOCAL' # Par défaut
+                    if 'PROG' in raw_geo: lens_type = 'PROGRESSIF'
+                    elif 'DEGRESSIF' in raw_geo or 'INTERIEUR' in raw_geo: lens_type = 'DEGRESSIF'
+                    elif 'UNI' in raw_geo or 'MONO' in raw_geo: lens_type = 'UNIFOCAL'
+                    else: lens_type = raw_geo # On garde tel quel si on ne reconnait pas
+
+                    # 2. CONSTRUCTION DES DONNÉES
+                    params = {
+                        "name": row.get('MODELE COMMERCIAL', 'Inconnu'),      
+                        "brand": row.get('MARQUE', 'GENERIQUE'),          
+                        "type": lens_type,
+                        "index": clean_index(row.get('INDICE')),
+                        "coating": row.get('TRAITEMENT', ''),
+                        "purchase": clean_price(row.get('PRIX 2*NETS')),  # Colonne M
+                        "selling": clean_price(row.get('KALIXIA'))        # Colonne P (Sert de référence Plafond)
+                    }
+                    
+                    # Sécurité : on n'importe pas les lignes sans prix ou sans nom
+                    if params["name"] and params["selling"] > 0:
+                        conn.execute(stmt, params)
+                        count += 1
             
             conn.commit()
             print(f"🎉 Succès ! {count} verres ont été importés dans la base Neon.")
 
     except Exception as e:
-        print(f"❌ Erreur SQL : {e}")
+        print(f"❌ Erreur lors de l'importation : {e}")
+        print("Conseil : Vérifiez que votre CSV a bien les entêtes exacts (MARQUE, MODELE COMMERCIAL, etc.) sur la première ligne.")
 
 if __name__ == "__main__":
-    import_data_from_sheets()
+    import_data_from_csv()
