@@ -51,7 +51,7 @@ function App() {
   // --- CONFIGURATION URL API ---
   // En local, on utilise http://127.0.0.1:8000/lenses
   // Si vous voulez tester depuis un autre appareil sur le même wifi, remplacez 127.0.0.1 par l'IP de votre PC (ex: 192.168.1.15)
-  const API_URL = "http://127.0.0.1:8000/lenses";
+  const API_URL = "https://api-podium.onrender.com/lenses";
 
   // --- THEMES VISUELS ---
   const themes = {
