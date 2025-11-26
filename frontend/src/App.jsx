@@ -5,10 +5,8 @@ import {
   Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car
 } from 'lucide-react';
 
-// --- COMPOSANT LOGOS (VERSION PNG) ---
-// Charge les images depuis le dossier public/logos/
+// --- COMPOSANT LOGOS ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
-  // Sécurité : on s'assure que brand existe
   const safeBrand = brand || 'unknown';
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
 
@@ -18,11 +16,7 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
       alt={safeBrand} 
       className={`${className} object-contain`}
       onError={(e) => {
-        // Fallback si l'image n'existe pas : on cache l'image brisée et on affiche le texte
         e.target.style.display = 'none';
-        // On utilise le parent pour afficher le texte de secours proprement via CSS si besoin, 
-        // ou on laisse le alt text gérer (souvent suffisant pour le debug)
-        // Ici, on injecte une span simple pour que ce soit visible
         const span = document.createElement('span');
         span.innerText = safeBrand;
         span.className = "text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full";
@@ -32,10 +26,10 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   );
 };
 
-// --- DATA MOCKÉE (Données de secours) ---
+// --- DONNÉES DE SECOURS (Si le serveur est éteint) ---
 const MOCK_LENSES = [
-  { id: 1, name: "OFFLINE - PROG HD 1.60", brand: "CODIR", index_mat: "1.60", purchasePrice: 80, sellingPrice: 240, margin: 160 },
-  { id: 2, name: "OFFLINE - VERIFIEZ CONNEXION", brand: "CODIR", index_mat: "1.67", purchasePrice: 0, sellingPrice: 0, margin: 0 },
+  { id: 1, name: "MODE HORS LIGNE - SERVEUR INJOIGNABLE", brand: "ERREUR", index_mat: "0.0", purchasePrice: 0, sellingPrice: 0, margin: 0 },
+  { id: 2, name: "VÉRIFIEZ L'URL DANS APP.JSX", brand: "CONFIG", index_mat: "0.0", purchasePrice: 0, sellingPrice: 0, margin: 0 },
 ];
 
 function App() {
@@ -45,15 +39,14 @@ function App() {
   const [error, setError] = useState(null);
   
   const [showSettings, setShowSettings] = useState(false);
-  const [showMargins, setShowMargins] = useState(false); // Masqué par défaut
+  const [showMargins, setShowMargins] = useState(false);
 
-  // Configuration (Menu Secondaire)
+  // Configuration
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
-    shopLogo: "", // Base64 pour le logo boutique
+    shopLogo: "", 
     themeColor: "blue",
-    // Les logos verriers sont maintenant gérés via fichiers PNG, plus besoin de les stocker ici
-    brandLogos: {}, 
+    brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
     UNIFOCAL: { maxPocket: 40 },
     PROGRESSIF: { maxPocket: 100 },
     DEGRESSIF: { maxPocket: 70 },
@@ -63,7 +56,7 @@ function App() {
   // Etat du formulaire
   const [formData, setFormData] = useState({
     network: 'HORS_RESEAU',
-    brand: 'ORUS',         // Par défaut ORUS car HORS_RESEAU
+    brand: 'ORUS',         
     type: 'PROGRESSIF',
     sphere: -2.00,
     cylinder: 0.00,
@@ -75,162 +68,62 @@ function App() {
     uvOption: true 
   });
 
-  // --- CONFIGURATION URL API ---
-  // Détecte l'environnement pour choisir la bonne URL
+  // --- CONFIGURATION URL API (CRITIQUE) ---
   const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
   
-  // ⚠️ REMPLACEZ CECI PAR VOTRE URL RENDER DE PRODUCTION
-  const PROD_URL = "https://api-podium-optique.onrender.com/lenses"; 
+  // 👇👇👇 COLLEZ VOTRE VRAIE ADRESSE RENDER ICI (gardez /lenses à la fin) 👇👇👇
+  const RENDER_URL = "https://api-podium.onrender.com/lenses"; 
   
-  const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : PROD_URL;
+  const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : RENDER_URL;
 
-  // --- THEMES VISUELS ---
+  // --- THEMES ---
   const themes = {
-    blue: { 
-      name: 'OCÉAN',
-      primary: 'bg-blue-700', hover: 'hover:bg-blue-800', 
-      text: 'text-blue-700', textDark: 'text-blue-900', 
-      light: 'bg-blue-50', border: 'border-blue-200', ring: 'ring-blue-300', 
-      shadow: 'shadow-blue-200'
-    },
-    emerald: { 
-      name: 'ÉMERAUDE',
-      primary: 'bg-emerald-700', hover: 'hover:bg-emerald-800', 
-      text: 'text-emerald-700', textDark: 'text-emerald-900', 
-      light: 'bg-emerald-50', border: 'border-emerald-200', ring: 'ring-emerald-300', 
-      shadow: 'shadow-emerald-200'
-    },
-    violet: { 
-      name: 'AMÉTHYSTE',
-      primary: 'bg-violet-700', hover: 'hover:bg-violet-800', 
-      text: 'text-violet-700', textDark: 'text-violet-900', 
-      light: 'bg-violet-50', border: 'border-violet-200', ring: 'ring-violet-300', 
-      shadow: 'shadow-violet-200'
-    },
-    amber: { 
-      name: 'AMBRE',
-      primary: 'bg-amber-700', hover: 'hover:bg-amber-800', 
-      text: 'text-amber-700', textDark: 'text-amber-900', 
-      light: 'bg-amber-50', border: 'border-amber-200', ring: 'ring-amber-300', 
-      shadow: 'shadow-amber-200'
-    },
-    rose: { 
-      name: 'RUBIS',
-      primary: 'bg-rose-700', hover: 'hover:bg-rose-800', 
-      text: 'text-rose-700', textDark: 'text-rose-900', 
-      light: 'bg-rose-50', border: 'border-rose-200', ring: 'ring-rose-300', 
-      shadow: 'shadow-rose-200'
-    },
+    blue: { name: 'OCÉAN', primary: 'bg-blue-700', hover: 'hover:bg-blue-800', text: 'text-blue-700', textDark: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-200', ring: 'ring-blue-300', shadow: 'shadow-blue-200' },
+    emerald: { name: 'ÉMERAUDE', primary: 'bg-emerald-700', hover: 'hover:bg-emerald-800', text: 'text-emerald-700', textDark: 'text-emerald-900', light: 'bg-emerald-50', border: 'border-emerald-200', ring: 'ring-emerald-300', shadow: 'shadow-emerald-200' },
+    violet: { name: 'AMÉTHYSTE', primary: 'bg-violet-700', hover: 'hover:bg-violet-800', text: 'text-violet-700', textDark: 'text-violet-900', light: 'bg-violet-50', border: 'border-violet-200', ring: 'ring-violet-300', shadow: 'shadow-violet-200' },
+    amber: { name: 'AMBRE', primary: 'bg-amber-700', hover: 'hover:bg-amber-800', text: 'text-amber-700', textDark: 'text-amber-900', light: 'bg-amber-50', border: 'border-amber-200', ring: 'ring-amber-300', shadow: 'shadow-amber-200' },
+    rose: { name: 'RUBIS', primary: 'bg-rose-700', hover: 'hover:bg-rose-800', text: 'text-rose-700', textDark: 'text-rose-900', light: 'bg-rose-50', border: 'border-rose-200', ring: 'ring-rose-300', shadow: 'shadow-rose-200' },
   };
-
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
 
-  // --- DONNÉES DE CONFIGURATION ---
-  const brands = [
-    { id: 'HOYA', label: 'HOYA' },
-    { id: 'ZEISS', label: 'ZEISS' },
-    { id: 'SEIKO', label: 'SEIKO' },
-    { id: 'CODIR', label: 'CODIR' },
-    { id: 'ORUS', label: 'ORUS' } 
-  ];
-
-  const lensTypes = [
-    { id: 'UNIFOCAL', label: 'UNIFOCAL' },
-    { id: 'PROGRESSIF', label: 'PROGRESSIF' },
-    { id: 'DEGRESSIF', label: 'DÉGRESSIF' },
-    { id: 'INTERIEUR', label: 'INTER. / BUREAU' }
-  ];
-
+  // --- DONNÉES ---
+  const brands = [ { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
+  const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'INTERIEUR', label: 'INTER. / BUREAU' } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
-
-  // CONFIGURATION DES TRAITEMENTS PAR MARQUE
-  const codirCoatings = [
-    { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> },
-    { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> },
-    { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> },
-    { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
-    { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
-    { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> },
-  ];
-
-  const brandCoatings = {
-    CODIR: codirCoatings,
-    ORUS: codirCoatings, // ORUS = CODIR
-    SEIKO: [
-      { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> },
-      { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> },
-      { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
-      { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> },
-      { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> },
-    ],
-    HOYA: [
-      { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> },
-      { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> },
-      { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> },
-      { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
-      { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
-    ],
-    ZEISS: [
-      { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> },
-      { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> },
-      { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
-      { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> },
-    ]
-  };
-
+  const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
+  const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  // --- LOGIQUE MÉTIER AUTOMATIQUE ---
   useEffect(() => {
-    // 1. Règle SUV/IP+ (Obligatoire si pas 1.50)
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
-        if (!formData.uvOption) {
-          setFormData(prev => ({ ...prev, uvOption: true }));
-        }
+        if (!formData.uvOption) { setFormData(prev => ({ ...prev, uvOption: true })); }
       }
     }
-
-    // 2. Reset traitement si changement de marque
     const coatingExists = currentCoatings.find(c => c.id === formData.coating);
-    if (!coatingExists) {
-      setFormData(prev => ({ ...prev, coating: currentCoatings[0].id }));
-    }
+    if (!coatingExists) { setFormData(prev => ({ ...prev, coating: currentCoatings[0].id })); }
   }, [formData.materialIndex, formData.brand, formData.network]); 
 
   const fetchData = () => {
     setLoading(true);
     setError(null); 
-
     axios.get(API_URL, {
       params: {
-        type: formData.type,       
-        network: formData.network, 
-        brand: formData.brand,     
-        sphere: formData.sphere,
-        index: formData.materialIndex,
-        coating: formData.coating,
-        clean: formData.cleanOption,
-        myopia: formData.myopiaControl,
-        uvOption: formData.uvOption, 
-        pocketLimit: userSettings[formData.type]?.maxPocket || 0
+        type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
+        index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
+        myopia: formData.myopiaControl, uvOption: formData.uvOption, pocketLimit: userSettings[formData.type]?.maxPocket || 0
       }
     })
       .then(response => {
-        if (response.data.length > 0) {
-          setLenses(response.data);
-        } else {
-          setLenses([]);
-        }
+        if (response.data.length > 0) { setLenses(response.data); } 
+        else { setLenses([]); }
         setLoading(false);
       })
       .catch(err => {
         console.error("Erreur connexion:", err);
-        // Fallback sur Mock Data si API inaccessible
+        // Affichage du MOCK uniquement si erreur réseau
         setLenses(MOCK_LENSES);
         setLoading(false);
       });
@@ -239,33 +132,22 @@ function App() {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
-
     if (name === 'addition') {
       const val = parseFloat(value);
       if (val > 4.00) newValue = 4.00;
       if (val < 0) newValue = 0.00;
     }
-
-    // Changement Réseau -> Marque par défaut
     if (name === 'network') {
       const defaultBrand = (newValue === 'HORS_RESEAU') ? 'ORUS' : 'CODIR';
-      setFormData(prev => ({ 
-        ...prev, 
-        [name]: newValue, 
-        brand: defaultBrand,
-        myopiaControl: false 
-      }));
+      setFormData(prev => ({ ...prev, [name]: newValue, brand: defaultBrand, myopiaControl: false }));
       return;
     }
-
-    // Changement Myopie -> Force Indice 1.58
     if (name === 'myopiaControl') {
       if (newValue === true) {
         setFormData(prev => ({ ...prev, [name]: newValue, materialIndex: '1.58' }));
         return;
       }
     }
-
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
 
@@ -274,47 +156,26 @@ function App() {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        if (target === 'shop') {
-          setUserSettings(prev => ({ ...prev, shopLogo: reader.result }));
-        }
+        if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } 
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleSettingChange = (section, field, value) => {
-    if (section === 'branding') {
-      setUserSettings(prev => ({ ...prev, [field]: value }));
-    } else {
-      setUserSettings(prev => ({
-        ...prev,
-        [section]: {
-          ...prev[section],
-          [field]: parseFloat(value) || 0
-        }
-      }));
-    }
+    if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
+    else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
   };
 
   const handleTypeChange = (newType) => {
     const shouldDisableAdd = newType === 'UNIFOCAL' || newType === 'DEGRESSIF';
-    setFormData(prev => ({
-      ...prev,
-      type: newType,
-      addition: shouldDisableAdd ? 0.00 : prev.addition,
-      myopiaControl: newType === 'UNIFOCAL' ? prev.myopiaControl : false 
-    }));
+    setFormData(prev => ({ ...prev, type: newType, addition: shouldDisableAdd ? 0.00 : prev.addition, myopiaControl: newType === 'UNIFOCAL' ? prev.myopiaControl : false }));
   };
 
   const handleCoatingChange = (newCoating) => {
-    setFormData(prev => ({
-      ...prev,
-      coating: newCoating,
-      cleanOption: false 
-    }));
+    setFormData(prev => ({ ...prev, coating: newCoating, cleanOption: false }));
   };
 
-  // --- HELPERS D'AFFICHAGE ---
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
   const isMyopiaEligible = formData.type === 'UNIFOCAL' && (formData.brand === 'HOYA' || formData.brand === 'SEIKO');
   const isUvOptionVisible = ['CODIR', 'HOYA', 'SEIKO', 'ORUS'].includes(formData.brand);
@@ -323,29 +184,20 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col text-slate-800 bg-slate-50 relative font-['Arial'] uppercase">
-      
-      {/* --- HEADER --- */}
       <header className="bg-white border-b border-slate-200 px-6 py-6 flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-6">
           <div className={`${currentTheme.primary} p-3 rounded-xl shadow-lg ${currentTheme.shadow} transition-colors duration-300`}>
             <LayoutDashboard className="w-8 h-8 text-white" />
           </div>
-          
           <div className="flex flex-col">
             <h1 className="text-sm font-bold text-slate-400 tracking-widest mb-1">PODIUM OPTIQUE</h1>
             <div className="flex items-center gap-4">
-              {userSettings.shopLogo && (
-                <img src={userSettings.shopLogo} alt="Logo" className="h-16 w-auto object-contain max-w-[250px]" />
-              )}
+              {userSettings.shopLogo && ( <img src={userSettings.shopLogo} alt="Logo" className="h-16 w-auto object-contain max-w-[250px]" /> )}
               {!userSettings.shopLogo && <Store className="w-12 h-12 text-slate-300"/>}
-              
-              <p className={`text-4xl font-bold ${currentTheme.text} leading-none tracking-tight`}>
-                {userSettings.shopName || "MON OPTICIEN"}
-              </p>
+              <p className={`text-4xl font-bold ${currentTheme.text} leading-none tracking-tight`}>{userSettings.shopName || "MON OPTICIEN"}</p>
             </div>
           </div>
         </div>
-        
         <div className="flex items-center gap-2">
           <button onClick={() => setShowMargins(!showMargins)} className="p-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-colors" title={showMargins ? "MASQUER LES MARGES" : "AFFICHER LES MARGES"}>
             {showMargins ? <EyeOff className="w-8 h-8" /> : <Eye className="w-8 h-8" />}
@@ -356,14 +208,9 @@ function App() {
         </div>
       </header>
 
-      {/* --- CORPS PRINCIPAL --- */}
       <main className="flex-1 flex overflow-hidden relative z-0">
-        
-        {/* === COLONNE GAUCHE === */}
         <aside className="w-[420px] bg-white border-r border-slate-200 flex flex-col overflow-y-auto z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
           <div className="p-6 space-y-8">
-            
-            {/* Réseau */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Shield className="w-5 h-5" /> RÉSEAU DE SOIN</label>
               <div className="relative">
@@ -379,8 +226,6 @@ function App() {
               </div>
             </div>
             <hr className="border-slate-100" />
-
-            {/* Marque Verrier */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Tag className="w-5 h-5" /> MARQUE VERRIER</label>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2 rounded-2xl">
@@ -397,8 +242,6 @@ function App() {
               </div>
             </div>
             <hr className="border-slate-100" />
-
-            {/* Correction */}
             <div className="space-y-4">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Glasses className="w-5 h-5" /> CORRECTION (OD)</label>
               <div className="grid grid-cols-2 gap-4">
@@ -426,8 +269,6 @@ function App() {
               </div>
             </div>
             <hr className="border-slate-100" />
-
-            {/* Géométrie */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Ruler className="w-5 h-5" /> GÉOMÉTRIE</label>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2 rounded-2xl">
@@ -445,8 +286,6 @@ function App() {
                 </label>
               </div>
             </div>
-
-            {/* Indice */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Layers className="w-5 h-5" /> INDICE</label>
               <div className="flex bg-slate-100 p-1.5 rounded-xl gap-1.5">
@@ -458,8 +297,6 @@ function App() {
                 })}
               </div>
             </div>
-
-            {/* Traitements */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
               <div className="grid grid-cols-2 gap-3">
@@ -480,7 +317,6 @@ function App() {
                 </label>
               </div>
             </div>
-
             <div className="pt-4 pb-8">
               <button onClick={fetchData} disabled={loading} className={`w-full py-5 ${currentTheme.primary} ${currentTheme.hover} disabled:bg-slate-300 text-white font-bold text-lg rounded-2xl shadow-xl ${currentTheme.shadow} transition-all active:scale-95 flex justify-center items-center gap-3`}>
                 {loading ? <RefreshCw className="animate-spin w-6 h-6"/> : <Search className="w-6 h-6" />}{loading ? "CALCUL EN COURS..." : "CALCULER LE PODIUM"}
@@ -489,7 +325,6 @@ function App() {
           </div>
         </aside>
 
-        {/* === COLONNE DROITE === */}
         <section className="flex-1 p-8 overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto">
             <div className="mb-8 flex flex-wrap gap-3 text-sm items-center font-bold text-slate-500">
@@ -502,11 +337,9 @@ function App() {
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">SPH {formData.sphere > 0 ? '+' : ''}{formData.sphere}</span>
                <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs`}>{currentCoatings.find(c => c.id === formData.coating)?.label}</span>
             </div>
-            
             {error && (
               <div className="bg-red-50 text-red-600 p-6 rounded-2xl mb-8 border border-red-200 flex items-center gap-4 font-bold"><div className="w-3 h-3 rounded-full bg-red-500 animate-pulse"/>{error}</div>
             )}
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-start">
               {lenses.length === 0 && !loading && !error && (
                 <div className="col-span-3 py-32 text-center opacity-60">
@@ -515,7 +348,6 @@ function App() {
                   <p className="text-sm text-slate-400 font-bold">MODIFIEZ VOS CRITÈRES POUR VOIR LES RÉSULTATS.</p>
                 </div>
               )}
-
               {lenses.map((lens, index) => {
                 const podiumStyles = [
                   { border: "border-yellow-400 ring-4 ring-yellow-50 shadow-xl shadow-yellow-100", badge: "bg-yellow-400 text-white border-yellow-500", icon: <Trophy className="w-5 h-5 text-white" />, label: "MEILLEUR CHOIX" },
@@ -523,7 +355,6 @@ function App() {
                   { border: "border-slate-200 shadow-lg", badge: "bg-slate-100 text-slate-600 border-slate-200", icon: <Star className="w-5 h-5 text-orange-400" />, label: "PREMIUM" }
                 ];
                 const style = podiumStyles[index] || podiumStyles[1];
-
                 return (
                   <div key={lens.id} className={`group bg-white rounded-3xl hover:-translate-y-2 border-2 transition-all duration-300 overflow-hidden relative ${style.border}`}>
                      <div className="absolute top-5 right-5 z-10"><span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold border shadow-sm ${style.badge}`}>{style.icon} {style.label}</span></div>
