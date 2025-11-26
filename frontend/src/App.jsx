@@ -7,18 +7,18 @@ import {
 
 // --- COMPOSANT LOGOS (IMAGES PNG) ---
 // Charge les images depuis le dossier /public/logos/
-const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
+const BrandLogo = ({ brand, className = "" }) => {
   const logoUrl = `/logos/${brand.toLowerCase()}.png`;
 
   return (
     <img 
       src={logoUrl} 
       alt={brand} 
-      className={`${className} object-contain`}
+      className={`max-h-full max-w-full object-contain ${className}`}
       onError={(e) => {
         // Si l'image n'est pas trouvée, on affiche le nom en texte
         e.target.style.display = 'none';
-        // On insère une span à la place (via DOM manipulation simple pour le fallback)
+        // On insère une span à la place
         const span = document.createElement('span');
         span.innerText = brand;
         span.className = "text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full";
@@ -67,7 +67,6 @@ function App() {
   });
 
   // Etat du formulaire
-  // Note: Coating par défaut 'MISTRAL' (commun à CODIR/ORUS qui sont par défaut)
   const [formData, setFormData] = useState({
     network: 'HORS_RESEAU',
     brand: 'ORUS',         // Par défaut ORUS car HORS_RESEAU
@@ -77,14 +76,12 @@ function App() {
     addition: 2.00,
     materialIndex: '1.60',
     coating: 'MISTRAL', 
-    cleanOption: false, // Obsolète (intégré aux traitements), gardé pour compatibilité backend
+    cleanOption: false, 
     myopiaControl: false,
     uvOption: true 
   });
 
   // --- CONFIGURATION URL API ---
-  // En local, on utilise http://127.0.0.1:8000/lenses
-  // Si vous voulez tester depuis un autre appareil sur le même wifi, remplacez 127.0.0.1 par l'IP de votre PC (ex: 192.168.1.15)
   const API_URL = "http://127.0.0.1:8000/lenses";
 
   // --- THEMES VISUELS ---
@@ -432,15 +429,16 @@ function App() {
                     <button
                       key={b.id}
                       onClick={() => setFormData({...formData, brand: b.id})}
-                      className={`py-3 px-2 rounded-xl transition-all duration-200 flex flex-col items-center gap-2 h-16 ${
+                      className={`py-3 px-2 rounded-xl transition-all duration-200 flex flex-col items-center gap-2 h-20 ${
                         formData.brand === b.id 
                         ? `bg-white ${currentTheme.text} shadow-md ring-2 ring-black/5 scale-[1.02]` 
                         : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
                       }`}
                     >
-                      <div className="h-8 w-full flex items-center justify-center mb-1">
-                        <BrandLogo brand={b.id} className="h-full w-auto object-contain opacity-90" />
+                      <div className="h-10 w-full flex items-center justify-center mb-1 p-1">
+                        <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain" />
                       </div>
+                      <span className="text-sm font-bold tracking-wider">{b.label}</span>
                     </button>
                   )
                 })}
