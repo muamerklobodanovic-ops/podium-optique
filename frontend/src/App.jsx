@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.04"; // Mise à jour Synchro Google
+const APP_VERSION = "1.05"; // Ajout Filtre Photochromique
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -141,7 +141,8 @@ function App() {
     coating: 'MISTRAL', 
     cleanOption: false, 
     myopiaControl: false,
-    uvOption: true 
+    uvOption: true,
+    photochromic: false // NOUVEAU: État pour le bouton Photochromique
   });
 
   const [serverUrl, setServerUrl] = useState(localStorage.getItem("optique_server_url") || "https://api-podium-optique.onrender.com/lenses");
@@ -221,15 +222,33 @@ function App() {
     formData.myopiaControl, formData.uvOption
   ]); 
 
-  // 2. FILTRAGE LOCAL (DESIGN) + FILTRAGE RÉSEAU
+  // 2. FILTRAGE LOCAL (DESIGN + PHOTOCHROMIQUE)
   useEffect(() => {
     if (lenses.length > 0) {
        let validLenses = lenses;
+       
+       // A. Filtre Prix Kalixia
        if (formData.network === 'KALIXIA') {
          validLenses = lenses.filter(l => l.sellingPrice > 0);
        }
+
+       // B. Filtre Photochromique
+       const isPhotoC = (item) => {
+          const text = (item.name + " " + item.coating).toUpperCase();
+          return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE");
+       };
+
+       if (formData.photochromic) {
+         validLenses = validLenses.filter(l => isPhotoC(l));
+       } else {
+         validLenses = validLenses.filter(l => !isPhotoC(l));
+       }
+
+       // C. Extraction designs
        const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
+
+       // D. Filtre Design
        if (formData.design) {
          setFilteredLenses(validLenses.filter(l => l.design === formData.design));
        } else {
@@ -239,7 +258,7 @@ function App() {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [lenses, formData.design, formData.network]);
+  }, [lenses, formData.design, formData.network, formData.photochromic]); // Ajout dépendance photochromic
 
 
   const fetchData = (ignoreFilters = false) => {
@@ -268,21 +287,6 @@ function App() {
       });
   };
 
-  const triggerSync = () => {
-      if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
-      setSyncLoading(true);
-      setSyncStatus(null);
-      axios.post(SYNC_URL, { url: sheetsUrl })
-          .then(res => {
-              setSyncStatus({ type: 'success', msg: `Succès ! ${res.data.count} verres importés.` });
-              fetchData(); // Rafraîchir les données
-          })
-          .catch(err => {
-              setSyncStatus({ type: 'error', msg: "Erreur : Vérifiez que le lien est bien public (CSV)." });
-          })
-          .finally(() => setSyncLoading(false));
-  };
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -300,7 +304,8 @@ function App() {
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
-
+  
+  // ... (Handlers inchangés: handleLogoUpload, handleSettingChange, etc.) ...
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) {
@@ -311,22 +316,18 @@ function App() {
       reader.readAsDataURL(file);
     }
   };
-
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
   };
-  
   const handleUrlChange = (value) => {
     setServerUrl(value);
     localStorage.setItem("optique_server_url", value); 
   };
-  
   const handleSheetsUrlChange = (value) => {
     setSheetsUrl(value);
     localStorage.setItem("optique_sheets_url", value);
   };
-
   const handleTypeChange = (newType) => {
     const shouldDisableAdd = newType === 'UNIFOCAL' || newType === 'DEGRESSIF';
     setFormData(prev => ({ ...prev, type: newType, design: '', addition: shouldDisableAdd ? 0.00 : prev.addition, myopiaControl: newType === 'UNIFOCAL' ? prev.myopiaControl : false }));
@@ -489,9 +490,20 @@ function App() {
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
               
-              {/* NOUVELLE LISTE TRAITEMENTS AVEC BOUTON TOUS */}
+              {/* LISTE TRAITEMENTS */}
               <div className="mb-2">
                  <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
+              </div>
+
+              {/* BOUTON PHOTOCHROMIQUE */}
+              <div className="mb-2">
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${formData.photochromic ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                    <div className="relative flex items-center">
+                      <input type="checkbox" name="photochromic" checked={formData.photochromic} onChange={handleChange} className="peer h-5 w-5 rounded-md border bg-white transition-all checked:border-yellow-500 checked:bg-yellow-500"/>
+                      <Sun className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 text-white opacity-0 peer-checked:opacity-100" />
+                    </div>
+                    <span className={`text-sm font-bold ${formData.photochromic ? 'text-yellow-700' : 'text-slate-500'}`}>PHOTOCHROMIQUE</span>
+                  </label>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -517,6 +529,7 @@ function App() {
           </div>
         </aside>
 
+        {/* ... Reste du code (Section Résultats, Settings) inchangé ... */}
         <section className="flex-1 p-8 overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto">
             {comparisonLens && (
