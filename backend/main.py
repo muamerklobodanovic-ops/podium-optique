@@ -21,6 +21,7 @@ app.add_middleware(
 # 3. Connexion Base de Données
 try:
     if DATABASE_URL:
+        # Correction pour certains formats d'URL postgres
         if DATABASE_URL.startswith("postgres://"):
             DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         engine = create_engine(DATABASE_URL)
@@ -40,16 +41,19 @@ def get_lenses(
     brand: str = None,
     index_mat: str = Query(None, alias="index"),
     coating: str = None,
+    # 👇 NOUVEAU : On écoute le paramètre design
+    design: str = None, 
     pocket_limit: float = Query(0.0, alias="pocketLimit"),
     
-    # Paramètres reçus mais filtrés via la logique SQL ci-dessous
+    # Paramètres optionnels
     network: str = None,
     sphere: float = 0.0,
     myopia: bool = False,
     uvOption: bool = False,
     clean: bool = False
 ):
-    print(f"🔍 FILTRE STRICT : Type={type_verre} | Marque={brand} | Indice={index_mat} | Trait={coating}")
+    # Log pour le débogage sur Render
+    print(f"🔍 FILTRE : Type={type_verre} | Marque={brand} | Design={design} | Indice={index_mat}")
 
     if not engine:
         return []
@@ -61,9 +65,7 @@ def get_lenses(
             params = {}
 
             # --- 1. FILTRE TYPE (STRICT) ---
-            # Doit correspondre exactement à 'UNIFOCAL', 'PROGRESSIF', 'DEGRESSIF'
             if type_verre:
-                # Petite exception pour INTERIEUR qui est souvent noté DEGRESSIF dans les catalogues
                 if type_verre == "INTERIEUR":
                      sql += " AND (type = 'DEGRESSIF' OR type = 'INTERIEUR')"
                 else:
@@ -76,50 +78,49 @@ def get_lenses(
                     # ORUS est une marque commerciale qui puise dans le stock CODIR
                     sql += " AND brand ILIKE 'CODIR'"
                 else:
-                    # ILIKE permet d'ignorer la casse (Hoya = HOYA) mais reste strict sur le mot
                     sql += " AND brand ILIKE :brand"
                     params["brand"] = brand
 
-            # --- 3. FILTRE INDICE (STRICT) ---
+            # --- 3. FILTRE DESIGN / GAMME (NOUVEAU) ---
+            if design and design != "TOUS" and design != "":
+                # Recherche partielle pour être souple (ex: "ECO" trouvera "ECO" et "GAMME ECO")
+                sql += " AND design ILIKE :design"
+                params["design"] = f"%{design}%"
+
+            # --- 4. FILTRE INDICE (STRICT) ---
             if index_mat:
-                # On gère le cas 1.60 vs 1,6 vs 1.6
                 clean_idx = index_mat.replace('.', ',') 
-                short_idx = index_mat.rstrip('0') # 1.60 -> 1.6
+                short_idx = index_mat.rstrip('0') 
                 
                 sql += " AND (index_mat = :idx1 OR index_mat = :idx2 OR index_mat = :idx3)"
                 params["idx1"] = index_mat
                 params["idx2"] = clean_idx
                 params["idx3"] = short_idx
 
-            # --- 4. FILTRE TRAITEMENT (TRÈS STRICT) ---
+            # --- 5. FILTRE TRAITEMENT (TRÈS STRICT) ---
             if coating:
-                # Le frontend envoie des codes avec underscores (ex: QUATTRO_UV_CLEAN)
-                # Le CSV contient des noms avec espaces ou tirets (ex: Quattro UV Clean)
+                # Nettoyage des codes front (QUATTRO_UV -> Quattro)
+                c_clean = coating.replace('_', ' ').replace('-', ' ')
+                # On prend le premier mot clé fort (ex: "QUATTRO" dans "QUATTRO UV")
+                keyword = c_clean.split(' ')[0]
                 
-                # On génère les variantes probables d'écriture
-                c_space = coating.replace('_', ' ')   # QUATTRO UV CLEAN
-                c_hyphen = coating.replace('_', '-')  # B-PROTECT
-                
-                # Recherche EXACTE (Insensible à la casse grace à ILIKE)
-                # Si on cherche "Mistral", ça NE trouvera PAS "Mistral Clean"
-                sql += " AND (coating ILIKE :c1 OR coating ILIKE :c2)"
-                params["c1"] = c_space
-                params["c2"] = c_hyphen
+                sql += " AND coating ILIKE :coating_kw"
+                params["coating_kw"] = f"%{keyword}%"
 
-            # --- 5. FILTRE MYOPIE (Recherche par mot clé spécifique) ---
+            # --- 6. FILTRE MYOPIE ---
             if myopia:
                 sql += " AND name ILIKE '%MIYO%'"
 
-            # Tri par marge (ou prix de vente si marge non calculable ici)
+            # Tri par prix de vente (ou marge) décroissant
             sql += " ORDER BY selling_price DESC LIMIT 50"
             
             result = conn.execute(text(sql), params)
             rows = result.fetchall()
             
-            # --- POST-TRAITEMENT & CALCULS ---
+            # --- POST-TRAITEMENT ---
             lenses_list = []
             
-            # Base de remboursement sécu/mutuelle estimée pour le calcul
+            # Base de remboursement sécu/mutuelle estimée
             refund_bases = {
                 "UNIFOCAL": 60.00,
                 "PROGRESSIF": 200.00,
@@ -132,18 +133,15 @@ def get_lenses(
                 lens = row._mapping
                 
                 p_price = float(lens['purchase_price'])
-                s_price_catalog = float(lens['selling_price']) # Prix Plafond
+                s_price_catalog = float(lens['selling_price']) 
                 
-                # Calcul du Prix Optimisé (Reste à Charge)
+                # Calcul du Prix Optimisé
                 final_selling_price = s_price_catalog
                 
                 if pocket_limit > 0:
-                    # On vise : Remboursement + Poche du client
                     target_price = base_refund + pocket_limit
-                    # On prend le plus bas entre le Prix Plafond et le Prix Cible
                     final_selling_price = min(target_price, s_price_catalog)
                     
-                    # Sécurité Marge : On ne descend pas en dessous d'un coeff 2.0
                     if final_selling_price < (p_price * 2.0):
                         final_selling_price = max(p_price * 2.0, s_price_catalog)
 
@@ -153,6 +151,7 @@ def get_lenses(
                     "id": lens['id'],
                     "name": lens['name'],
                     "brand": brand if brand == "ORUS" else lens['brand'],
+                    "design": lens.get('design', 'STANDARD'), # On renvoie le design au front
                     "index_mat": lens['index_mat'],
                     "coating": lens['coating'],
                     "purchasePrice": round(p_price, 2),
@@ -160,10 +159,10 @@ def get_lenses(
                     "margin": round(margin, 2)
                 })
             
-            # Tri final pour le podium
+            # Tri final
             lenses_list.sort(key=lambda x: x['margin'], reverse=True)
             
-            return lenses_list[:3]
+            return lenses_list[:3] # Top 3
 
     except Exception as e:
         print(f"❌ ERREUR SQL : {e}")
