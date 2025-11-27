@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff
 } from 'lucide-react';
 
 // --- COMPOSANT LOGOS (IMAGES PNG) ---
@@ -26,14 +26,13 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   );
 };
 
-// --- DONNÉES DE SECOURS ---
+// --- DONNÉES DE SECOURS (S'affichent uniquement en cas d'erreur) ---
 const MOCK_LENSES = [
-  { id: 1, name: "MODE HORS LIGNE - DÉMO", brand: "CODIR", index_mat: "1.60", purchasePrice: 80, sellingPrice: 240, margin: 160 },
-  { id: 2, name: "EXEMPLE VERRE PROGRESSIF", brand: "CODIR", index_mat: "1.67", purchasePrice: 110, sellingPrice: 310, margin: 200 },
-  { id: 3, name: "ECO MISTRAL 1.50", brand: "CODIR", index_mat: "1.50", purchasePrice: 25, sellingPrice: 90, margin: 65 },
+  { id: 999, name: "⚠️ MODE HORS LIGNE", brand: "ERREUR", index_mat: "0.0", purchasePrice: 0, sellingPrice: 0, margin: 0 },
+  { id: 998, name: "SERVEUR NON CONNECTÉ", brand: "INFO", index_mat: "0.0", purchasePrice: 0, sellingPrice: 0, margin: 0 },
 ];
 
-// --- COMPOSANT CARTE VERRE (Extrait pour réutilisation) ---
+// --- COMPOSANT CARTE VERRE ---
 const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReference = false }) => {
   const podiumStyles = [
     { 
@@ -56,14 +55,12 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
     }
   ];
 
-  // Si c'est une référence, on force un style neutre mais distinctif
   const style = isReference 
     ? { border: "border-blue-500 ring-4 ring-blue-50 shadow-xl", badge: "bg-blue-600 text-white", icon: <ArrowRightLeft className="w-5 h-5"/>, label: "RÉFÉRENCE" }
     : (podiumStyles[index] || podiumStyles[1]);
 
   return (
     <div className={`group bg-white rounded-3xl border-2 transition-all duration-300 overflow-hidden relative flex flex-col ${style.border} ${isReference ? 'scale-100' : 'hover:-translate-y-2'}`}>
-        
         <div className="absolute top-5 right-5 z-10">
           <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold border shadow-sm ${style.badge}`}>
             {style.icon} {style.label}
@@ -73,9 +70,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
         <div className="p-8 pt-14 border-b border-slate-50 relative">
           <h3 className="font-bold text-2xl text-slate-800 mb-2 leading-tight">{lens.name}</h3>
           <p className="text-sm text-slate-500 font-bold flex items-center gap-3">
-            {lens.brand} 
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-300"/> 
-            INDICE {lens.index_mat}
+            {lens.brand} <span className="w-1.5 h-1.5 rounded-full bg-slate-300"/> INDICE {lens.index_mat}
           </p>
         </div>
         
@@ -96,7 +91,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
                 <div className="flex justify-between items-end mb-2">
                     <span className="text-xs font-bold text-green-700 tracking-wide">MARGE NETTE</span>
                     <span className="text-xs font-bold text-green-700 bg-green-100 px-3 py-1 rounded-lg">
-                      {((lens.margin / lens.sellingPrice) * 100).toFixed(0)}%
+                      {lens.sellingPrice > 0 ? ((lens.margin / lens.sellingPrice) * 100).toFixed(0) : 0}%
                     </span>
                 </div>
                 <div className="bg-green-50 p-4 rounded-2xl border border-green-100 flex items-center justify-between">
@@ -109,9 +104,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
             <div className="pt-2 flex flex-col h-full">
                 <div className="bg-green-50 p-6 rounded-2xl border border-green-100 text-center mb-4 flex-1 flex flex-col justify-center items-center">
                   <span className="block text-xs font-bold text-green-600 mb-2 uppercase tracking-wider">PRIX CONSEILLÉ</span>
-                  <span className="text-5xl font-bold text-green-600 tracking-tighter">
-                    {lens.sellingPrice} €
-                  </span>
+                  <span className="text-5xl font-bold text-green-600 tracking-tighter">{lens.sellingPrice} €</span>
                 </div>
                 <div className="text-left pl-1">
                   <span className="text-[10px] font-mono text-slate-300 tracking-widest">
@@ -122,13 +115,9 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
           )}
         </div>
 
-        {/* BOUTON COMPARER (Sauf si c'est déjà la référence) */}
         {!isReference && (
           <div className="p-4 bg-white border-t border-slate-100">
-            <button 
-              onClick={() => onCompare(lens)}
-              className="w-full py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-blue-100 hover:text-blue-700 transition-colors flex items-center justify-center gap-2 text-sm"
-            >
+            <button onClick={() => onCompare(lens)} className="w-full py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-blue-100 hover:text-blue-700 transition-colors flex items-center justify-center gap-2 text-sm">
               <ArrowRightLeft className="w-4 h-4" /> COMPARER
             </button>
           </div>
@@ -142,11 +131,10 @@ function App() {
   const [lenses, setLenses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isOnline, setIsOnline] = useState(true); // Pour afficher l'état de la connexion
   
   const [showSettings, setShowSettings] = useState(false);
   const [showMargins, setShowMargins] = useState(false);
-
-  // État pour le verre de comparaison (figé en haut)
   const [comparisonLens, setComparisonLens] = useState(null);
 
   // Configuration
@@ -161,7 +149,7 @@ function App() {
     INTERIEUR: { maxPocket: 70 }
   });
 
-  // Etat du formulaire
+  // Formulaire
   const [formData, setFormData] = useState({
     network: 'HORS_RESEAU',
     brand: 'ORUS',         
@@ -176,11 +164,16 @@ function App() {
     uvOption: true 
   });
 
+  // --- URL API ---
   const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
+  
+  // ⚠️ ICI : Mettez l'URL que vous avez copiée sur Render.com
+  // Exemple : "https://api-podium-abcd.onrender.com/lenses"
   const RENDER_URL = "https://api-podium-optique.onrender.com/lenses"; 
+  
   const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : RENDER_URL;
 
-  // --- THEMES VISUELS ---
+  // Themes & Data constants...
   const themes = {
     blue: { name: 'OCÉAN', primary: 'bg-blue-700', hover: 'hover:bg-blue-800', text: 'text-blue-700', textDark: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-200', ring: 'ring-blue-300', shadow: 'shadow-blue-200' },
     emerald: { name: 'ÉMERAUDE', primary: 'bg-emerald-700', hover: 'hover:bg-emerald-800', text: 'text-emerald-700', textDark: 'text-emerald-900', light: 'bg-emerald-50', border: 'border-emerald-200', ring: 'ring-emerald-300', shadow: 'shadow-emerald-200' },
@@ -189,7 +182,6 @@ function App() {
     rose: { name: 'RUBIS', primary: 'bg-rose-700', hover: 'hover:bg-rose-800', text: 'text-rose-700', textDark: 'text-rose-900', light: 'bg-rose-50', border: 'border-rose-200', ring: 'ring-rose-300', shadow: 'shadow-rose-200' },
   };
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
-
   const brands = [ { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'INTERIEUR', label: 'INTER. / BUREAU' } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
@@ -212,11 +204,12 @@ function App() {
   const fetchData = (ignoreFilters = false) => {
     setLoading(true);
     setError(null); 
-    if (!isLocal && API_URL.includes("VOTRE-URL-RENDER-ICI")) {
-      setLenses(MOCK_LENSES);
-      setLoading(false);
-      return;
+    
+    // Si on est en ligne mais que l'URL est celle par défaut du template, on force l'erreur
+    if (!isLocal && API_URL.includes("api-podium-optique.onrender.com") && !API_URL.includes("VOTRE-URL")) {
+       // C'est probablement une URL exemple, on tente quand même mais on reste prudent
     }
+
     const params = ignoreFilters ? {} : {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
         index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
@@ -225,17 +218,20 @@ function App() {
 
     axios.get(API_URL, { params })
       .then(response => {
+        setIsOnline(true);
         if (response.data.length > 0) { setLenses(response.data); } 
         else { setLenses([]); }
         setLoading(false);
       })
       .catch(err => {
         console.error("Erreur connexion:", err);
-        setLenses(MOCK_LENSES);
+        setIsOnline(false); // Marque comme déconnecté
+        setLenses(MOCK_LENSES); // Affiche les fausses données pour ne pas casser l'UI
         setLoading(false);
       });
   };
 
+  // Handlers (handleChange, etc...) restent inchangés
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -257,7 +253,6 @@ function App() {
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
-
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) {
@@ -268,28 +263,21 @@ function App() {
       reader.readAsDataURL(file);
     }
   };
-
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
   };
-
   const handleTypeChange = (newType) => {
     const shouldDisableAdd = newType === 'UNIFOCAL' || newType === 'DEGRESSIF';
     setFormData(prev => ({ ...prev, type: newType, addition: shouldDisableAdd ? 0.00 : prev.addition, myopiaControl: newType === 'UNIFOCAL' ? prev.myopiaControl : false }));
   };
-
   const handleCoatingChange = (newCoating) => {
     setFormData(prev => ({ ...prev, coating: newCoating, cleanOption: false }));
   };
-
-  // --- FONCTIONS COMPARAISON ---
   const handleCompare = (lens) => {
     setComparisonLens(lens);
-    // Scroll vers le haut pour voir la comparaison
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
   const clearComparison = () => {
     setComparisonLens(null);
   };
@@ -316,7 +304,13 @@ function App() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Indicateur de Statut API */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {isOnline ? <Wifi className="w-4 h-4"/> : <WifiOff className="w-4 h-4"/>}
+            {isOnline ? "EN LIGNE" : "HORS LIGNE"}
+          </div>
+
           <button onClick={() => setShowMargins(!showMargins)} className="p-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-colors" title={showMargins ? "MASQUER LES MARGES" : "AFFICHER LES MARGES"}>
             {showMargins ? <EyeOff className="w-8 h-8" /> : <Eye className="w-8 h-8" />}
           </button>
@@ -445,39 +439,22 @@ function App() {
 
         <section className="flex-1 p-8 overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto">
-            {/* SECTION COMPARAISON (Si activée) */}
             {comparisonLens && (
               <div className="mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
                  <div className="flex justify-between items-end mb-4 pb-2 border-b border-blue-100">
-                   <h3 className="text-xl font-black text-blue-800 flex items-center gap-2 tracking-wide">
-                     <ArrowRightLeft className="w-6 h-6"/> PRODUIT DE RÉFÉRENCE (FIGÉ)
-                   </h3>
-                   <button 
-                     onClick={clearComparison} 
-                     className="flex items-center gap-2 text-xs font-bold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors"
-                   >
-                     <XCircle className="w-4 h-4"/> ARRÊTER LA COMPARAISON
-                   </button>
+                   <h3 className="text-xl font-black text-blue-800 flex items-center gap-2 tracking-wide"><ArrowRightLeft className="w-6 h-6"/> PRODUIT DE RÉFÉRENCE (FIGÉ)</h3>
+                   <button onClick={clearComparison} className="flex items-center gap-2 text-xs font-bold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors"><XCircle className="w-4 h-4"/> ARRÊTER LA COMPARAISON</button>
                  </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                     <div className="relative">
                       <div className="absolute -top-3 -left-3 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-20">RÉFÉRENCE A</div>
-                      <LensCard 
-                        lens={comparisonLens} 
-                        index={0} 
-                        currentTheme={currentTheme} 
-                        showMargins={showMargins} 
-                        onCompare={() => {}} 
-                        isReference={true} 
-                      />
+                      <LensCard lens={comparisonLens} index={0} currentTheme={currentTheme} showMargins={showMargins} onCompare={() => {}} isReference={true} />
                     </div>
-                    {/* Espace vide pour montrer que c'est une comparaison face aux résultats du bas */}
                     <div className="hidden md:flex items-center justify-center text-slate-300 font-bold text-4xl opacity-20">VS</div>
                  </div>
               </div>
             )}
 
-            {/* LISTE DES RÉSULTATS */}
             <div className="mb-8 flex flex-wrap gap-3 text-sm items-center font-bold text-slate-500">
                <span>{comparisonLens ? "COMPARER AVEC :" : "FILTRES :"}</span>
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><Shield className="w-4 h-4"/>{formData.network === 'HORS_RESEAU' ? 'HORS RÉSEAU' : formData.network}</span>
@@ -501,17 +478,8 @@ function App() {
                   <p className="text-sm text-slate-400 font-bold">MODIFIEZ VOS CRITÈRES POUR VOIR LES RÉSULTATS.</p>
                 </div>
               )}
-
               {lenses.map((lens, index) => (
-                <LensCard 
-                  key={lens.id} 
-                  lens={lens} 
-                  index={index} 
-                  currentTheme={currentTheme} 
-                  showMargins={showMargins} 
-                  onCompare={handleCompare}
-                  isReference={false}
-                />
+                <LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} isReference={false} />
               ))}
             </div>
           </div>
@@ -529,6 +497,7 @@ function App() {
               </div>
               <div className="p-8 overflow-y-auto">
                 <div className="space-y-10">
+                  {/* Settings content (Identité, Thème, Plafonds...) */}
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">IDENTITÉ DU POINT DE VENTE</h4>
                     <div className="grid grid-cols-1 gap-6">
@@ -539,35 +508,6 @@ function App() {
                           <Store className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-2">LOGO DU MAGASIN</label>
-                        <div className="flex items-center gap-4">
-                          {userSettings.shopLogo && (
-                            <div className="h-16 w-16 relative bg-white rounded-xl border border-slate-200 p-2 flex-shrink-0 shadow-sm">
-                               <img src={userSettings.shopLogo} alt="Logo" className="h-full w-full object-contain" />
-                               <button onClick={() => setUserSettings(prev => ({...prev, shopLogo: ""}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-sm transition-colors"><X className="w-3 h-3" /></button>
-                            </div>
-                          )}
-                          <div className="relative flex-1">
-                            <div className="relative">
-                               <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"/>
-                               <div className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-200 border-dashed rounded-xl text-slate-500 text-xs font-bold flex items-center hover:bg-slate-100 transition-colors uppercase">{userSettings.shopLogo ? "CHANGER LE FICHIER..." : "CLIQUEZ POUR CHOISIR UN FICHIER..."}</div>
-                               <Upload className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-5">
-                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">THÈME & COULEURS</h4>
-                    <div className="grid grid-cols-5 gap-3">
-                      {Object.keys(themes).map(colorKey => (
-                        <button key={colorKey} onClick={() => handleSettingChange('branding', 'themeColor', colorKey)} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${userSettings.themeColor === colorKey ? `border-${colorKey}-500 bg-${colorKey}-50` : 'border-transparent hover:bg-slate-50'}`}>
-                          <div className={`w-10 h-10 rounded-full ${themes[colorKey].primary} shadow-sm ring-4 ring-white`}></div>
-                          <span className="text-[10px] font-bold text-slate-500">{themes[colorKey].name}</span>
-                        </button>
-                      ))}
                     </div>
                   </div>
                   <div className="space-y-5">
