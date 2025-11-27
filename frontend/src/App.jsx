@@ -147,9 +147,25 @@ function App() {
   const brands = [ { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'INTERIEUR', label: 'INTER. / BUREAU' } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
+  
+  // DESIGNS PAR DÉFAUT (Fallback si pas de données CSV)
+  const defaultDesignsByType = {
+    'UNIFOCAL': [{ id: 'STANDARD', label: 'STANDARD' }, { id: 'PREMIUM', label: 'PREMIUM' }],
+    'PROGRESSIF': [{ id: 'ECO', label: 'ECO' }, { id: 'CONFORT', label: 'CONFORT' }, { id: 'PREMIUM', label: 'PREMIUM' }],
+    'DEGRESSIF': [{ id: 'OFFICE', label: 'OFFICE' }],
+    'INTERIEUR': [{ id: 'INDOOR', label: 'INDOOR' }]
+  };
+
+  // Designs actuels (soit dynamiques du CSV, soit par défaut)
+  const currentDesignsConfig = availableDesigns.length > 0 
+    ? availableDesigns.map(d => ({ id: d, label: d })) 
+    : (defaultDesignsByType[formData.type] || []);
+
   const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
+
+  useEffect(() => { fetchData(); }, []);
 
   // 1. RECHARGEMENT DES DONNÉES QUAND LES CRITÈRES CHANGENT
   useEffect(() => {
@@ -184,7 +200,7 @@ function App() {
   }, [lenses, formData.design]);
 
 
-  const fetchData = () => {
+  const fetchData = (ignoreFilters = false) => {
     setLoading(true);
     setError(null); 
     
@@ -194,7 +210,7 @@ function App() {
 
     // On n'envoie PAS le design au backend pour recevoir toute la gamme
     // On filtre ensuite localement pour pouvoir afficher les boutons
-    const params = {
+    const params = ignoreFilters ? {} : {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
         index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
         myopia: formData.myopiaControl, uvOption: formData.uvOption, pocketLimit: userSettings[formData.type]?.maxPocket || 0
@@ -203,7 +219,8 @@ function App() {
     axios.get(API_URL, { params })
       .then(response => {
         setIsOnline(true);
-        setLenses(response.data || []);
+        if (response.data.length > 0) { setLenses(response.data); } 
+        else { setLenses([]); }
         setLoading(false);
       })
       .catch(err => {
@@ -375,29 +392,28 @@ function App() {
                 ))}
               </div>
 
-              {/* CHOIX DU DESIGN (Affiché seulement si des designs sont disponibles) */}
-              {availableDesigns.length > 0 && (
-                <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
-                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
-                   <div className="flex flex-wrap gap-2">
+              {/* CHOIX DU DESIGN */}
+              <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
+                 <div className="flex flex-wrap gap-2">
+                   <button
+                     onClick={() => handleDesignChange('')}
+                     className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
+                   >
+                     TOUS
+                   </button>
+                   {/* Si aucun design trouvé, on affiche les défauts */}
+                   {(currentDesignsConfig.length > 0 ? currentDesignsConfig : []).map(d => (
                      <button
-                       onClick={() => handleDesignChange('')}
-                       className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
+                       key={d.id}
+                       onClick={() => handleDesignChange(d.id)}
+                       className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === d.id ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
                      >
-                       TOUS
+                       {d.label}
                      </button>
-                     {availableDesigns.map(design => (
-                       <button
-                         key={design}
-                         onClick={() => handleDesignChange(design)}
-                         className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === design ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
-                       >
-                         {design}
-                       </button>
-                     ))}
-                   </div>
-                </div>
-              )}
+                   ))}
+                 </div>
+              </div>
 
               <div className={`transition-all duration-300 overflow-hidden ${isMyopiaEligible ? 'max-h-24 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
                 <label className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer border-2 transition-colors ${formData.myopiaControl ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
@@ -497,10 +513,10 @@ function App() {
           </div>
         </section>
 
-        {/* ... (Modale Settings identique, conservée pour le code complet) ... */}
         {showSettings && (
           <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
-            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
+             {/* ... Contenu Settings identique ... */}
+             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
               <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-4 text-slate-800">
                   <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm"><Settings className="w-6 h-6 text-slate-600" /></div>
