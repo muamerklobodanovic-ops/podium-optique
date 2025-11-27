@@ -5,6 +5,10 @@ import {
   Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect
 } from 'lucide-react';
 
+// --- VERSION APPLICATION ---
+// Incrémentez ce nombre de 0.01 à chaque mise à jour
+const APP_VERSION = "1.02";
+
 // --- COMPOSANT LOGOS (IMAGES PNG) ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const safeBrand = brand || 'unknown';
@@ -185,14 +189,14 @@ function App() {
   // 2. FILTRAGE LOCAL (DESIGN) + FILTRAGE RÉSEAU
   useEffect(() => {
     if (lenses.length > 0) {
-       // MODIFICATION ICI : Filtre conditionnel selon le réseau
+       // Filtre conditionnel selon le réseau
        let validLenses = lenses;
        
        if (formData.network === 'KALIXIA') {
          // Pour Kalixia, on ne garde que ce qui est tarifé (>0)
          validLenses = lenses.filter(l => l.sellingPrice > 0);
        }
-       // Pour les autres réseaux, on garde tout (permet de voir les verres même si prix à 0)
+       // Pour les autres réseaux, on garde tout
 
        // Extraction dynamique des designs uniquement depuis les verres valides
        const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
@@ -208,7 +212,7 @@ function App() {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [lenses, formData.design, formData.network]); // Ajout de formData.network
+  }, [lenses, formData.design, formData.network]);
 
 
   const fetchData = (ignoreFilters = false) => {
@@ -449,6 +453,7 @@ function App() {
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
               
+              {/* NOUVELLE LISTE TRAITEMENTS AVEC BOUTON TOUS */}
               <div className="mb-2">
                  <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
               </div>
@@ -472,6 +477,7 @@ function App() {
               </div>
             </div>
             <div className="pt-4 pb-8">
+              {/* Le bouton est supprimé mais j'ai gardé l'espace pour l'aération du bas de page si nécessaire, sinon on peut retirer le div complet */}
             </div>
           </div>
         </aside>
@@ -499,10 +505,7 @@ function App() {
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><Shield className="w-4 h-4"/>{formData.network === 'HORS_RESEAU' ? 'HORS RÉSEAU' : formData.network}</span>
                <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs flex items-center gap-2`}><Tag className="w-4 h-4"/>{brands.find(b => b.id === formData.brand)?.label}</span>
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">{lensTypes.find(t => t.id === formData.type)?.label} {formData.materialIndex}</span>
-               
-               {/* Affichage du design sélectionné */}
                {formData.design && (<span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><BoxSelect className="w-4 h-4"/> {formData.design}</span>)}
-
                {formData.myopiaControl && (<span className="bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200 text-purple-800 shadow-sm text-xs flex items-center gap-2"><Eye className="w-4 h-4"/> FREINATION MYOPIE</span>)}
                {(formData.uvOption) && isUvOptionVisible && (<span className="bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 text-orange-800 shadow-sm text-xs">{uvOptionLabel}</span>)}
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">SPH {formData.sphere > 0 ? '+' : ''}{formData.sphere}</span>
@@ -534,7 +537,7 @@ function App() {
               <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-4 text-slate-800">
                   <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm"><Settings className="w-6 h-6 text-slate-600" /></div>
-                  <div><h3 className="font-bold text-xl leading-tight">CONFIGURATION</h3><p className="text-xs text-slate-500 font-bold">PERSONNALISATION & LIMITES</p></div>
+                  <div><h3 className="font-bold text-xl leading-tight">CONFIGURATION</h3><p className="text-xs text-slate-500 font-bold">PERSONNALISATION & LIMITES</p><p className="text-[10px] text-slate-400 mt-1">VERSION {APP_VERSION}</p></div>
                 </div>
                 <button onClick={() => setShowSettings(false)} className="p-3 hover:bg-slate-200 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
               </div>
@@ -574,7 +577,7 @@ function App() {
                     </div>
                   </div>
                   <div className="space-y-5">
-                    <div className="flex justify-between items-end border-b-2 border-slate-100 pb-2 mb-4"><h4 className="font-bold text-sm text-slate-400">PLAFONDS RESTE À CHARGE</h4><span className="text-[10px] font-bold bg-slate-200 text-slate-500 px-2 py-1 rounded">REMBOURSEMENT GÉRÉ PAR BDD</span></div>
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">PLAFONDS RESTE À CHARGE</h4>
                     <div className="grid grid-cols-2 gap-6">
                       {lensTypes.map(type => (
                         <div key={type.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
