@@ -91,9 +91,9 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
 
 function App() {
   // --- ETATS ---
-  const [lenses, setLenses] = useState([]); // Données brutes du serveur
-  const [filteredLenses, setFilteredLenses] = useState([]); // Données affichées (filtrées par design)
-  const [availableDesigns, setAvailableDesigns] = useState([]); // Liste des boutons Designs
+  const [lenses, setLenses] = useState([]); 
+  const [filteredLenses, setFilteredLenses] = useState([]); 
+  const [availableDesigns, setAvailableDesigns] = useState([]); 
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -103,7 +103,6 @@ function App() {
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
 
-  // Configuration
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
     shopLogo: "", 
@@ -115,12 +114,11 @@ function App() {
     INTERIEUR: { maxPocket: 70 }
   });
 
-  // Formulaire
   const [formData, setFormData] = useState({
     network: 'HORS_RESEAU',
     brand: 'ORUS',         
     type: 'PROGRESSIF',
-    design: '', // Filtre local
+    design: '', 
     sphere: 0.00,    
     cylinder: 0.00,
     addition: 0.00,  
@@ -160,7 +158,7 @@ function App() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // 1. RECHARGEMENT DES DONNÉES QUAND LES CRITÈRES CHANGENT
+  // 1. RECHARGEMENT DES DONNÉES QUAND LES CRITÈRES CHANGENT (AUTO-REFRESH)
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -171,7 +169,19 @@ function App() {
     if (!coatingExists) { setFormData(prev => ({ ...prev, coating: currentCoatings[0].id })); }
 
     fetchData(); 
-  }, [formData.materialIndex, formData.brand, formData.network, formData.type, formData.coating]); 
+  }, [
+    formData.materialIndex, 
+    formData.brand, 
+    formData.network, 
+    formData.type, 
+    formData.coating,
+    // Ajout des champs manquants pour le refresh automatique
+    formData.sphere,
+    formData.cylinder,
+    formData.addition,
+    formData.myopiaControl,
+    formData.uvOption
+  ]); 
 
   // 2. FILTRAGE LOCAL (DESIGN) QUAND LES DONNÉES ARRIVENT
   useEffect(() => {
@@ -222,7 +232,6 @@ function App() {
       });
   };
 
-  // ... Handlers inchangés ...
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -459,9 +468,7 @@ function App() {
               </div>
             </div>
             <div className="pt-4 pb-8">
-              <button onClick={() => fetchData(false)} disabled={loading} className={`w-full py-5 ${currentTheme.primary} ${currentTheme.hover} disabled:bg-slate-300 text-white font-bold text-lg rounded-2xl shadow-xl ${currentTheme.shadow} transition-all active:scale-95 flex justify-center items-center gap-3`}>
-                {loading ? <RefreshCw className="animate-spin w-6 h-6"/> : <Search className="w-6 h-6" />}{loading ? "CALCUL EN COURS..." : "CALCULER LE PODIUM"}
-              </button>
+              {/* Le bouton est supprimé mais j'ai gardé l'espace pour l'aération du bas de page si nécessaire, sinon on peut retirer le div complet */}
             </div>
           </div>
         </aside>
@@ -489,7 +496,10 @@ function App() {
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><Shield className="w-4 h-4"/>{formData.network === 'HORS_RESEAU' ? 'HORS RÉSEAU' : formData.network}</span>
                <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs flex items-center gap-2`}><Tag className="w-4 h-4"/>{brands.find(b => b.id === formData.brand)?.label}</span>
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">{lensTypes.find(t => t.id === formData.type)?.label} {formData.materialIndex}</span>
+               
+               {/* Affichage du design sélectionné */}
                {formData.design && (<span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><BoxSelect className="w-4 h-4"/> {formData.design}</span>)}
+
                {formData.myopiaControl && (<span className="bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200 text-purple-800 shadow-sm text-xs flex items-center gap-2"><Eye className="w-4 h-4"/> FREINATION MYOPIE</span>)}
                {(formData.uvOption) && isUvOptionVisible && (<span className="bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 text-orange-800 shadow-sm text-xs">{uvOptionLabel}</span>)}
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">SPH {formData.sphere > 0 ? '+' : ''}{formData.sphere}</span>
