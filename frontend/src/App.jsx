@@ -176,15 +176,18 @@ function App() {
   // 2. FILTRAGE LOCAL (DESIGN) QUAND LES DONNÉES ARRIVENT
   useEffect(() => {
     if (lenses.length > 0) {
-       // Extraction dynamique des designs disponibles dans les résultats
-       const designs = [...new Set(lenses.map(l => l.design).filter(Boolean))].sort();
+       // Etape cruciale : On ne garde que les verres avec un prix > 0
+       const validLenses = lenses.filter(l => l.sellingPrice > 0);
+
+       // Extraction dynamique des designs uniquement depuis les verres valides
+       const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
-       // Application du filtre design
+       // Application du filtre design sur les verres valides
        if (formData.design) {
-         setFilteredLenses(lenses.filter(l => l.design === formData.design));
+         setFilteredLenses(validLenses.filter(l => l.design === formData.design));
        } else {
-         setFilteredLenses(lenses);
+         setFilteredLenses(validLenses);
        }
     } else {
        setAvailableDesigns([]);
@@ -201,8 +204,6 @@ function App() {
       setLenses(MOCK_LENSES); setLoading(false); return;
     }
 
-    // On demande au backend tous les verres (via le backend sans limite)
-    // Pour ensuite filtrer localement le design
     const params = ignoreFilters ? {} : {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
         index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
@@ -221,6 +222,7 @@ function App() {
       });
   };
 
+  // ... Handlers inchangés ...
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -487,10 +489,7 @@ function App() {
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><Shield className="w-4 h-4"/>{formData.network === 'HORS_RESEAU' ? 'HORS RÉSEAU' : formData.network}</span>
                <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs flex items-center gap-2`}><Tag className="w-4 h-4"/>{brands.find(b => b.id === formData.brand)?.label}</span>
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">{lensTypes.find(t => t.id === formData.type)?.label} {formData.materialIndex}</span>
-               
-               {/* Affichage du design sélectionné */}
                {formData.design && (<span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><BoxSelect className="w-4 h-4"/> {formData.design}</span>)}
-
                {formData.myopiaControl && (<span className="bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200 text-purple-800 shadow-sm text-xs flex items-center gap-2"><Eye className="w-4 h-4"/> FREINATION MYOPIE</span>)}
                {(formData.uvOption) && isUvOptionVisible && (<span className="bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 text-orange-800 shadow-sm text-xs">{uvOptionLabel}</span>)}
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">SPH {formData.sphere > 0 ? '+' : ''}{formData.sphere}</span>
