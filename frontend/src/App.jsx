@@ -120,7 +120,7 @@ function App() {
     network: 'HORS_RESEAU',
     brand: 'ORUS',         
     type: 'PROGRESSIF',
-    design: '', // Filtre local
+    design: '', 
     sphere: 0.00,    
     cylinder: 0.00,
     addition: 0.00,  
@@ -143,25 +143,21 @@ function App() {
     rose: { name: 'RUBIS', primary: 'bg-rose-700', hover: 'hover:bg-rose-800', text: 'text-rose-700', textDark: 'text-rose-900', light: 'bg-rose-50', border: 'border-rose-200', ring: 'ring-rose-300', shadow: 'shadow-rose-200' },
   };
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
-
   const brands = [ { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'INTERIEUR', label: 'INTER. / BUREAU' } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   
-  // DESIGNS PAR DÉFAUT (Fallback si pas de données CSV)
-  const defaultDesignsByType = {
-    'UNIFOCAL': [{ id: 'STANDARD', label: 'STANDARD' }, { id: 'PREMIUM', label: 'PREMIUM' }],
-    'PROGRESSIF': [{ id: 'ECO', label: 'ECO' }, { id: 'CONFORT', label: 'CONFORT' }, { id: 'PREMIUM', label: 'PREMIUM' }],
-    'DEGRESSIF': [{ id: 'OFFICE', label: 'OFFICE' }],
-    'INTERIEUR': [{ id: 'INDOOR', label: 'INDOOR' }]
-  };
+  // CONFIGURATION DES TRAITEMENTS REORGANISÉE
+  // Paires : [Classique, Blue] pour chaque ligne
+  const codirCoatings = [
+    { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> },
+    { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
+    { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> },
+    { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
+    { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> },
+    { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> },
+  ];
 
-  // Designs actuels (soit dynamiques du CSV, soit par défaut)
-  const currentDesignsConfig = availableDesigns.length > 0 
-    ? availableDesigns.map(d => ({ id: d, label: d })) 
-    : (defaultDesignsByType[formData.type] || []);
-
-  const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
@@ -174,7 +170,8 @@ function App() {
         if (!formData.uvOption) { setFormData(prev => ({ ...prev, uvOption: true })); }
       }
     }
-    const coatingExists = currentCoatings.find(c => c.id === formData.coating);
+    // Vérifie si le traitement actuel existe, sinon reset (sauf si c'est '', ce qui veut dire TOUS)
+    const coatingExists = formData.coating === '' || currentCoatings.find(c => c.id === formData.coating);
     if (!coatingExists) { setFormData(prev => ({ ...prev, coating: currentCoatings[0].id })); }
 
     fetchData(); 
@@ -183,11 +180,8 @@ function App() {
   // 2. FILTRAGE LOCAL (DESIGN) QUAND LES DONNÉES ARRIVENT
   useEffect(() => {
     if (lenses.length > 0) {
-       // Extraction des designs uniques
        const designs = [...new Set(lenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
-
-       // Application du filtre design local
        if (formData.design) {
          setFilteredLenses(lenses.filter(l => l.design === formData.design));
        } else {
@@ -199,17 +193,14 @@ function App() {
     }
   }, [lenses, formData.design]);
 
-
   const fetchData = (ignoreFilters = false) => {
     setLoading(true);
     setError(null); 
     
-    if (!isLocal && API_URL.includes("VOTRE-URL")) {
+    if (!isLocal && API_URL.includes("VOTRE-URL-RENDER-ICI")) {
       setLenses(MOCK_LENSES); setLoading(false); return;
     }
 
-    // On n'envoie PAS le design au backend pour recevoir toute la gamme
-    // On filtre ensuite localement pour pouvoir afficher les boutons
     const params = ignoreFilters ? {} : {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
         index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
@@ -219,8 +210,7 @@ function App() {
     axios.get(API_URL, { params })
       .then(response => {
         setIsOnline(true);
-        if (response.data.length > 0) { setLenses(response.data); } 
-        else { setLenses([]); }
+        setLenses(response.data || []);
         setLoading(false);
       })
       .catch(err => {
@@ -270,7 +260,6 @@ function App() {
   };
   const handleTypeChange = (newType) => {
     const shouldDisableAdd = newType === 'UNIFOCAL' || newType === 'DEGRESSIF';
-    // Reset design quand on change de type pour éviter les incohérences
     setFormData(prev => ({ ...prev, type: newType, design: '', addition: shouldDisableAdd ? 0.00 : prev.addition, myopiaControl: newType === 'UNIFOCAL' ? prev.myopiaControl : false }));
   };
   const handleDesignChange = (newDesign) => {
@@ -393,27 +382,28 @@ function App() {
               </div>
 
               {/* CHOIX DU DESIGN */}
-              <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
-                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
-                 <div className="flex flex-wrap gap-2">
-                   <button
-                     onClick={() => handleDesignChange('')}
-                     className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
-                   >
-                     TOUS
-                   </button>
-                   {/* Si aucun design trouvé, on affiche les défauts */}
-                   {(currentDesignsConfig.length > 0 ? currentDesignsConfig : []).map(d => (
+              {availableDesigns.length > 0 && (
+                <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
+                   <div className="flex flex-wrap gap-2">
                      <button
-                       key={d.id}
-                       onClick={() => handleDesignChange(d.id)}
-                       className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === d.id ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
+                       onClick={() => handleDesignChange('')}
+                       className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
                      >
-                       {d.label}
+                       TOUS
                      </button>
-                   ))}
-                 </div>
-              </div>
+                     {availableDesigns.map(design => (
+                       <button
+                         key={design}
+                         onClick={() => handleDesignChange(design)}
+                         className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === design ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
+                       >
+                         {design}
+                       </button>
+                     ))}
+                   </div>
+                </div>
+              )}
 
               <div className={`transition-all duration-300 overflow-hidden ${isMyopiaEligible ? 'max-h-24 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
                 <label className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer border-2 transition-colors ${formData.myopiaControl ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
@@ -438,6 +428,12 @@ function App() {
             </div>
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
+              
+              {/* NOUVELLE LISTE TRAITEMENTS AVEC BOUTON TOUS */}
+              <div className="mb-2">
+                 <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 {currentCoatings.map(c => (
                   <button key={c.id} onClick={() => handleCoatingChange(c.id)} className={`p-4 rounded-xl border-2 text-left transition-all relative overflow-hidden ${formData.coating === c.id ? `${currentTheme.light} ${currentTheme.border} ${currentTheme.textDark} ring-1 ${currentTheme.ring.replace('focus:', '')}` : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'}`}>
@@ -487,11 +483,14 @@ function App() {
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><Shield className="w-4 h-4"/>{formData.network === 'HORS_RESEAU' ? 'HORS RÉSEAU' : formData.network}</span>
                <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs flex items-center gap-2`}><Tag className="w-4 h-4"/>{brands.find(b => b.id === formData.brand)?.label}</span>
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">{lensTypes.find(t => t.id === formData.type)?.label} {formData.materialIndex}</span>
+               
+               {/* Affichage du design sélectionné */}
                {formData.design && (<span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><BoxSelect className="w-4 h-4"/> {formData.design}</span>)}
+
                {formData.myopiaControl && (<span className="bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200 text-purple-800 shadow-sm text-xs flex items-center gap-2"><Eye className="w-4 h-4"/> FREINATION MYOPIE</span>)}
                {(formData.uvOption) && isUvOptionVisible && (<span className="bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 text-orange-800 shadow-sm text-xs">{uvOptionLabel}</span>)}
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">SPH {formData.sphere > 0 ? '+' : ''}{formData.sphere}</span>
-               <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs`}>{currentCoatings.find(c => c.id === formData.coating)?.label}</span>
+               <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs`}>{formData.coating === '' ? 'TOUS TRAITEMENTS' : currentCoatings.find(c => c.id === formData.coating)?.label}</span>
             </div>
             
             {error && (
@@ -515,7 +514,7 @@ function App() {
 
         {showSettings && (
           <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
-             {/* ... Contenu Settings identique ... */}
+             {/* ... Contenu Settings inchangé ... */}
              <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
               <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-4 text-slate-800">
@@ -550,7 +549,18 @@ function App() {
                     </div>
                   </div>
                   <div className="space-y-5">
-                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">PLAFONDS RESTE À CHARGE</h4>
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">THÈME & COULEURS</h4>
+                    <div className="grid grid-cols-5 gap-3">
+                      {Object.keys(themes).map(colorKey => (
+                        <button key={colorKey} onClick={() => handleSettingChange('branding', 'themeColor', colorKey)} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${userSettings.themeColor === colorKey ? `border-${colorKey}-500 bg-${colorKey}-50` : 'border-transparent hover:bg-slate-50'}`}>
+                          <div className={`w-10 h-10 rounded-full ${themes[colorKey].primary} shadow-sm ring-4 ring-white`}></div>
+                          <span className="text-[10px] font-bold text-slate-500">{themes[colorKey].name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <div className="flex justify-between items-end border-b-2 border-slate-100 pb-2 mb-4"><h4 className="font-bold text-sm text-slate-400">PLAFONDS RESTE À CHARGE</h4><span className="text-[10px] font-bold bg-slate-200 text-slate-500 px-2 py-1 rounded">REMBOURSEMENT GÉRÉ PAR BDD</span></div>
                     <div className="grid grid-cols-2 gap-6">
                       {lensTypes.map(type => (
                         <div key={type.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
