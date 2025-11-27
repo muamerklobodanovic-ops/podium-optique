@@ -141,21 +141,15 @@ def import_data_from_csv():
                 raw_purchase = get_column_value(row, ['PRIX 2*NETS', 'PRIX 2 NETS', '2*NETS'])
                 purchase = clean_price(raw_purchase)
                 
-                # Prix Vente : On cherche Kalixia, sinon Santeclair, sinon on met un markup sur l'achat
+                # Prix Vente : On cherche UNIQUEMENT Kalixia
                 raw_selling = get_column_value(row, ['KALIXIA'])
                 selling = clean_price(raw_selling)
                 
-                # Fallback Prix Vente si vide (ex: Coeff 2.5 sur l'achat)
-                if selling == 0 and purchase > 0:
-                     selling = purchase * 2.5
-                
-                # Fallback Santeclair si Kalixia vide
-                if selling == 0:
-                    raw_selling_alt = get_column_value(row, ['SANTECLAIRE', 'SANTECLAIR'])
-                    selling = clean_price(raw_selling_alt)
+                # NOTE : On a supprimé les règles de fallback (Coeff 2.5 et Santéclair)
+                # Si selling est à 0, le verre sera importé mais avec un prix de vente à 0.
 
                 # 3. INSERTION
-                # On importe si on a au moins un nom
+                # On importe même si le prix de vente est à 0 (synchronisation complète)
                 if name != 'Inconnu':
                     params = {
                         "name": name,      
