@@ -120,7 +120,7 @@ function App() {
     network: 'HORS_RESEAU',
     brand: 'ORUS',         
     type: 'PROGRESSIF',
-    design: '', 
+    design: '', // Filtre local
     sphere: 0.00,    
     cylinder: 0.00,
     addition: 0.00,  
@@ -147,8 +147,6 @@ function App() {
   const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'INTERIEUR', label: 'INTER. / BUREAU' } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   
-  // CONFIGURATION DES TRAITEMENTS REORGANISÉE
-  // Paires : [Classique, Blue] pour chaque ligne
   const codirCoatings = [
     { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> },
     { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
@@ -157,7 +155,6 @@ function App() {
     { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> },
     { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> },
   ];
-
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
@@ -170,7 +167,6 @@ function App() {
         if (!formData.uvOption) { setFormData(prev => ({ ...prev, uvOption: true })); }
       }
     }
-    // Vérifie si le traitement actuel existe, sinon reset (sauf si c'est '', ce qui veut dire TOUS)
     const coatingExists = formData.coating === '' || currentCoatings.find(c => c.id === formData.coating);
     if (!coatingExists) { setFormData(prev => ({ ...prev, coating: currentCoatings[0].id })); }
 
@@ -180,8 +176,11 @@ function App() {
   // 2. FILTRAGE LOCAL (DESIGN) QUAND LES DONNÉES ARRIVENT
   useEffect(() => {
     if (lenses.length > 0) {
+       // Extraction dynamique des designs disponibles dans les résultats
        const designs = [...new Set(lenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
+
+       // Application du filtre design
        if (formData.design) {
          setFilteredLenses(lenses.filter(l => l.design === formData.design));
        } else {
@@ -193,14 +192,17 @@ function App() {
     }
   }, [lenses, formData.design]);
 
+
   const fetchData = (ignoreFilters = false) => {
     setLoading(true);
     setError(null); 
     
-    if (!isLocal && API_URL.includes("VOTRE-URL-RENDER-ICI")) {
+    if (!isLocal && API_URL.includes("VOTRE-URL")) {
       setLenses(MOCK_LENSES); setLoading(false); return;
     }
 
+    // On demande au backend tous les verres (via le backend sans limite)
+    // Pour ensuite filtrer localement le design
     const params = ignoreFilters ? {} : {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
         index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
@@ -240,6 +242,7 @@ function App() {
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
+
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) {
@@ -250,6 +253,7 @@ function App() {
       reader.readAsDataURL(file);
     }
   };
+
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
@@ -512,10 +516,10 @@ function App() {
           </div>
         </section>
 
+        {/* ... (Modale Settings identique, conservée pour le code complet) ... */}
         {showSettings && (
           <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
-             {/* ... Contenu Settings inchangé ... */}
-             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
+            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
               <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-4 text-slate-800">
                   <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm"><Settings className="w-6 h-6 text-slate-600" /></div>
@@ -535,7 +539,6 @@ function App() {
                         </div>
                     </div>
                   </div>
-                  {/* ... Reste des paramètres (Identité, Thème, Plafonds) ... */}
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">IDENTITÉ DU POINT DE VENTE</h4>
                     <div className="grid grid-cols-1 gap-6">

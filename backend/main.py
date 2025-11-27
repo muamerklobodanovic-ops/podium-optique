@@ -41,7 +41,6 @@ def get_lenses(
     brand: str = None,
     index_mat: str = Query(None, alias="index"),
     coating: str = None,
-    # 👇 NOUVEAU : On écoute le paramètre design
     design: str = None, 
     pocket_limit: float = Query(0.0, alias="pocketLimit"),
     
@@ -52,8 +51,8 @@ def get_lenses(
     uvOption: bool = False,
     clean: bool = False
 ):
-    # Log pour le débogage sur Render
-    print(f"🔍 FILTRE : Type={type_verre} | Marque={brand} | Design={design} | Indice={index_mat}")
+    # Log pour le débogage
+    print(f"🔍 RECHERCHE INFINIE : Type={type_verre} | Marque={brand} | Design={design}")
 
     if not engine:
         return []
@@ -81,9 +80,8 @@ def get_lenses(
                     sql += " AND brand ILIKE :brand"
                     params["brand"] = brand
 
-            # --- 3. FILTRE DESIGN / GAMME (NOUVEAU) ---
+            # --- 3. FILTRE DESIGN / GAMME ---
             if design and design != "TOUS" and design != "":
-                # Recherche partielle pour être souple (ex: "ECO" trouvera "ECO" et "GAMME ECO")
                 sql += " AND design ILIKE :design"
                 params["design"] = f"%{design}%"
 
@@ -97,22 +95,20 @@ def get_lenses(
                 params["idx2"] = clean_idx
                 params["idx3"] = short_idx
 
-            # --- 5. FILTRE TRAITEMENT (TRÈS STRICT) ---
+            # --- 5. FILTRE TRAITEMENT ---
             if coating:
-                # Nettoyage des codes front (QUATTRO_UV -> Quattro)
-                c_clean = coating.replace('_', ' ').replace('-', ' ')
-                # On prend le premier mot clé fort (ex: "QUATTRO" dans "QUATTRO UV")
-                keyword = c_clean.split(' ')[0]
-                
+                c_clean = coating.split('_')[0]
                 sql += " AND coating ILIKE :coating_kw"
-                params["coating_kw"] = f"%{keyword}%"
+                params["coating_kw"] = f"%{c_clean}%"
 
             # --- 6. FILTRE MYOPIE ---
             if myopia:
                 sql += " AND name ILIKE '%MIYO%'"
 
-            # Tri par prix de vente (ou marge) décroissant
-            sql += " ORDER BY selling_price DESC LIMIT 50"
+            # --- PAS DE LIMITE ---
+            # On retire le LIMIT pour récupérer absolument toutes les références
+            # Cela permet au frontend de scanner tous les designs disponibles
+            sql += " ORDER BY selling_price DESC"
             
             result = conn.execute(text(sql), params)
             rows = result.fetchall()
@@ -151,7 +147,7 @@ def get_lenses(
                     "id": lens['id'],
                     "name": lens['name'],
                     "brand": brand if brand == "ORUS" else lens['brand'],
-                    "design": lens.get('design', 'STANDARD'), # On renvoie le design au front
+                    "design": lens.get('design', 'STANDARD'), 
                     "index_mat": lens['index_mat'],
                     "coating": lens['coating'],
                     "purchasePrice": round(p_price, 2),
@@ -162,7 +158,8 @@ def get_lenses(
             # Tri final
             lenses_list.sort(key=lambda x: x['margin'], reverse=True)
             
-            return lenses_list[:3] # Top 3
+            # On renvoie TOUTE la liste (pas de slice [:3])
+            return lenses_list
 
     except Exception as e:
         print(f"❌ ERREUR SQL : {e}")
