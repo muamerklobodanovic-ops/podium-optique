@@ -175,7 +175,6 @@ function App() {
     formData.network, 
     formData.type, 
     formData.coating,
-    // Ajout des champs manquants pour le refresh automatique
     formData.sphere,
     formData.cylinder,
     formData.addition,
@@ -183,11 +182,17 @@ function App() {
     formData.uvOption
   ]); 
 
-  // 2. FILTRAGE LOCAL (DESIGN) QUAND LES DONNÉES ARRIVENT
+  // 2. FILTRAGE LOCAL (DESIGN) + FILTRAGE RÉSEAU
   useEffect(() => {
     if (lenses.length > 0) {
-       // Etape cruciale : On ne garde que les verres avec un prix > 0
-       const validLenses = lenses.filter(l => l.sellingPrice > 0);
+       // MODIFICATION ICI : Filtre conditionnel selon le réseau
+       let validLenses = lenses;
+       
+       if (formData.network === 'KALIXIA') {
+         // Pour Kalixia, on ne garde que ce qui est tarifé (>0)
+         validLenses = lenses.filter(l => l.sellingPrice > 0);
+       }
+       // Pour les autres réseaux, on garde tout (permet de voir les verres même si prix à 0)
 
        // Extraction dynamique des designs uniquement depuis les verres valides
        const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
@@ -203,7 +208,7 @@ function App() {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [lenses, formData.design]);
+  }, [lenses, formData.design, formData.network]); // Ajout de formData.network
 
 
   const fetchData = (ignoreFilters = false) => {
@@ -444,7 +449,6 @@ function App() {
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
               
-              {/* NOUVELLE LISTE TRAITEMENTS AVEC BOUTON TOUS */}
               <div className="mb-2">
                  <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
               </div>
@@ -468,7 +472,6 @@ function App() {
               </div>
             </div>
             <div className="pt-4 pb-8">
-              {/* Le bouton est supprimé mais j'ai gardé l'espace pour l'aération du bas de page si nécessaire, sinon on peut retirer le div complet */}
             </div>
           </div>
         </aside>
@@ -525,7 +528,6 @@ function App() {
           </div>
         </section>
 
-        {/* ... (Modale Settings identique, conservée pour le code complet) ... */}
         {showSettings && (
           <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
