@@ -2,14 +2,20 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, Palette
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-// Incrémentez ce nombre de 0.01 à chaque mise à jour
-const APP_VERSION = "1.02";
+const APP_VERSION = "1.03";
 
-// --- COMPOSANT LOGOS (IMAGES PNG) ---
+// --- OUTILS COULEURS ---
+// Fonction pour convertir Hex en RGB pour créer des nuances (fonds clairs)
+const hexToRgb = (hex) => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
+};
+
+// --- COMPOSANT LOGOS ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const safeBrand = brand || 'unknown';
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
@@ -94,7 +100,6 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
 };
 
 function App() {
-  // --- ETATS ---
   const [lenses, setLenses] = useState([]); 
   const [filteredLenses, setFilteredLenses] = useState([]); 
   const [availableDesigns, setAvailableDesigns] = useState([]); 
@@ -110,7 +115,8 @@ function App() {
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
     shopLogo: "", 
-    themeColor: "blue",
+    themeColor: "blue", // 'blue', 'emerald', 'custom'...
+    customColor: "#2563eb", // Couleur par défaut pour le mode custom (Bleu roi)
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
     UNIFOCAL: { maxPocket: 40 },
     PROGRESSIF: { maxPocket: 100 },
@@ -137,14 +143,46 @@ function App() {
   const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
   const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : serverUrl;
 
+  // --- GESTION DES COULEURS DYNAMIQUES ---
+  useEffect(() => {
+    const root = document.documentElement;
+    if (userSettings.themeColor === 'custom') {
+      const rgb = hexToRgb(userSettings.customColor);
+      root.style.setProperty('--theme-primary', userSettings.customColor);
+      root.style.setProperty('--theme-light', `rgb(${rgb} / 0.1)`); // Fond clair avec transparence
+      root.style.setProperty('--theme-border', `rgb(${rgb} / 0.2)`); // Bordure légère
+      root.style.setProperty('--theme-ring', `rgb(${rgb} / 0.5)`); // Ring focus
+    } else {
+      // Reset si on repasse sur un thème prédéfini
+      root.style.removeProperty('--theme-primary');
+      root.style.removeProperty('--theme-light');
+      root.style.removeProperty('--theme-border');
+      root.style.removeProperty('--theme-ring');
+    }
+  }, [userSettings.themeColor, userSettings.customColor]);
+
   const themes = {
     blue: { name: 'OCÉAN', primary: 'bg-blue-700', hover: 'hover:bg-blue-800', text: 'text-blue-700', textDark: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-200', ring: 'ring-blue-300', shadow: 'shadow-blue-200' },
     emerald: { name: 'ÉMERAUDE', primary: 'bg-emerald-700', hover: 'hover:bg-emerald-800', text: 'text-emerald-700', textDark: 'text-emerald-900', light: 'bg-emerald-50', border: 'border-emerald-200', ring: 'ring-emerald-300', shadow: 'shadow-emerald-200' },
     violet: { name: 'AMÉTHYSTE', primary: 'bg-violet-700', hover: 'hover:bg-violet-800', text: 'text-violet-700', textDark: 'text-violet-900', light: 'bg-violet-50', border: 'border-violet-200', ring: 'ring-violet-300', shadow: 'shadow-violet-200' },
     amber: { name: 'AMBRE', primary: 'bg-amber-700', hover: 'hover:bg-amber-800', text: 'text-amber-700', textDark: 'text-amber-900', light: 'bg-amber-50', border: 'border-amber-200', ring: 'ring-amber-300', shadow: 'shadow-amber-200' },
     rose: { name: 'RUBIS', primary: 'bg-rose-700', hover: 'hover:bg-rose-800', text: 'text-rose-700', textDark: 'text-rose-900', light: 'bg-rose-50', border: 'border-rose-200', ring: 'ring-rose-300', shadow: 'shadow-rose-200' },
+    // Thème Custom utilisant les variables CSS
+    custom: { 
+        name: 'PERSO', 
+        primary: 'bg-[var(--theme-primary)]', 
+        hover: 'hover:opacity-90', 
+        text: 'text-[var(--theme-primary)]', 
+        textDark: 'text-black', // Fallback safe
+        light: 'bg-[var(--theme-light)]', 
+        border: 'border-[var(--theme-border)]', 
+        ring: 'ring-[var(--theme-ring)]', 
+        shadow: 'shadow-md' 
+    }
   };
+
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
+
   const brands = [ { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'INTERIEUR', label: 'INTER. / BUREAU' } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
@@ -162,7 +200,6 @@ function App() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // 1. RECHARGEMENT DES DONNÉES QUAND LES CRITÈRES CHANGENT (AUTO-REFRESH)
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -186,23 +223,14 @@ function App() {
     formData.uvOption
   ]); 
 
-  // 2. FILTRAGE LOCAL (DESIGN) + FILTRAGE RÉSEAU
   useEffect(() => {
     if (lenses.length > 0) {
-       // Filtre conditionnel selon le réseau
        let validLenses = lenses;
-       
        if (formData.network === 'KALIXIA') {
-         // Pour Kalixia, on ne garde que ce qui est tarifé (>0)
          validLenses = lenses.filter(l => l.sellingPrice > 0);
        }
-       // Pour les autres réseaux, on garde tout
-
-       // Extraction dynamique des designs uniquement depuis les verres valides
        const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
-
-       // Application du filtre design sur les verres valides
        if (formData.design) {
          setFilteredLenses(validLenses.filter(l => l.design === formData.design));
        } else {
@@ -263,12 +291,15 @@ function App() {
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
 
+  // --- UPLOAD LOGO : CORRECTION Z-INDEX & CIBLE ---
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } 
+        if (target === 'shop') { 
+            setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); 
+        } 
       };
       reader.readAsDataURL(file);
     }
@@ -477,7 +508,9 @@ function App() {
               </div>
             </div>
             <div className="pt-4 pb-8">
-              {/* Le bouton est supprimé mais j'ai gardé l'espace pour l'aération du bas de page si nécessaire, sinon on peut retirer le div complet */}
+              <button onClick={() => fetchData(false)} disabled={loading} className={`w-full py-5 ${currentTheme.primary} ${currentTheme.hover} disabled:bg-slate-300 text-white font-bold text-lg rounded-2xl shadow-xl ${currentTheme.shadow} transition-all active:scale-95 flex justify-center items-center gap-3`}>
+                {loading ? <RefreshCw className="animate-spin w-6 h-6"/> : <Search className="w-6 h-6" />}{loading ? "CALCUL EN COURS..." : "CALCULER LE PODIUM"}
+              </button>
             </div>
           </div>
         </aside>
@@ -552,6 +585,17 @@ function App() {
                           <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
                         </div>
                     </div>
+                    <div className="flex items-center gap-2 mt-4">
+                        <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
+                        <div className="relative">
+                            <input type="color" value={userSettings.customColor} onChange={(e) => {
+                                handleSettingChange('branding', 'customColor', e.target.value);
+                                handleSettingChange('branding', 'themeColor', 'custom');
+                            }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
+                            <div className="pointer-events-none absolute inset-0 rounded ring-1 ring-inset ring-black/10" />
+                        </div>
+                        <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
+                    </div>
                   </div>
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">IDENTITÉ DU POINT DE VENTE</h4>
@@ -561,6 +605,24 @@ function App() {
                         <div className="relative">
                           <input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} placeholder="EX: MON OPTICIEN" className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
                           <Store className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">LOGO DU MAGASIN</label>
+                        <div className="flex items-center gap-4">
+                          {userSettings.shopLogo && (
+                            <div className="h-16 w-16 relative bg-white rounded-xl border border-slate-200 p-2 flex-shrink-0 shadow-sm">
+                               <img src={userSettings.shopLogo} alt="Logo" className="h-full w-full object-contain" />
+                               <button onClick={() => setUserSettings(prev => ({...prev, shopLogo: ""}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-sm transition-colors"><X className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                          <div className="relative flex-1">
+                            <div className="relative">
+                               <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"/>
+                               <div className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-200 border-dashed rounded-xl text-slate-500 text-xs font-bold flex items-center hover:bg-slate-100 transition-colors uppercase">{userSettings.shopLogo ? "CHANGER LE FICHIER..." : "CLIQUEZ POUR CHOISIR UN FICHIER..."}</div>
+                               <Upload className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -577,7 +639,7 @@ function App() {
                     </div>
                   </div>
                   <div className="space-y-5">
-                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">PLAFONDS RESTE À CHARGE</h4>
+                    <div className="flex justify-between items-end border-b-2 border-slate-100 pb-2 mb-4"><h4 className="font-bold text-sm text-slate-400">PLAFONDS RESTE À CHARGE</h4><span className="text-[10px] font-bold bg-slate-200 text-slate-500 px-2 py-1 rounded">REMBOURSEMENT GÉRÉ PAR BDD</span></div>
                     <div className="grid grid-cols-2 gap-6">
                       {lensTypes.map(type => (
                         <div key={type.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
