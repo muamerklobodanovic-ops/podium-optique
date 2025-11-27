@@ -4,126 +4,167 @@ from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
 
+# 1. Configuration
 load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 app = FastAPI()
 
+# 2. Sécurité (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], 
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
+# 3. Connexion Base de Données
+try:
+    if DATABASE_URL:
+        if DATABASE_URL.startswith("postgres://"):
+            DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        engine = create_engine(DATABASE_URL)
+    else:
+        engine = None
+except Exception as e:
+    print(f"❌ ERREUR CRITIQUE CONNEXION BDD: {e}")
+    engine = None
 
 @app.get("/")
 def read_root():
-    return {"message": "API Podium Optique Active"}
+    return {"status": "online", "message": "API Podium Optique Active"}
 
 @app.get("/lenses")
 def get_lenses(
-    # Paramètres reçus du Frontend
     type_verre: str = Query("PROGRESSIF", alias="type"),
-    network: str = "HORS_RESEAU",
     brand: str = None,
-    sphere: float = 0.0,
     index_mat: str = Query(None, alias="index"),
     coating: str = None,
-    clean: bool = False,
+    pocket_limit: float = Query(0.0, alias="pocketLimit"),
+    
+    # Paramètres reçus mais filtrés via la logique SQL ci-dessous
+    network: str = None,
+    sphere: float = 0.0,
     myopia: bool = False,
-    pocket_limit: float = Query(0.0, alias="pocketLimit") # La limite RAC définie par l'opticien
+    uvOption: bool = False,
+    clean: bool = False
 ):
-    print(f"🔍 RECHERCHE : Type={type_verre} | Marque={brand} | Indice={index_mat} | RAC_Max={pocket_limit}€")
+    print(f"🔍 FILTRE STRICT : Type={type_verre} | Marque={brand} | Indice={index_mat} | Trait={coating}")
+
+    if not engine:
+        return []
 
     try:
         with engine.connect() as conn:
-            # 1. Construction dynamique de la requête SQL
-            # On commence par filtrer par TYPE (obligatoire)
-            sql_query = "SELECT * FROM lenses WHERE type = :type_verre"
-            params = {"type_verre": type_verre}
+            # On commence la requête
+            sql = "SELECT * FROM lenses WHERE 1=1"
+            params = {}
 
-            # Filtre Marque (Si spécifiée et pas "Toutes")
+            # --- 1. FILTRE TYPE (STRICT) ---
+            # Doit correspondre exactement à 'UNIFOCAL', 'PROGRESSIF', 'DEGRESSIF'
+            if type_verre:
+                # Petite exception pour INTERIEUR qui est souvent noté DEGRESSIF dans les catalogues
+                if type_verre == "INTERIEUR":
+                     sql += " AND (type = 'DEGRESSIF' OR type = 'INTERIEUR')"
+                else:
+                     sql += " AND type = :type"
+                     params["type"] = type_verre
+
+            # --- 2. FILTRE MARQUE (STRICT) ---
             if brand and brand != "TOUTES":
-                # Note: Assurez-vous que vos marques dans la BDD correspondent (HOYA, ESSILOR...)
-                # Ici on fait un filtre insensible à la casse
-                sql_query += " AND brand ILIKE :brand"
-                params["brand"] = f"%{brand}%"
+                if brand == "ORUS":
+                    # ORUS est une marque commerciale qui puise dans le stock CODIR
+                    sql += " AND brand ILIKE 'CODIR'"
+                else:
+                    # ILIKE permet d'ignorer la casse (Hoya = HOYA) mais reste strict sur le mot
+                    sql += " AND brand ILIKE :brand"
+                    params["brand"] = brand
 
-            # Filtre Indice (Si spécifié)
+            # --- 3. FILTRE INDICE (STRICT) ---
             if index_mat:
-                sql_query += " AND index_mat = :index_mat"
-                params["index_mat"] = index_mat
+                # On gère le cas 1.60 vs 1,6 vs 1.6
+                clean_idx = index_mat.replace('.', ',') 
+                short_idx = index_mat.rstrip('0') # 1.60 -> 1.6
+                
+                sql += " AND (index_mat = :idx1 OR index_mat = :idx2 OR index_mat = :idx3)"
+                params["idx1"] = index_mat
+                params["idx2"] = clean_idx
+                params["idx3"] = short_idx
 
-            # Filtre Myopie Control (Si activé, on cherche des mots clés comme 'MiYOSMART')
+            # --- 4. FILTRE TRAITEMENT (TRÈS STRICT) ---
+            if coating:
+                # Le frontend envoie des codes avec underscores (ex: QUATTRO_UV_CLEAN)
+                # Le CSV contient des noms avec espaces ou tirets (ex: Quattro UV Clean)
+                
+                # On génère les variantes probables d'écriture
+                c_space = coating.replace('_', ' ')   # QUATTRO UV CLEAN
+                c_hyphen = coating.replace('_', '-')  # B-PROTECT
+                
+                # Recherche EXACTE (Insensible à la casse grace à ILIKE)
+                # Si on cherche "Mistral", ça NE trouvera PAS "Mistral Clean"
+                sql += " AND (coating ILIKE :c1 OR coating ILIKE :c2)"
+                params["c1"] = c_space
+                params["c2"] = c_hyphen
+
+            # --- 5. FILTRE MYOPIE (Recherche par mot clé spécifique) ---
             if myopia:
-                sql_query += " AND name ILIKE '%MiYOSMART%'"
+                sql += " AND name ILIKE '%MIYO%'"
+
+            # Tri par marge (ou prix de vente si marge non calculable ici)
+            sql += " ORDER BY selling_price DESC LIMIT 50"
             
-            # Exécution de la requête
-            result = conn.execute(text(sql_query), params)
+            result = conn.execute(text(sql), params)
+            rows = result.fetchall()
             
-            lenses = []
+            # --- POST-TRAITEMENT & CALCULS ---
+            lenses_list = []
             
-            # 2. Simulation des Données Manquantes (Remboursement)
-            # Idéalement, ces chiffres viendront de votre base de données (colonnes 'refund_base')
-            refund_table = {
-                "UNIFOCAL": 0.05,   # Base sécu ridicule + Mutuelle (simulé à 50€ dans la logique)
-                "PROGRESSIF": 0.05,
-                "DEGRESSIF": 0.05,
-                "INTERIEUR": 0.05
-            }
-            
-            # On définit un remboursement mutuelle moyen SIMULÉ pour l'instant
-            # (A remplacer par une vraie colonne dans la BDD plus tard)
-            simulated_mutual_refund = {
+            # Base de remboursement sécu/mutuelle estimée pour le calcul
+            refund_bases = {
                 "UNIFOCAL": 60.00,
                 "PROGRESSIF": 200.00,
                 "DEGRESSIF": 120.00,
                 "INTERIEUR": 120.00
             }
+            base_refund = refund_bases.get(type_verre, 0.0)
 
-            for row in result:
+            for row in rows:
                 lens = row._mapping
                 
-                # Récupération des prix de base
-                purchase_price = float(lens['purchase_price'])
-                selling_price_ceiling = float(lens['selling_price']) # Prix Plafond Réseau (Cap)
+                p_price = float(lens['purchase_price'])
+                s_price_catalog = float(lens['selling_price']) # Prix Plafond
                 
-                # Calcul du Remboursement (Simulé pour l'instant)
-                refund_amount = simulated_mutual_refund.get(type_verre, 0.0)
+                # Calcul du Prix Optimisé (Reste à Charge)
+                final_selling_price = s_price_catalog
                 
-                # --- LOGIQUE CŒUR : CALCUL DU PRIX OPTIMISÉ ---
-                # Prix Optimisé = Ce que la mutuelle donne + Ce que le client veut bien payer max
-                target_price = refund_amount + pocket_limit
-                
-                # Le prix de vente final ne peut pas dépasser le Plafond Réseau
-                final_selling_price = min(target_price, selling_price_ceiling)
-                
-                # Sécurité : On ne vend jamais à perte ! (Coef min 2.0 par exemple)
-                if final_selling_price < (purchase_price * 1.5):
-                    final_selling_price = selling_price_ceiling # On revient au prix plafond si l'optimisé est trop bas
-                
-                # Calcul de la marge
-                margin = final_selling_price - purchase_price
-                
-                lenses.append({
+                if pocket_limit > 0:
+                    # On vise : Remboursement + Poche du client
+                    target_price = base_refund + pocket_limit
+                    # On prend le plus bas entre le Prix Plafond et le Prix Cible
+                    final_selling_price = min(target_price, s_price_catalog)
+                    
+                    # Sécurité Marge : On ne descend pas en dessous d'un coeff 2.0
+                    if final_selling_price < (p_price * 2.0):
+                        final_selling_price = max(p_price * 2.0, s_price_catalog)
+
+                margin = final_selling_price - p_price
+
+                lenses_list.append({
                     "id": lens['id'],
                     "name": lens['name'],
-                    "brand": lens['brand'],
+                    "brand": brand if brand == "ORUS" else lens['brand'],
                     "index_mat": lens['index_mat'],
-                    "purchasePrice": purchase_price,
-                    "sellingPrice": round(final_selling_price, 2), # On envoie le prix optimisé
-                    "margin": round(margin, 2),
-                    "refundAmount": refund_amount # On renvoie l'info au front
+                    "coating": lens['coating'],
+                    "purchasePrice": round(p_price, 2),
+                    "sellingPrice": round(final_selling_price, 2),
+                    "margin": round(margin, 2)
                 })
             
-            # Tri par marge décroissante (Le Podium)
-            lenses.sort(key=lambda x: x['margin'], reverse=True)
+            # Tri final pour le podium
+            lenses_list.sort(key=lambda x: x['margin'], reverse=True)
             
-            # On ne garde que le Top 3
-            return lenses[:3]
+            return lenses_list[:3]
 
     except Exception as e:
         print(f"❌ ERREUR SQL : {e}")
-        return {"error": str(e)}
+        return []
