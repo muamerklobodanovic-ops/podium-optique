@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server
 } from 'lucide-react';
 
 // --- COMPOSANT LOGOS (IMAGES PNG) ---
@@ -29,7 +29,7 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
 // --- DONNÉES DE SECOURS (S'affichent uniquement en cas d'erreur) ---
 const MOCK_LENSES = [
   { id: 999, name: "⚠️ MODE HORS LIGNE", brand: "ERREUR", index_mat: "0.0", purchasePrice: 0, sellingPrice: 0, margin: 0 },
-  { id: 998, name: "SERVEUR NON CONNECTÉ", brand: "INFO", index_mat: "0.0", purchasePrice: 0, sellingPrice: 0, margin: 0 },
+  { id: 998, name: "VÉRIFIEZ L'ADRESSE DU SERVEUR", brand: "CONFIG", index_mat: "0.0", purchasePrice: 0, sellingPrice: 0, margin: 0 },
 ];
 
 // --- COMPOSANT CARTE VERRE ---
@@ -164,14 +164,16 @@ function App() {
     uvOption: true 
   });
 
-  // --- URL API ---
+  // --- GESTION INTELLIGENTE DE L'URL ---
+  // On récupère l'URL sauvegardée par l'utilisateur, sinon on prend une valeur par défaut
+  const [serverUrl, setServerUrl] = useState(
+    localStorage.getItem("optique_server_url") || "https://api-podium-optique.onrender.com/lenses"
+  );
+
   const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
   
-  // ⚠️ ICI : Mettez l'URL que vous avez copiée sur Render.com
-  // Exemple : "https://api-podium-abcd.onrender.com/lenses"
-  const RENDER_URL = "https://api-podium-optique.onrender.com/lenses"; 
-  
-  const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : RENDER_URL;
+  // Si on est en local, on force le localhost, sinon on utilise l'URL configurée
+  const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : serverUrl;
 
   // Themes & Data constants...
   const themes = {
@@ -205,11 +207,6 @@ function App() {
     setLoading(true);
     setError(null); 
     
-    // Si on est en ligne mais que l'URL est celle par défaut du template, on force l'erreur
-    if (!isLocal && API_URL.includes("api-podium-optique.onrender.com") && !API_URL.includes("VOTRE-URL")) {
-       // C'est probablement une URL exemple, on tente quand même mais on reste prudent
-    }
-
     const params = ignoreFilters ? {} : {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
         index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
@@ -231,7 +228,7 @@ function App() {
       });
   };
 
-  // Handlers (handleChange, etc...) restent inchangés
+  // Handlers
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -253,6 +250,7 @@ function App() {
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
+
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) {
@@ -263,14 +261,23 @@ function App() {
       reader.readAsDataURL(file);
     }
   };
+
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
   };
+  
+  // Gestion spéciale pour le changement d'URL de l'API
+  const handleUrlChange = (value) => {
+    setServerUrl(value);
+    localStorage.setItem("optique_server_url", value); // Sauvegarde persistante
+  };
+
   const handleTypeChange = (newType) => {
     const shouldDisableAdd = newType === 'UNIFOCAL' || newType === 'DEGRESSIF';
     setFormData(prev => ({ ...prev, type: newType, addition: shouldDisableAdd ? 0.00 : prev.addition, myopiaControl: newType === 'UNIFOCAL' ? prev.myopiaControl : false }));
   };
+
   const handleCoatingChange = (newCoating) => {
     setFormData(prev => ({ ...prev, coating: newCoating, cleanOption: false }));
   };
@@ -321,6 +328,7 @@ function App() {
       </header>
 
       <main className="flex-1 flex overflow-hidden relative z-0">
+        {/* (Sidebar et Main content inchangés, je les réinclus pour que le fichier soit complet) */}
         <aside className="w-[420px] bg-white border-r border-slate-200 flex flex-col overflow-y-auto z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
           <div className="p-6 space-y-8">
             <div className="space-y-3">
@@ -497,7 +505,26 @@ function App() {
               </div>
               <div className="p-8 overflow-y-auto">
                 <div className="space-y-10">
-                  {/* Settings content (Identité, Thème, Plafonds...) */}
+                  
+                  {/* CONFIGURATION URL API */}
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">CONNEXION SERVEUR</h4>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label>
+                        <div className="relative">
+                          <input 
+                            type="text" 
+                            value={serverUrl} 
+                            onChange={(e) => handleUrlChange(e.target.value)} 
+                            placeholder="https://api-podium-..." 
+                            className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"
+                          />
+                          <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-2 font-bold">NE MODIFIEZ QUE SI LE SITE EST HORS LIGNE EN PRODUCTION.</p>
+                    </div>
+                  </div>
+
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">IDENTITÉ DU POINT DE VENTE</h4>
                     <div className="grid grid-cols-1 gap-6">
@@ -508,6 +535,17 @@ function App() {
                           <Store className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
                         </div>
                       </div>
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">THÈME & COULEURS</h4>
+                    <div className="grid grid-cols-5 gap-3">
+                      {Object.keys(themes).map(colorKey => (
+                        <button key={colorKey} onClick={() => handleSettingChange('branding', 'themeColor', colorKey)} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${userSettings.themeColor === colorKey ? `border-${colorKey}-500 bg-${colorKey}-50` : 'border-transparent hover:bg-slate-50'}`}>
+                          <div className={`w-10 h-10 rounded-full ${themes[colorKey].primary} shadow-sm ring-4 ring-white`}></div>
+                          <span className="text-[10px] font-bold text-slate-500">{themes[colorKey].name}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                   <div className="space-y-5">
