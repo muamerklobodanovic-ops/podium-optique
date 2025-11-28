@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.22"; // Version Stable & Sécurisée
+const APP_VERSION = "1.23"; // Filtres Stricts (Coating ===) & Formule Prix AX+B
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -14,13 +14,12 @@ const hexToRgb = (hex) => {
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
 
-// --- COMPOSANT LOGOS (SÉCURISÉ) ---
+// --- COMPOSANT LOGOS ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const [hasError, setHasError] = useState(false);
   const safeBrand = brand || 'unknown';
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
 
-  // Si erreur de chargement ou pas de marque, on affiche le texte
   if (hasError || !brand) {
     return (
       <span className="text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full px-1 text-center">
@@ -41,8 +40,8 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
 
 // --- DONNÉES DE SECOURS ---
 const MOCK_LENSES = [
-  { id: 1, name: "MODE HORS LIGNE", brand: "CODIR", index_mat: "1.60", design: "AUDACE", purchasePrice: 80, sellingPrice: 240, margin: 160 },
-  { id: 2, name: "EXEMPLE", brand: "CODIR", index_mat: "1.67", design: "INFINI", purchasePrice: 110, sellingPrice: 310, margin: 200 },
+  { id: 1, name: "MODE HORS LIGNE", brand: "CODIR", index_mat: "1.60", design: "AUDACE", coating: "MISTRAL", purchasePrice: 80, sellingPrice: 240, margin: 160 },
+  { id: 2, name: "EXEMPLE", brand: "CODIR", index_mat: "1.67", design: "INFINI", coating: "QUATTRO UV", purchasePrice: 110, sellingPrice: 310, margin: 200 },
 ];
 
 // --- COMPOSANT CARTE VERRE ---
@@ -57,7 +56,6 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
     ? { border: "border-blue-500 ring-4 ring-blue-50 shadow-xl", badge: "bg-blue-600 text-white", icon: <ArrowRightLeft className="w-5 h-5"/>, label: "RÉFÉRENCE" }
     : (podiumStyles[index] || podiumStyles[1]);
 
-  // Calcul sécurisé pour éviter NaN
   const displayMargin = (lens.sellingPrice > 0) 
     ? ((lens.margin / lens.sellingPrice) * 100).toFixed(0) 
     : 0;
@@ -137,7 +135,6 @@ function App() {
     themeColor: "blue", 
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
-    // 5 Catégories de prix pour le marché libre
     pricing: {
         uniStock: { x: 2.5, b: 20 },   
         uniFab: { x: 3.0, b: 30 },     
@@ -186,6 +183,7 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
+  // Responsive
   useEffect(() => {
     const handleResize = () => { if (window.innerWidth < 1024) { } };
     window.addEventListener('resize', handleResize);
@@ -240,12 +238,12 @@ function App() {
     if (lenses && lenses.length > 0) {
        let workingList = lenses.map(l => ({...l}));
 
-       // Marque Strict
+       // --- MARQUE STRICT ---
        if (formData.brand && formData.brand !== '') {
            workingList = workingList.filter(l => l.brand && l.brand.toUpperCase() === formData.brand.toUpperCase());
        }
 
-       // Prix Marché Libre (Sécurisé)
+       // --- PRIX MARCHE LIBRE (AX+B) ---
        if (formData.network === 'HORS_RESEAU') {
           const pRules = userSettings.pricing || {};
           
@@ -255,23 +253,27 @@ function App() {
              const lensName = (lens.name || "").toUpperCase();
 
              if (lensType === 'UNIFOCAL') {
-                 const isStock = lensName.includes(' ST') || lensName.includes('_ST');
+                 // Détection stock par mot clé
+                 const isStock = lensName.includes(' ST') || lensName.includes('_ST') || lensName.includes('STOCK');
                  rule = isStock ? (pRules.uniStock || defaultPricingConfig) : (pRules.uniFab || defaultPricingConfig);
              } 
              else if (lensType === 'DEGRESSIF') { rule = pRules.degressif || defaultPricingConfig; } 
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || defaultPricingConfig; }
              else if (lensType === 'MULTIFOCAL') { rule = pRules.multifocal || defaultPricingConfig; }
 
+             // Formule AX + B
              const newSelling = (lens.purchasePrice * rule.x) + rule.b;
              const newMargin = newSelling - lens.purchasePrice;
              return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
           });
           workingList.sort((a, b) => b.margin - a.margin);
+
        } else if (formData.network === 'KALIXIA') {
+         // Pour Kalixia, on ne montre QUE si le prix est connu
          workingList = workingList.filter(l => l.sellingPrice > 0);
        }
 
-       // Indice Strict
+       // --- INDICE STRICT ---
        workingList = workingList.filter(l => {
            if(!l.index_mat) return false;
            const lIdx = l.index_mat.replace(',', '.');
@@ -279,7 +281,7 @@ function App() {
            return parseFloat(lIdx) === parseFloat(fIdx);
        });
 
-       // Photochromique
+       // --- PHOTOCHROMIQUE ---
        const isPhotoC = (item) => {
           const text = ((item.name || "") + " " + (item.coating || "")).toUpperCase();
           return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR");
@@ -290,28 +292,28 @@ function App() {
          workingList = workingList.filter(l => !isPhotoC(l));
        }
 
-       // Traitement Strict
+       // --- TRAITEMENT STRICT (EGALITE EXACTE) ---
        if (formData.coating) {
           const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
           if (selectedCoatingObj) {
              const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
              workingList = workingList.filter(l => {
                 const lensCoating = (l.coating || "").toUpperCase().trim();
-                return lensCoating === targetLabel; 
+                return lensCoating === targetLabel; // Égalité stricte
              });
           }
        }
 
-       // Myopie
+       // --- MYOPIE ---
        if (formData.myopiaControl) {
           workingList = workingList.filter(l => (l.name || "").toUpperCase().includes("MIYO"));
        }
 
-       // Designs
+       // --- DESIGNS DISPONIBLES ---
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
-       // Filtre Design Final
+       // --- FILTRE DESIGN ---
        if (formData.design) {
          setFilteredLenses(workingList.filter(l => l.design === formData.design));
        } else {
@@ -583,7 +585,8 @@ function App() {
                 </label>
               </div>
             </div>
-            <div className="pt-4 pb-8"></div>
+            <div className="pt-4 pb-8">
+            </div>
           </div>
         </aside>
 
