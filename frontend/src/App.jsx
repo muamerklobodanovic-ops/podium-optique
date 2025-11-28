@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.23"; // Filtres Stricts (Coating ===) & Formule Prix AX+B
+const APP_VERSION = "1.24"; // Filtres Stricts Renforcés (Type + Marque + Design)
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -40,8 +40,8 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
 
 // --- DONNÉES DE SECOURS ---
 const MOCK_LENSES = [
-  { id: 1, name: "MODE HORS LIGNE", brand: "CODIR", index_mat: "1.60", design: "AUDACE", coating: "MISTRAL", purchasePrice: 80, sellingPrice: 240, margin: 160 },
-  { id: 2, name: "EXEMPLE", brand: "CODIR", index_mat: "1.67", design: "INFINI", coating: "QUATTRO UV", purchasePrice: 110, sellingPrice: 310, margin: 200 },
+  { id: 1, name: "MODE HORS LIGNE", brand: "CODIR", type: "PROGRESSIF", index_mat: "1.60", design: "AUDACE", coating: "MISTRAL", purchasePrice: 80, sellingPrice: 240, margin: 160 },
+  { id: 2, name: "EXEMPLE", brand: "CODIR", type: "PROGRESSIF", index_mat: "1.67", design: "INFINI", coating: "QUATTRO UV", purchasePrice: 110, sellingPrice: 310, margin: 200 },
 ];
 
 // --- COMPOSANT CARTE VERRE ---
@@ -121,12 +121,11 @@ function App() {
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Synchro Google Sheets
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
 
-  // Configuration par défaut (Fallback anti-crash)
+  // Configuration par défaut
   const defaultPricingConfig = { x: 2.5, b: 20 };
   
   const [userSettings, setUserSettings] = useState({
@@ -220,7 +219,7 @@ function App() {
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
-  // 1. RECHARGEMENT
+  // 1. RECHARGEMENT (DATA LOAD)
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -230,17 +229,34 @@ function App() {
     const coatingExists = formData.coating === '' || currentCoatings.find(c => c.id === formData.coating);
     if (!coatingExists) { setFormData(prev => ({ ...prev, coating: currentCoatings[0].id })); }
 
+    // On recharge uniquement si Marque ou Type change (car l'API renvoie tout le stock pour ces critères)
     fetchData(); 
   }, [formData.brand, formData.network, formData.type]); 
 
-  // 2. FILTRAGE LOCAL (SÉCURISÉ)
+  // 2. FILTRAGE LOCAL (SÉCURISÉ & STRICT)
   useEffect(() => {
     if (lenses && lenses.length > 0) {
        let workingList = lenses.map(l => ({...l}));
 
-       // --- MARQUE STRICT ---
+       // --- FILTRE MARQUE STRICT ---
        if (formData.brand && formData.brand !== '') {
-           workingList = workingList.filter(l => l.brand && l.brand.toUpperCase() === formData.brand.toUpperCase());
+           workingList = workingList.filter(l => 
+             l.brand && l.brand.toUpperCase().trim() === formData.brand.toUpperCase().trim()
+           );
+       }
+
+       // --- FILTRE TYPE/GEOMETRIE STRICT ---
+       if (formData.type && formData.type !== '') {
+           // Pour Progressif Intérieur, on gère les alias
+           if (formData.type === "PROGRESSIF D'INTÉRIEUR") {
+              workingList = workingList.filter(l => 
+                 l.type && (l.type.toUpperCase().includes("INTERIEUR") || l.type.toUpperCase().includes("D'INTÉRIEUR"))
+              );
+           } else {
+              workingList = workingList.filter(l => 
+                 l.type && l.type.toUpperCase().trim() === formData.type.toUpperCase().trim()
+              );
+           }
        }
 
        // --- PRIX MARCHE LIBRE (AX+B) ---
@@ -249,11 +265,10 @@ function App() {
           
           workingList = workingList.map(lens => {
              let rule = pRules.prog || defaultPricingConfig; 
-             const lensType = lens.type || ""; 
+             const lensType = (lens.type || "").toUpperCase();
              const lensName = (lens.name || "").toUpperCase();
 
              if (lensType === 'UNIFOCAL') {
-                 // Détection stock par mot clé
                  const isStock = lensName.includes(' ST') || lensName.includes('_ST') || lensName.includes('STOCK');
                  rule = isStock ? (pRules.uniStock || defaultPricingConfig) : (pRules.uniFab || defaultPricingConfig);
              } 
@@ -261,7 +276,6 @@ function App() {
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || defaultPricingConfig; }
              else if (lensType === 'MULTIFOCAL') { rule = pRules.multifocal || defaultPricingConfig; }
 
-             // Formule AX + B
              const newSelling = (lens.purchasePrice * rule.x) + rule.b;
              const newMargin = newSelling - lens.purchasePrice;
              return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
@@ -293,13 +307,14 @@ function App() {
        }
 
        // --- TRAITEMENT STRICT (EGALITE EXACTE) ---
-       if (formData.coating) {
+       if (formData.coating && formData.coating !== '') {
           const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
           if (selectedCoatingObj) {
              const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
              workingList = workingList.filter(l => {
+                // On compare le label (ex: "QUATTRO UV") avec ce qu'on a en base
                 const lensCoating = (l.coating || "").toUpperCase().trim();
-                return lensCoating === targetLabel; // Égalité stricte
+                return lensCoating === targetLabel; 
              });
           }
        }
@@ -309,16 +324,19 @@ function App() {
           workingList = workingList.filter(l => (l.name || "").toUpperCase().includes("MIYO"));
        }
 
-       // --- DESIGNS DISPONIBLES ---
+       // --- DESIGNS DISPONIBLES (SUR LISTE FILTRÉE) ---
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
-       // --- FILTRE DESIGN ---
-       if (formData.design) {
-         setFilteredLenses(workingList.filter(l => l.design === formData.design));
+       // --- FILTRE DESIGN (FINAL) ---
+       if (formData.design && formData.design !== '') {
+         setFilteredLenses(workingList.filter(l => 
+           l.design && l.design.toUpperCase().trim() === formData.design.toUpperCase().trim()
+         ));
        } else {
          setFilteredLenses(workingList);
        }
+
     } else {
        setAvailableDesigns([]);
        setFilteredLenses([]);
@@ -332,6 +350,7 @@ function App() {
     formData.coating, 
     formData.materialIndex, 
     formData.myopiaControl,
+    formData.type, // Important : le type fait partie du filtre strict
     userSettings.pricing
   ]);
 
