@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.24"; // Filtres Stricts Renforcés (Type + Marque + Design)
+const APP_VERSION = "1.26"; // Filtres Stricts Hiérarchiques & Formule Prix
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -40,8 +40,8 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
 
 // --- DONNÉES DE SECOURS ---
 const MOCK_LENSES = [
-  { id: 1, name: "MODE HORS LIGNE", brand: "CODIR", type: "PROGRESSIF", index_mat: "1.60", design: "AUDACE", coating: "MISTRAL", purchasePrice: 80, sellingPrice: 240, margin: 160 },
-  { id: 2, name: "EXEMPLE", brand: "CODIR", type: "PROGRESSIF", index_mat: "1.67", design: "INFINI", coating: "QUATTRO UV", purchasePrice: 110, sellingPrice: 310, margin: 200 },
+  { id: 1, name: "MODE HORS LIGNE", brand: "CODIR", index_mat: "1.60", design: "AUDACE", coating: "MISTRAL", purchasePrice: 80, sellingPrice: 240, margin: 160 },
+  { id: 2, name: "EXEMPLE", brand: "CODIR", index_mat: "1.67", design: "INFINI", coating: "QUATTRO UV", purchasePrice: 110, sellingPrice: 310, margin: 200 },
 ];
 
 // --- COMPOSANT CARTE VERRE ---
@@ -121,6 +121,7 @@ function App() {
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Synchro Google Sheets
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
@@ -207,6 +208,8 @@ function App() {
     { id: 'CODIR', label: 'CODIR' }, 
     { id: 'ORUS', label: 'ORUS' } 
   ];
+  
+  // 5 GÉOMÉTRIES DU FICHIER CSV
   const lensTypes = [ 
     { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
     { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
@@ -214,12 +217,13 @@ function App() {
     { id: 'MULTIFOCAL', label: 'MULTIFOCAL' },
     { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" }
   ];
+  
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
-  // 1. RECHARGEMENT (DATA LOAD)
+  // 1. RECHARGEMENT
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -229,7 +233,6 @@ function App() {
     const coatingExists = formData.coating === '' || currentCoatings.find(c => c.id === formData.coating);
     if (!coatingExists) { setFormData(prev => ({ ...prev, coating: currentCoatings[0].id })); }
 
-    // On recharge uniquement si Marque ou Type change (car l'API renvoie tout le stock pour ces critères)
     fetchData(); 
   }, [formData.brand, formData.network, formData.type]); 
 
@@ -238,25 +241,11 @@ function App() {
     if (lenses && lenses.length > 0) {
        let workingList = lenses.map(l => ({...l}));
 
-       // --- FILTRE MARQUE STRICT ---
+       // --- MARQUE STRICT ---
        if (formData.brand && formData.brand !== '') {
            workingList = workingList.filter(l => 
              l.brand && l.brand.toUpperCase().trim() === formData.brand.toUpperCase().trim()
            );
-       }
-
-       // --- FILTRE TYPE/GEOMETRIE STRICT ---
-       if (formData.type && formData.type !== '') {
-           // Pour Progressif Intérieur, on gère les alias
-           if (formData.type === "PROGRESSIF D'INTÉRIEUR") {
-              workingList = workingList.filter(l => 
-                 l.type && (l.type.toUpperCase().includes("INTERIEUR") || l.type.toUpperCase().includes("D'INTÉRIEUR"))
-              );
-           } else {
-              workingList = workingList.filter(l => 
-                 l.type && l.type.toUpperCase().trim() === formData.type.toUpperCase().trim()
-              );
-           }
        }
 
        // --- PRIX MARCHE LIBRE (AX+B) ---
