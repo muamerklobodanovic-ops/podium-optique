@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.28"; // Stratégie "Client-Side Only" pour Marque Strict
+const APP_VERSION = "1.29"; // Bypass Backend Aliasing (Fetch All & Filter Local)
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -106,6 +106,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
 };
 
 function App() {
+  // --- ETATS ---
   const [lenses, setLenses] = useState([]); 
   const [filteredLenses, setFilteredLenses] = useState([]); 
   const [availableDesigns, setAvailableDesigns] = useState([]); 
@@ -117,6 +118,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
+  
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [syncLoading, setSyncLoading] = useState(false);
@@ -143,7 +145,7 @@ function App() {
 
   const [formData, setFormData] = useState({
     network: 'HORS_RESEAU',
-    brand: '', // DÉFAUT = TOUTES (Vide)
+    brand: '', // DÉFAUT = TOUTES
     type: 'PROGRESSIF',
     design: '', 
     sphere: 0.00,    
@@ -263,7 +265,9 @@ function App() {
              return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
           });
           workingList.sort((a, b) => b.margin - a.margin);
+
        } else if (formData.network === 'KALIXIA') {
+         // Pour Kalixia, on ne montre QUE si le prix est connu
          workingList = workingList.filter(l => l.sellingPrice > 0);
        }
 
@@ -338,12 +342,13 @@ function App() {
     setError(null); 
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(MOCK_LENSES); setLoading(false); return; }
 
-    // APPEL NEUTRE (PAS DE MARQUE ENVOYÉE SI PAS SÉLECTIONNÉE)
-    // Ceci évite le filtrage/aliasing côté serveur
+    // MODIFICATION ICI : ON NE PASSE PAS LA MARQUE AU SERVEUR
+    // On demande "Tout" pour ce type de verre, et on filtre la marque localement
+    // Cela contourne le problème d'aliasing ORUS=CODIR du backend
     const params = {
         type: formData.type, 
         network: formData.network, 
-        brand: formData.brand === '' ? undefined : formData.brand, 
+        brand: undefined, // On force 'undefined' pour ne pas filtrer côté serveur
         pocketLimit: 0 
     };
 
@@ -372,8 +377,7 @@ function App() {
     if (name === 'addition') { const val = parseFloat(value); if (val > 4.00) newValue = 4.00; if (val < 0) newValue = 0.00; }
     if (name === 'network') {
       const defaultBrand = (newValue === 'HORS_RESEAU') ? 'ORUS' : 'CODIR';
-      // On garde la marque sélectionnée par l'utilisateur, pas de force change
-      setFormData(prev => ({ ...prev, [name]: newValue, myopiaControl: false }));
+      setFormData(prev => ({ ...prev, [name]: newValue, brand: defaultBrand, myopiaControl: false }));
       return;
     }
     if (name === 'myopiaControl') {
