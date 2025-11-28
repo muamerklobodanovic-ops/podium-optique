@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.11"; // Suppression définitive Plafonds + Logo Magasin
+const APP_VERSION = "1.12"; // Nettoyage final (Suppression Plafonds UI)
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -112,10 +112,8 @@ function App() {
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
   
-  // Nouvel état pour gérer l'affichage du panneau latéral
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Etat pour la synchro Google Sheets
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
@@ -126,13 +124,12 @@ function App() {
     themeColor: "blue", 
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
-    // Règles de prix pour le marché libre (AxX+B)
     pricing: {
-        uniStock: { x: 2.5, b: 20 },   // Unifocal Stock (ST)
-        uniFab: { x: 3.0, b: 30 },     // Unifocal Fab
-        prog: { x: 3.2, b: 50 },       // Progressif
-        degressif: { x: 3.0, b: 40 },  // Dégressif
-        interieur: { x: 3.0, b: 40 }   // Intérieur
+        uniStock: { x: 2.5, b: 20 },   
+        uniFab: { x: 3.0, b: 30 },     
+        prog: { x: 3.2, b: 50 },       
+        degressif: { x: 3.0, b: 40 },  
+        interieur: { x: 3.0, b: 40 }   
     }
   });
 
@@ -157,7 +154,7 @@ function App() {
   const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : serverUrl;
   const SYNC_URL = isLocal ? "http://127.0.0.1:8000/sync" : serverUrl.replace('/lenses', '/sync');
 
-  // --- GESTION DES COULEURS DYNAMIQUES ---
+  // --- GESTION DES COULEURS ---
   useEffect(() => {
     const root = document.documentElement;
     if (userSettings.themeColor === 'custom') {
@@ -174,11 +171,11 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
-  // Gestion responsive : masquer le panneau sur mobile au chargement
+  // Responsive
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 1024) {
-        // Sur mobile/tablette, on peut vouloir masquer par défaut ou laisser l'utilisateur choisir
+        // Logic mobile si nécessaire
       }
     };
     window.addEventListener('resize', handleResize);
@@ -221,9 +218,7 @@ function App() {
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
-  useEffect(() => { fetchData(); }, []);
-
-  // 1. RECHARGEMENT DES DONNÉES QUAND LES CRITÈRES CHANGENT
+  // 1. RECHARGEMENT DES DONNÉES
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -240,15 +235,15 @@ function App() {
     formData.myopiaControl, formData.uvOption
   ]); 
 
-  // 2. FILTRAGE LOCAL (DESIGN + PHOTOCHROMIQUE)
+  // 2. FILTRAGE LOCAL
   useEffect(() => {
     if (lenses.length > 0) {
        let processedLenses = lenses.map(l => ({...l}));
 
-       // --- RECALCUL DES PRIX POUR MARCHÉ LIBRE ---
+       // --- RECALCUL DES PRIX ---
        if (formData.network === 'HORS_RESEAU') {
           processedLenses = processedLenses.map(lens => {
-             let rule = userSettings.pricing.prog; // Par défaut
+             let rule = userSettings.pricing.prog; 
              if (lens.type === 'UNIFOCAL') {
                  const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
                  rule = isStock ? userSettings.pricing.uniStock : userSettings.pricing.uniFab;
@@ -264,35 +259,37 @@ function App() {
          processedLenses = processedLenses.filter(l => l.sellingPrice > 0);
        }
 
-       // Filtre Photochromique
+       // --- FILTRES ---
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
-          return text.includes("TRANSITIONS") || 
-                 text.includes("GEN S") || 
-                 text.includes("SOLACTIVE") ||
-                 text.includes("TGNS") || 
-                 text.includes("SABR") || 
-                 text.includes("SAGR");
+          return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR");
        };
-
        if (formData.photochromic) {
          processedLenses = processedLenses.filter(l => isPhotoC(l));
        } else {
          processedLenses = processedLenses.filter(l => !isPhotoC(l));
        }
 
-       // Filtre Traitement Strict
+       // Traitement Strict
        if (formData.coating) {
           const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
           if (selectedCoatingObj) {
              const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
              processedLenses = processedLenses.filter(l => {
                 const lensCoating = (l.coating || "").toUpperCase().trim();
-                return lensCoating === targetLabel;
+                return lensCoating.includes(targetLabel); 
              });
           }
        }
 
+       // Indice Strict
+       processedLenses = processedLenses.filter(l => {
+           const lIdx = l.index_mat.replace(',', '.');
+           const fIdx = formData.materialIndex.replace(',', '.');
+           return parseFloat(lIdx) === parseFloat(fIdx);
+       });
+
+       // Designs
        const designs = [...new Set(processedLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
@@ -305,16 +302,13 @@ function App() {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating, userSettings.pricing]);
+  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating, formData.materialIndex, userSettings.pricing]);
 
 
   const fetchData = (ignoreFilters = false) => {
     setLoading(true);
     setError(null); 
-    
-    if (!isLocal && API_URL.includes("VOTRE-URL")) {
-      setLenses(MOCK_LENSES); setLoading(false); return;
-    }
+    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(MOCK_LENSES); setLoading(false); return; }
 
     const params = ignoreFilters ? {} : {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
@@ -476,6 +470,7 @@ function App() {
               </div>
             </div>
             <hr className="border-slate-100" />
+            {/* ... (Reste du volet inchangé) ... */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Tag className="w-5 h-5" /> MARQUE VERRIER</label>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2 rounded-2xl">
@@ -527,25 +522,13 @@ function App() {
                 ))}
               </div>
 
-              {/* CHOIX DU DESIGN */}
               {availableDesigns.length > 0 && (
                 <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
                    <div className="flex flex-wrap gap-2">
-                     <button
-                       onClick={() => handleDesignChange('')}
-                       className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
-                     >
-                       TOUS
-                     </button>
+                     <button onClick={() => handleDesignChange('')} className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS</button>
                      {availableDesigns.map(design => (
-                       <button
-                         key={design}
-                         onClick={() => handleDesignChange(design)}
-                         className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === design ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
-                       >
-                         {design}
-                       </button>
+                       <button key={design} onClick={() => handleDesignChange(design)} className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === design ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>{design}</button>
                      ))}
                    </div>
                 </div>
@@ -575,12 +558,9 @@ function App() {
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
               
-              {/* LISTE TRAITEMENTS */}
               <div className="mb-2">
                  <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
               </div>
-
-              {/* BOUTON PHOTOCHROMIQUE */}
               <div className="mb-2">
                   <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${formData.photochromic ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                     <div className="relative flex items-center">
