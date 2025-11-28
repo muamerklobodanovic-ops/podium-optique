@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.07"; // Fix Modale Settings + Sidebar Mobile
+const APP_VERSION = "1.08"; // Ajout Logo Magasin + Suppression Plafonds
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -126,14 +126,10 @@ function App() {
     themeColor: "blue", 
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
-    // NOUVEAU : Règles de prix pour le marché libre (AxX+B)
-    pricing: {
-        uniStock: { x: 2.5, b: 20 },   // Unifocal Stock (ST)
-        uniFab: { x: 3.0, b: 30 },     // Unifocal Fab
-        prog: { x: 3.2, b: 50 },       // Progressif
-        degressif: { x: 3.0, b: 40 },  // Dégressif
-        interieur: { x: 3.0, b: 40 }   // Intérieur
-    }
+    // UNIFOCAL: { maxPocket: 40 }, // Supprimé
+    // PROGRESSIF: { maxPocket: 100 }, // Supprimé
+    // DEGRESSIF: { maxPocket: 70 }, // Supprimé
+    // INTERIEUR: { maxPocket: 70 } // Supprimé
   });
 
   const [formData, setFormData] = useState({
@@ -243,27 +239,14 @@ function App() {
   // 2. FILTRAGE LOCAL (DESIGN + PHOTOCHROMIQUE)
   useEffect(() => {
     if (lenses.length > 0) {
-       let processedLenses = lenses.map(l => ({...l}));
-
-       // --- RECALCUL DES PRIX POUR MARCHÉ LIBRE ---
-       if (formData.network === 'HORS_RESEAU') {
-          processedLenses = processedLenses.map(lens => {
-             let rule = userSettings.pricing.prog; // Par défaut
-             if (lens.type === 'UNIFOCAL') {
-                 const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
-                 rule = isStock ? userSettings.pricing.uniStock : userSettings.pricing.uniFab;
-             } else if (lens.type === 'DEGRESSIF') { rule = userSettings.pricing.degressif; } 
-             else if (lens.type === 'INTERIEUR') { rule = userSettings.pricing.interieur; }
-
-             const newSelling = (lens.purchasePrice * rule.x) + rule.b;
-             const newMargin = newSelling - lens.purchasePrice;
-             return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
-          });
-          processedLenses.sort((a, b) => b.margin - a.margin);
-       } else if (formData.network === 'KALIXIA') {
-         processedLenses = processedLenses.filter(l => l.sellingPrice > 0);
+       let validLenses = lenses;
+       
+       // A. Filtre Prix Kalixia
+       if (formData.network === 'KALIXIA') {
+         validLenses = lenses.filter(l => l.sellingPrice > 0);
        }
 
+       // B. Filtre Photochromique
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
           return text.includes("TRANSITIONS") || 
@@ -275,36 +258,39 @@ function App() {
        };
 
        if (formData.photochromic) {
-         processedLenses = processedLenses.filter(l => isPhotoC(l));
+         validLenses = validLenses.filter(l => isPhotoC(l));
        } else {
-         processedLenses = processedLenses.filter(l => !isPhotoC(l));
+         validLenses = validLenses.filter(l => !isPhotoC(l));
        }
 
-       // Filtre Traitement Strict
+       // C. Filtre Traitement Strict (Ajouté)
+       // Si un traitement est sélectionné, on vérifie que le nom correspond exactement
        if (formData.coating) {
           const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
           if (selectedCoatingObj) {
              const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
-             processedLenses = processedLenses.filter(l => {
+             validLenses = validLenses.filter(l => {
                 const lensCoating = (l.coating || "").toUpperCase().trim();
                 return lensCoating === targetLabel;
              });
           }
        }
 
-       const designs = [...new Set(processedLenses.map(l => l.design).filter(Boolean))].sort();
+       // D. Extraction designs
+       const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
+       // E. Filtre Design
        if (formData.design) {
-         setFilteredLenses(processedLenses.filter(l => l.design === formData.design));
+         setFilteredLenses(validLenses.filter(l => l.design === formData.design));
        } else {
-         setFilteredLenses(processedLenses);
+         setFilteredLenses(validLenses);
        }
     } else {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating, userSettings.pricing]);
+  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating]); // Ajout coating
 
 
   const fetchData = (ignoreFilters = false) => {
@@ -318,7 +304,7 @@ function App() {
     const params = ignoreFilters ? {} : {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
         index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
-        myopia: formData.myopiaControl, uvOption: formData.uvOption, pocketLimit: userSettings[formData.type]?.maxPocket || 0
+        myopia: formData.myopiaControl, uvOption: formData.uvOption, pocketLimit: 0
     };
 
     axios.get(API_URL, { params })
@@ -491,8 +477,6 @@ function App() {
               </div>
             </div>
             <hr className="border-slate-100" />
-            
-            {/* ... (Sections Correction et Geometrie inchangées) ... */}
             <div className="space-y-4">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Glasses className="w-5 h-5" /> CORRECTION (OD)</label>
               <div className="grid grid-cols-2 gap-4">
@@ -533,9 +517,20 @@ function App() {
                 <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
                    <div className="flex flex-wrap gap-2">
-                     <button onClick={() => handleDesignChange('')} className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS</button>
+                     <button
+                       onClick={() => handleDesignChange('')}
+                       className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
+                     >
+                       TOUS
+                     </button>
                      {availableDesigns.map(design => (
-                       <button key={design} onClick={() => handleDesignChange(design)} className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === design ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>{design}</button>
+                       <button
+                         key={design}
+                         onClick={() => handleDesignChange(design)}
+                         className={`flex-1 py-2 px-2 text-[10px] font-bold rounded-lg transition-all border ${formData.design === design ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}
+                       >
+                         {design}
+                       </button>
                      ))}
                    </div>
                 </div>
@@ -678,8 +673,61 @@ function App() {
               </div>
               <div className="p-8 overflow-y-auto">
                 <div className="space-y-10">
-                  
-                  {/* --- FORMULE PRIX MARCHÉ LIBRE --- */}
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">GESTION CATALOGUE</h4>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <label className="block text-xs font-bold text-slate-600 mb-2">LIEN GOOGLE SHEETS (PUBLIÉ WEB CSV)</label>
+                        <div className="flex gap-2">
+                           <input 
+                            type="text" 
+                            value={sheetsUrl} 
+                            onChange={(e) => handleSheetsUrlChange(e.target.value)} 
+                            placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" 
+                            className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"
+                          />
+                          <button 
+                             onClick={triggerSync}
+                             disabled={syncLoading || !sheetsUrl}
+                             className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                          >
+                             {syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>}
+                             SYNCHRO
+                          </button>
+                        </div>
+                        {syncStatus && (
+                           <div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                             {syncStatus.msg}
+                           </div>
+                        )}
+                        <p className="text-[10px] text-slate-400 mt-2">
+                          1. Dans Google Sheets : Fichier {'>'} Partager {'>'} Publier sur le web<br/>
+                          2. Choisissez "Feuille 1" et format "CSV"<br/>
+                          3. Copiez le lien et collez-le ici.
+                        </p>
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">CONNEXION SERVEUR</h4>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label>
+                        <div className="relative">
+                          <input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://api-podium-..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
+                          <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4">
+                        <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
+                        <div className="relative">
+                            <input type="color" value={userSettings.customColor} onChange={(e) => {
+                                handleSettingChange('branding', 'customColor', e.target.value);
+                                handleSettingChange('branding', 'themeColor', 'custom');
+                            }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
+                            <div className="pointer-events-none absolute inset-0 rounded ring-1 ring-inset ring-black/10" />
+                        </div>
+                        <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
+                    </div>
+                  </div>
+
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">FORMULE PRIX DE VENTE (MARCHÉ LIBRE)</h4>
                     <p className="text-[10px] text-slate-500 mb-2">Calcul automatique : (Prix Achat x Coefficient) + Forfait Montage</p>
@@ -748,55 +796,6 @@ function App() {
                   </div>
 
                   <div className="space-y-5">
-                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">GESTION CATALOGUE</h4>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                        <label className="block text-xs font-bold text-slate-600 mb-2">LIEN GOOGLE SHEETS (PUBLIÉ WEB CSV)</label>
-                        <div className="flex gap-2">
-                           <input 
-                            type="text" 
-                            value={sheetsUrl} 
-                            onChange={(e) => handleSheetsUrlChange(e.target.value)} 
-                            placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" 
-                            className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"
-                          />
-                          <button 
-                             onClick={triggerSync}
-                             disabled={syncLoading || !sheetsUrl}
-                             className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                          >
-                             {syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>}
-                             SYNCHRO
-                          </button>
-                        </div>
-                        {syncStatus && (
-                           <div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                             {syncStatus.msg}
-                           </div>
-                        )}
-                        <p className="text-[10px] text-slate-400 mt-2">
-                          1. Dans Google Sheets : Fichier {'>'} Partager {'>'} Publier sur le web<br/>
-                          2. Choisissez "Feuille 1" et format "CSV"<br/>
-                          3. Copiez le lien et collez-le ici.
-                        </p>
-                    </div>
-                  </div>
-                  <div className="space-y-5">
-                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">CONNEXION SERVEUR</h4>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label>
-                        <div className="relative">
-                          <input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://api-podium-..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
-                          <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-4">
-                        <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
-                        <div className="relative">
-                            <input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
-                        </div>
-                    </div>
-                  </div>
-                  <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">IDENTITÉ DU POINT DE VENTE</h4>
                     <div className="grid grid-cols-1 gap-6">
                       <div>
@@ -804,6 +803,24 @@ function App() {
                         <div className="relative">
                           <input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} placeholder="EX: MON OPTICIEN" className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
                           <Store className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">LOGO DU MAGASIN</label>
+                        <div className="flex items-center gap-4">
+                          {userSettings.shopLogo && (
+                            <div className="h-16 w-16 relative bg-white rounded-xl border border-slate-200 p-2 flex-shrink-0 shadow-sm">
+                               <img src={userSettings.shopLogo} alt="Logo" className="h-full w-full object-contain" />
+                               <button onClick={() => setUserSettings(prev => ({...prev, shopLogo: ""}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-sm transition-colors"><X className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                          <div className="relative flex-1">
+                            <div className="relative">
+                               <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"/>
+                               <div className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-200 border-dashed rounded-xl text-slate-500 text-xs font-bold flex items-center hover:bg-slate-100 transition-colors uppercase">{userSettings.shopLogo ? "CHANGER LE FICHIER..." : "CLIQUEZ POUR CHOISIR UN FICHIER..."}</div>
+                               <Upload className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -816,20 +833,6 @@ function App() {
                           <div className={`w-10 h-10 rounded-full ${themes[colorKey].primary} shadow-sm ring-4 ring-white`}></div>
                           <span className="text-[10px] font-bold text-slate-500">{themes[colorKey].name}</span>
                         </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-5">
-                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">PLAFONDS RESTE À CHARGE</h4>
-                    <div className="grid grid-cols-2 gap-6">
-                      {lensTypes.map(type => (
-                        <div key={type.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                           <label className="block text-xs font-bold text-slate-600 mb-2">{type.label}</label>
-                           <div className="relative">
-                              <input type="number" value={userSettings[type.id]?.maxPocket || ''} onChange={(e) => handleSettingChange(type.id, 'maxPocket', e.target.value)} className="w-full p-3 pr-10 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none text-right text-lg"/>
-                              <span className="absolute right-4 top-3.5 text-sm text-slate-400 font-bold">€</span>
-                           </div>
-                        </div>
                       ))}
                     </div>
                   </div>
