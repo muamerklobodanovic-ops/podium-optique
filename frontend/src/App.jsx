@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.19"; // Fix Modale Settings (Position + Crash proof)
+const APP_VERSION = "1.20"; // Fix Crash BrandLogo (Safe Mode) & Pricing Safety
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -14,23 +14,27 @@ const hexToRgb = (hex) => {
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
 
-// --- COMPOSANT LOGOS ---
+// --- COMPOSANT LOGOS (SÉCURISÉ) ---
+// Utilise useState au lieu de manipuler le DOM directement pour éviter les crashs
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
+  const [hasError, setHasError] = useState(false);
   const safeBrand = brand || 'unknown';
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
+
+  if (hasError) {
+    return (
+      <span className="text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full px-1 text-center">
+        {safeBrand === '' ? 'TOUTES' : safeBrand}
+      </span>
+    );
+  }
 
   return (
     <img 
       src={logoUrl} 
       alt={safeBrand} 
       className={`${className} object-contain`}
-      onError={(e) => {
-        e.target.style.display = 'none';
-        const span = document.createElement('span');
-        span.innerText = safeBrand === '' ? 'TOUTES' : safeBrand;
-        span.className = "text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full";
-        if(e.target.parentNode) e.target.parentNode.appendChild(span);
-      }}
+      onError={() => setHasError(true)}
     />
   );
 };
@@ -118,13 +122,14 @@ function App() {
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
 
+  // Configuration Par Défaut Solide
+  const defaultPricing = { x: 2.5, b: 20 };
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
     shopLogo: "", 
     themeColor: "blue", 
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
-    // Règles de prix (Valeurs par défaut robustes)
     pricing: {
         uniStock: { x: 2.5, b: 20 },   
         uniFab: { x: 3.0, b: 30 },     
@@ -173,6 +178,7 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
+  // Responsive
   useEffect(() => {
     const handleResize = () => { if (window.innerWidth < 1024) { } };
     window.addEventListener('resize', handleResize);
@@ -189,6 +195,7 @@ function App() {
   };
 
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
+
   const brands = [ 
     { id: '', label: 'TOUTES' },
     { id: 'HOYA', label: 'HOYA' }, 
@@ -197,6 +204,7 @@ function App() {
     { id: 'CODIR', label: 'CODIR' }, 
     { id: 'ORUS', label: 'ORUS' } 
   ];
+
   const lensTypes = [ 
     { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
     { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
@@ -233,19 +241,21 @@ function App() {
            workingList = workingList.filter(l => l.brand.toUpperCase() === formData.brand.toUpperCase());
        }
 
-       // Prix Marché Libre avec Sécurité (Optional Chaining)
+       // Prix & Formules avec Sécurité
        if (formData.network === 'HORS_RESEAU') {
+          // Récupération sûre des règles de prix (évite le crash si undefined)
+          const pRules = userSettings.pricing || {};
+          
           workingList = workingList.map(lens => {
-             // Sélection règle de prix (avec fallback si la config est corrompue)
-             let rule = userSettings.pricing?.prog || {x: 3.2, b: 50}; 
+             let rule = pRules.prog || defaultPricing; 
              
              if (lens.type === 'UNIFOCAL') {
                  const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
-                 rule = isStock ? (userSettings.pricing?.uniStock || {x: 2.5, b: 20}) : (userSettings.pricing?.uniFab || {x: 3.0, b: 30});
+                 rule = isStock ? (pRules.uniStock || defaultPricing) : (pRules.uniFab || defaultPricing);
              } 
-             else if (lens.type === 'DEGRESSIF') { rule = userSettings.pricing?.degressif || {x: 3.0, b: 40}; } 
-             else if (lens.type.includes('INTERIEUR')) { rule = userSettings.pricing?.interieur || {x: 3.0, b: 40}; }
-             else if (lens.type === 'MULTIFOCAL') { rule = userSettings.pricing?.multifocal || {x: 3.0, b: 40}; }
+             else if (lens.type === 'DEGRESSIF') { rule = pRules.degressif || defaultPricing; } 
+             else if (lens.type.includes('INTERIEUR')) { rule = pRules.interieur || defaultPricing; }
+             else if (lens.type === 'MULTIFOCAL') { rule = pRules.multifocal || defaultPricing; }
 
              const newSelling = (lens.purchasePrice * rule.x) + rule.b;
              const newMargin = newSelling - lens.purchasePrice;
@@ -291,7 +301,6 @@ function App() {
           workingList = workingList.filter(l => l.name.toUpperCase().includes("MIYO"));
        }
 
-       // Designs
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
@@ -340,7 +349,7 @@ function App() {
       });
   };
 
-  // HANDLERS
+  // HANDLERS (Identiques)
   const triggerSync = () => {
       if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
       setSyncLoading(true);
@@ -389,7 +398,7 @@ function App() {
   const uvOptionLabel = (formData.brand === 'CODIR' || formData.brand === 'ORUS') ? 'OPTION SUV (UV 400)' : 'OPTION IP+ (UV)';
   const isUvOptionMandatory = formData.materialIndex !== '1.50';
 
-  // Fallback pour éviter le crash si pricing est undefined dans un vieux state
+  // Fallback pour éviter le crash
   const safePricing = userSettings.pricing || {
         uniStock: { x: 2.5, b: 20 },   
         uniFab: { x: 3.0, b: 30 },     
@@ -398,6 +407,9 @@ function App() {
         interieur: { x: 3.0, b: 40 },
         multifocal: { x: 3.0, b: 40 }
   };
+  
+  // Fallback par défaut pour le calcul
+  const defaultPricing = { x: 3.0, b: 30 };
 
   return (
     <div className="min-h-screen flex flex-col text-slate-800 bg-slate-50 relative font-['Arial'] uppercase">
@@ -432,7 +444,6 @@ function App() {
         </div>
       </header>
 
-      {/* CONTENU PRINCIPAL */}
       <main className="flex-1 flex overflow-hidden relative z-0">
         <aside className={`bg-white border-r border-slate-200 flex flex-col overflow-y-auto z-20 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-full lg:w-[420px] translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-0 opacity-0 pointer-events-none'} absolute lg:relative h-full`}>
           <div className="lg:hidden p-4 border-b border-slate-100 flex justify-between items-center">
@@ -519,29 +530,41 @@ function App() {
                 </label>
               </div>
             </div>
-            
-            {/* INDICE */}
             <div className="space-y-3">
-               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Layers className="w-5 h-5" /> INDICE</label>
-               <div className="flex bg-slate-100 p-1.5 rounded-xl gap-1.5">
-                 {indices.map(idx => (
-                   <button key={idx} onClick={() => setFormData({...formData, materialIndex: idx})} className={`flex-1 py-3 text-xs font-bold rounded-lg ${formData.materialIndex === idx ? 'bg-white shadow-sm' : 'text-slate-500'}`}>{idx}</button>
-                 ))}
-               </div>
+              <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Layers className="w-5 h-5" /> INDICE</label>
+              <div className="flex bg-slate-100 p-1.5 rounded-xl gap-1.5">
+                {indices.map(idx => {
+                  const isDisabled = formData.myopiaControl && idx !== '1.58';
+                  return (
+                    <button key={idx} disabled={isDisabled} onClick={() => setFormData({...formData, materialIndex: idx})} className={`flex-1 py-3 text-xs font-bold rounded-lg ${formData.materialIndex === idx ? 'bg-white shadow-sm' : 'text-slate-500'}`}>{idx}</button>
+                  )
+                })}
+              </div>
             </div>
-
-            {/* TRAITEMENTS */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
-              <button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-xs font-bold rounded-lg border ${formData.coating === '' ? 'bg-white border-slate-200 shadow-sm' : 'border-transparent'}`}>TOUS LES TRAITEMENTS</button>
-              <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer mb-2 ${formData.photochromic ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-transparent'}`}>
-                  <input type="checkbox" checked={formData.photochromic} onChange={handleChange} name="photochromic" className="peer h-5 w-5"/>
-                  <span className="text-sm font-bold text-slate-500">PHOTOCHROMIQUE</span>
-              </label>
+              
+              {/* LISTE TRAITEMENTS */}
+              <div className="mb-2">
+                 <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
+              </div>
+
+              {/* BOUTON PHOTOCHROMIQUE */}
+              <div className="mb-2">
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${formData.photochromic ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                    <div className="relative flex items-center">
+                      <input type="checkbox" name="photochromic" checked={formData.photochromic} onChange={handleChange} className="peer h-5 w-5 rounded-md border bg-white transition-all checked:border-yellow-500 checked:bg-yellow-500"/>
+                      <Sun className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 text-white opacity-0 peer-checked:opacity-100" />
+                    </div>
+                    <span className={`text-sm font-bold ${formData.photochromic ? 'text-yellow-700' : 'text-slate-500'}`}>PHOTOCHROMIQUE</span>
+                  </label>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 {currentCoatings.map(c => (
-                  <button key={c.id} onClick={() => handleCoatingChange(c.id)} className={`p-4 rounded-xl border-2 text-left ${formData.coating === c.id ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-100'}`}>
-                     <div className="font-bold text-sm">{c.label}</div>
+                  <button key={c.id} onClick={() => handleCoatingChange(c.id)} className={`p-4 rounded-xl border-2 text-left transition-all relative overflow-hidden ${formData.coating === c.id ? `${currentTheme.light} ${currentTheme.border} ${currentTheme.textDark} ring-1 ${currentTheme.ring.replace('focus:', '')}` : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'}`}>
+                    <div className="text-[10px] font-bold mb-1 opacity-60 flex items-center gap-1.5">{c.icon} {c.type === 'BLUE' ? 'LUMIÈRE BLEUE' : c.type === 'SUN' ? 'SOLEIL' : c.type === 'DRIVE' ? 'CONDUITE' : c.type === 'CLEAN' ? 'NETTOYAGE' : 'ANTIREFLET'}</div>
+                    <div className="font-bold text-sm">{c.label}</div>
                   </button>
                 ))}
               </div>
@@ -555,7 +578,8 @@ function App() {
                 </label>
               </div>
             </div>
-            <div className="pt-4 pb-8"></div>
+            <div className="pt-4 pb-8">
+            </div>
           </div>
         </aside>
 
@@ -622,7 +646,6 @@ function App() {
         </section>
 
         {showSettings && (
-          // MODALE FIXÉE AU PREMIER PLAN (Z-INDEX 100)
           <div 
             className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" 
             onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}
@@ -636,59 +659,29 @@ function App() {
                 <button onClick={() => setShowSettings(false)} className="p-3 hover:bg-slate-200 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
               </div>
               <div className="p-8 overflow-y-auto">
+                {/* ... Contenu des Paramètres avec les 5 catégories de prix ... */}
                 <div className="space-y-10">
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">GESTION CATALOGUE</h4>
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                         <label className="block text-xs font-bold text-slate-600 mb-2">LIEN GOOGLE SHEETS (PUBLIÉ WEB CSV)</label>
                         <div className="flex gap-2">
-                           <input 
-                            type="text" 
-                            value={sheetsUrl} 
-                            onChange={(e) => handleSheetsUrlChange(e.target.value)} 
-                            placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" 
-                            className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"
-                          />
-                          <button 
-                             onClick={triggerSync}
-                             disabled={syncLoading || !sheetsUrl}
-                             className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                          >
-                             {syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>}
-                             SYNCHRO
-                          </button>
+                           <input type="text" value={sheetsUrl} onChange={(e) => handleSheetsUrlChange(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"/>
+                          <button onClick={triggerSync} disabled={syncLoading || !sheetsUrl} className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">{syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>} SYNCHRO</button>
                         </div>
-                        {syncStatus && (
-                           <div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                             {syncStatus.msg}
-                           </div>
-                        )}
+                        {syncStatus && (<div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{syncStatus.msg}</div>)}
                     </div>
                   </div>
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">CONNEXION SERVEUR</h4>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label>
-                        <div className="relative">
-                          <input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://api-podium-..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
-                          <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-4">
-                        <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
-                        <div className="relative">
-                            <input type="color" value={userSettings.customColor} onChange={(e) => {
-                                handleSettingChange('branding', 'customColor', e.target.value);
-                                handleSettingChange('branding', 'themeColor', 'custom');
-                            }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
-                        </div>
-                        <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
-                    </div>
+                    <div><label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label><div className="relative"><input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://api-podium-..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/><Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" /></div></div>
+                    <div className="flex items-center gap-2 mt-4"><label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label><div className="relative"><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" /></div></div>
                   </div>
 
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">FORMULE PRIX DE VENTE (MARCHÉ LIBRE)</h4>
                     <div className="space-y-4">
+                      {/* 5 Catégories de Prix */}
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
