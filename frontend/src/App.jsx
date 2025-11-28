@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.16"; // 5 Géométries + Filtre Marque Strict + Toutes Marques
+const APP_VERSION = "1.17"; // Rollback UI Stable + Filtres Stricts
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -114,6 +114,7 @@ function App() {
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Synchro
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
@@ -172,10 +173,9 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
+  // Responsive
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) { }
-    };
+    const handleResize = () => { if (window.innerWidth < 1024) { } };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -190,8 +190,7 @@ function App() {
   };
 
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
-  
-  // --- LISTE MARQUES AVEC OPTION TOUTES ---
+
   const brands = [ 
     { id: '', label: 'TOUTES' },
     { id: 'HOYA', label: 'HOYA' }, 
@@ -200,8 +199,8 @@ function App() {
     { id: 'CODIR', label: 'CODIR' }, 
     { id: 'ORUS', label: 'ORUS' } 
   ];
-  
-  // --- LISTE GÉOMÉTRIES MISE À JOUR ---
+
+  // --- 5 GÉOMÉTRIES ---
   const lensTypes = [ 
     { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
     { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
@@ -215,7 +214,7 @@ function App() {
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
-  // --- 1. RECHARGEMENT DONNÉES (CRITÈRES MAJEURS) ---
+  // 1. RECHARGEMENT DES DONNÉES (CRITÈRES MAJEURS)
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -226,15 +225,9 @@ function App() {
     if (!coatingExists) { setFormData(prev => ({ ...prev, coating: currentCoatings[0].id })); }
 
     fetchData(); 
-  }, [
-    // On recharge la data SI la marque change (pour avoir le bon catalogue) ou le type
-    // (Les autres critères comme indice/traitement sont filtrés localement pour rapidité)
-    formData.brand, 
-    formData.network, 
-    formData.type
-  ]); 
+  }, [formData.brand, formData.network, formData.type]); 
 
-  // --- 2. FILTRAGE LOCAL STRICT (CRITÈRES MINEURS) ---
+  // 2. FILTRAGE LOCAL STRICT (CRITÈRES MINEURS)
   useEffect(() => {
     if (lenses.length > 0) {
        let workingList = lenses.map(l => ({...l}));
@@ -265,6 +258,13 @@ function App() {
          workingList = workingList.filter(l => l.sellingPrice > 0);
        }
 
+       // --- INDICE STRICT ---
+       workingList = workingList.filter(l => {
+           const lIdx = l.index_mat.replace(',', '.');
+           const fIdx = formData.materialIndex.replace(',', '.');
+           return parseFloat(lIdx) === parseFloat(fIdx);
+       });
+
        // --- PHOTOCHROMIQUE ---
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
@@ -283,22 +283,17 @@ function App() {
              const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
              workingList = workingList.filter(l => {
                 const lensCoating = (l.coating || "").toUpperCase().trim();
-                return lensCoating === targetLabel; // Egalité stricte
+                return lensCoating === targetLabel; 
              });
           }
        }
 
-       // --- INDICE STRICT ---
-       workingList = workingList.filter(l => {
-           const lIdx = l.index_mat.replace(',', '.');
-           const fIdx = formData.materialIndex.replace(',', '.');
-           return parseFloat(lIdx) === parseFloat(fIdx);
-       });
+       // --- MYOPIE ---
+       if (formData.myopiaControl) {
+          workingList = workingList.filter(l => l.name.toUpperCase().includes("MIYO"));
+       }
 
-       // --- DESIGNS DISPONIBLES ---
-       // On calcule les designs APRES avoir filtré la marque et le type, mais AVANT indice/traitement pour garder de la visibilité ?
-       // NON : Le user veut que "quand un design est selectionné, ne montrer que ces design".
-       // Donc la liste des designs dispo doit être celle des verres restants.
+       // --- DESIGNS DISPONIBLES (BASÉ SUR LE FILTRAGE PRÉCÉDENT) ---
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
@@ -313,13 +308,14 @@ function App() {
        setFilteredLenses([]);
     }
   }, [
-    lenses, // Quand le serveur répond
+    lenses, 
     formData.design, 
-    formData.brand, // Ajouté pour filtre strict local
+    formData.brand, 
     formData.network, 
     formData.photochromic, 
     formData.coating, 
     formData.materialIndex, 
+    formData.myopiaControl,
     userSettings.pricing
   ]);
 
@@ -328,12 +324,11 @@ function App() {
     setError(null); 
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(MOCK_LENSES); setLoading(false); return; }
 
-    // On demande au serveur : Type et Marque (Si 'TOUTES', on envoie vide ou la marque sélectionnée)
-    // Le serveur renvoie TOUT pour ce type (et marque si spécifiée), le frontend filtrera le reste.
+    // On demande large : Type et Marque (si sélectionnée)
     const params = {
         type: formData.type, 
         network: formData.network, 
-        brand: formData.brand === '' ? undefined : formData.brand, // Si vide, on envoie rien pour avoir tout
+        brand: formData.brand === '' ? undefined : formData.brand, 
         pocketLimit: 0 
     };
 
@@ -349,6 +344,13 @@ function App() {
       });
   };
 
+  // HANDLERS (Inchangés)
+  const triggerSync = () => {
+      if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
+      setSyncLoading(true);
+      setSyncStatus(null);
+      axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { setSyncStatus({ type: 'success', msg: `Succès ! ${res.data.count} verres importés.` }); fetchData(); }).catch(err => { setSyncStatus({ type: 'error', msg: "Erreur Synchro" }); }).finally(() => setSyncLoading(false));
+  };
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -358,35 +360,32 @@ function App() {
       setFormData(prev => ({ ...prev, [name]: newValue, brand: defaultBrand, myopiaControl: false }));
       return;
     }
+    if (name === 'myopiaControl') {
+      if (newValue === true) { setFormData(prev => ({ ...prev, [name]: newValue, materialIndex: '1.58' })); return; }
+    }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
-
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); }
   };
-
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
   };
-  
   const handlePriceRuleChange = (category, field, value) => {
       setUserSettings(prev => ({ ...prev, pricing: { ...prev.pricing, [category]: { ...prev.pricing[category], [field]: parseFloat(value) || 0 } } }));
   };
-
   const handleUrlChange = (value) => { setServerUrl(value); localStorage.setItem("optique_server_url", value); };
   const handleSheetsUrlChange = (value) => { setSheetsUrl(value); localStorage.setItem("optique_sheets_url", value); };
-  
   const handleTypeChange = (newType) => {
-    setFormData(prev => ({ ...prev, type: newType, design: '' })); // Reset design on type change
+    setFormData(prev => ({ ...prev, type: newType, design: '' }));
   };
   const handleDesignChange = (newDesign) => { setFormData(prev => ({ ...prev, design: newDesign })); };
   const handleCoatingChange = (newCoating) => { setFormData(prev => ({ ...prev, coating: newCoating, cleanOption: false })); };
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const clearComparison = () => { setComparisonLens(null); };
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-  const triggerSync = () => { /* ... (code synchro inchangé) ... */ if (!sheetsUrl) return alert("URL?"); setSyncLoading(true); axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { setSyncStatus({ type: 'success', msg: 'OK' }); fetchData(); }).finally(() => setSyncLoading(false)); };
 
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
   const isMyopiaEligible = formData.type === 'UNIFOCAL' && (formData.brand === 'HOYA' || formData.brand === 'SEIKO');
@@ -423,21 +422,29 @@ function App() {
 
       <main className="flex-1 flex overflow-hidden relative z-0">
         <aside className={`bg-white border-r border-slate-200 flex flex-col overflow-y-auto z-20 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-full lg:w-[420px] translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-0 opacity-0 pointer-events-none'} absolute lg:relative h-full`}>
-          {/* ... CONTENU SIDEBAR (Réseau, Marque, Correction) ... */}
+          <div className="lg:hidden p-4 border-b border-slate-100 flex justify-between items-center">
+             <span className="font-bold text-slate-500">FILTRES</span>
+             <button onClick={() => setIsSidebarOpen(false)}><ChevronLeft className="w-6 h-6 text-slate-400"/></button>
+          </div>
           <div className="p-6 space-y-8">
-             <div className="space-y-3">
+             <button onClick={() => setIsSidebarOpen(false)} className="hidden lg:flex absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-500 hover:bg-slate-100 rounded-full"><ChevronLeft className="w-5 h-5"/></button>
+            
+            {/* SECTION RESEAU & MARQUE */}
+            <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Shield className="w-5 h-5" /> RÉSEAU DE SOIN</label>
               <div className="relative">
                 <select name="network" value={formData.network} onChange={handleChange} className={`w-full p-4 pl-5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 text-lg focus:ring-2 outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors focus:${currentTheme.border} focus:ring-${userSettings.themeColor}-500`} style={{ '--tw-ring-color': `var(--${userSettings.themeColor}-500)` }}>
                   <option value="HORS_RESEAU">TARIF LIBRE (HORS RÉSEAU)</option>
                   <option value="KALIXIA">KALIXIA</option>
-                  {/* ... Autres réseaux ... */}
+                  <option value="SANTECLAIR">SANTÉCLAIR</option>
+                  <option value="CARTEBLANCHE">CARTE BLANCHE</option>
+                  <option value="ITELIS">ITELIS</option>
+                  <option value="SEVEANE">SÉVÉANE</option>
                 </select>
                 <ChevronRight className="w-5 h-5 text-slate-400 absolute right-5 top-5 rotate-90 pointer-events-none"/>
               </div>
             </div>
             <hr className="border-slate-100" />
-
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Tag className="w-5 h-5" /> MARQUE VERRIER</label>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2 rounded-2xl">
@@ -454,8 +461,8 @@ function App() {
               </div>
             </div>
             <hr className="border-slate-100" />
-
-            {/* ... CORRECTION (Inchangé) ... */}
+            
+            {/* CORRECTION */}
             <div className="space-y-4">
                <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Glasses className="w-5 h-5" /> CORRECTION</label>
                <div className="grid grid-cols-2 gap-4">
@@ -468,6 +475,7 @@ function App() {
             </div>
             <hr className="border-slate-100" />
 
+            {/* GEOMETRIE & DESIGN */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Ruler className="w-5 h-5" /> GÉOMÉTRIE</label>
               <div className="flex flex-col gap-2 bg-slate-50 p-2 rounded-2xl">
@@ -476,7 +484,6 @@ function App() {
                 ))}
               </div>
               
-              {/* CHOIX DESIGN DYNAMIQUE */}
               {availableDesigns.length > 0 && (
                 <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
@@ -488,9 +495,19 @@ function App() {
                    </div>
                 </div>
               )}
-            </div>
 
-            {/* ... INDICES & TRAITEMENTS (Inchangés) ... */}
+              <div className={`transition-all duration-300 overflow-hidden ${isMyopiaEligible ? 'max-h-24 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+                <label className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer border-2 transition-colors ${formData.myopiaControl ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                  <div className="relative flex items-center">
+                    <input type="checkbox" name="myopiaControl" checked={formData.myopiaControl} onChange={handleChange} className="peer h-6 w-6 cursor-pointer appearance-none rounded-lg border-2 border-purple-300 bg-white transition-all checked:border-purple-600 checked:bg-purple-600"/>
+                    <Eye className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 text-white opacity-0 peer-checked:opacity-100" />
+                  </div>
+                  <div><span className="text-sm font-bold text-purple-900 block leading-tight">FREINATION MYOPIE</span><span className="text-[10px] text-purple-600 font-bold mt-0.5 block">TYPE MIYOSMART (INDICE 1.58 OBLIGATOIRE)</span></div>
+                </label>
+              </div>
+            </div>
+            
+            {/* INDICE */}
             <div className="space-y-3">
                <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Layers className="w-5 h-5" /> INDICE</label>
                <div className="flex bg-slate-100 p-1.5 rounded-xl gap-1.5">
@@ -500,6 +517,7 @@ function App() {
                </div>
             </div>
 
+            {/* TRAITEMENTS */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
               <button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-xs font-bold rounded-lg border ${formData.coating === '' ? 'bg-white border-slate-200 shadow-sm' : 'border-transparent'}`}>TOUS LES TRAITEMENTS</button>
@@ -514,32 +532,195 @@ function App() {
                   </button>
                 ))}
               </div>
+              <div className={`transition-all duration-300 overflow-hidden ${isUvOptionVisible ? 'max-h-24 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+                <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${isUvOptionMandatory ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-80' : 'bg-orange-50 border-orange-200 hover:bg-orange-100'}`}>
+                  <div className="relative flex items-center">
+                    <input type="checkbox" name="uvOption" checked={formData.uvOption} onChange={handleChange} disabled={isUvOptionMandatory} className={`peer h-5 w-5 rounded-md border bg-white transition-all ${isUvOptionMandatory ? 'border-slate-400 bg-slate-400 checked:bg-slate-500' : 'border-orange-300 checked:border-orange-600 checked:bg-orange-600 cursor-pointer'}`}/>
+                    {(formData.uvOption || isUvOptionMandatory) && <Sparkles className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white" />}
+                  </div>
+                  <div><span className={`text-sm font-bold select-none ${isUvOptionMandatory ? 'text-slate-600' : 'text-orange-900'}`}>{uvOptionLabel}</span>{isUvOptionMandatory && <span className="ml-2 text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded font-bold">OBLIGATOIRE</span>}</div>
+                </label>
+              </div>
             </div>
-            <div className="h-24"></div>
+            <div className="pt-4 pb-8"></div>
           </div>
         </aside>
 
-        {/* ... SECTION RÉSULTATS (Inchangée) ... */}
+        {!isSidebarOpen && (
+          <button onClick={() => setIsSidebarOpen(true)} className="absolute bottom-6 left-6 z-30 bg-blue-600 text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-all animate-in fade-in zoom-in lg:hidden">
+            <Sliders className="w-6 h-6"/>
+          </button>
+        )}
+        {!isSidebarOpen && (
+          <div className="hidden lg:flex w-12 bg-white border-r border-slate-200 flex-col items-center py-6 z-20">
+              <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400"><ChevronRight className="w-6 h-6"/></button>
+              <div className="mt-8 writing-vertical-lr text-xs font-bold text-slate-300 tracking-widest rotate-180">FILTRES</div>
+          </div>
+        )}
+
         <section className="flex-1 p-8 overflow-y-auto bg-slate-50">
+           {/* ... (Section Résultats & Comparaison inchangée, conservée par défaut) ... */}
            <div className="max-w-7xl mx-auto">
-              {/* Comparaison & Filtres... */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-start">
-                {filteredLenses.map((lens, index) => (
-                  <LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} />
-                ))}
+            {comparisonLens && (
+              <div className="mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
+                 <div className="flex justify-between items-end mb-4 pb-2 border-b border-blue-100">
+                   <h3 className="text-xl font-black text-blue-800 flex items-center gap-2 tracking-wide"><ArrowRightLeft className="w-6 h-6"/> PRODUIT DE RÉFÉRENCE (FIGÉ)</h3>
+                   <button onClick={clearComparison} className="flex items-center gap-2 text-xs font-bold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors"><XCircle className="w-4 h-4"/> ARRÊTER LA COMPARAISON</button>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="relative">
+                      <div className="absolute -top-3 -left-3 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-20">RÉFÉRENCE A</div>
+                      <LensCard lens={comparisonLens} index={0} currentTheme={currentTheme} showMargins={showMargins} onCompare={() => {}} isReference={true} />
+                    </div>
+                    <div className="hidden md:flex items-center justify-center text-slate-300 font-bold text-4xl opacity-20">VS</div>
+                 </div>
               </div>
+            )}
+
+            <div className="mb-8 flex flex-wrap gap-3 text-sm items-center font-bold text-slate-500">
+               <span>{comparisonLens ? "COMPARER AVEC :" : "FILTRES :"}</span>
+               <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><Shield className="w-4 h-4"/>{formData.network === 'HORS_RESEAU' ? 'HORS RÉSEAU' : formData.network}</span>
+               <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs flex items-center gap-2`}><Tag className="w-4 h-4"/>{brands.find(b => b.id === formData.brand)?.label}</span>
+               <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">{lensTypes.find(t => t.id === formData.type)?.label} {formData.materialIndex}</span>
+               {formData.design && (<span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs flex items-center gap-2"><BoxSelect className="w-4 h-4"/> {formData.design}</span>)}
+               {formData.myopiaControl && (<span className="bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200 text-purple-800 shadow-sm text-xs flex items-center gap-2"><Eye className="w-4 h-4"/> FREINATION MYOPIE</span>)}
+               {(formData.uvOption) && isUvOptionVisible && (<span className="bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 text-orange-800 shadow-sm text-xs">{uvOptionLabel}</span>)}
+               <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">SPH {formData.sphere > 0 ? '+' : ''}{formData.sphere}</span>
+               <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs`}>{formData.coating === '' ? 'TOUS TRAITEMENTS' : currentCoatings.find(c => c.id === formData.coating)?.label}</span>
+               {formData.photochromic && (<span className="bg-yellow-100 px-3 py-1.5 rounded-lg border border-yellow-200 text-yellow-800 shadow-sm text-xs flex items-center gap-2"><Sun className="w-4 h-4"/> PHOTOCHROMIQUE</span>)}
+            </div>
+            
+            {error && (
+              <div className="bg-red-50 text-red-600 p-6 rounded-2xl mb-8 border border-red-200 flex items-center gap-4 font-bold"><div className="w-3 h-3 rounded-full bg-red-500 animate-pulse"/>{error}</div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-start">
+              {filteredLenses.length === 0 && !loading && !error && (
+                <div className="col-span-3 py-32 text-center opacity-60">
+                  <div className="bg-white inline-flex p-6 rounded-full mb-6 shadow-sm border border-slate-100"><Glasses className="w-16 h-16 text-slate-300" /></div>
+                  <h3 className="text-2xl font-bold text-slate-600 mb-2">AUCUN VERRE TROUVÉ</h3>
+                  <p className="text-sm text-slate-400 font-bold">MODIFIEZ VOS CRITÈRES POUR VOIR LES RÉSULTATS.</p>
+                </div>
+              )}
+              {filteredLenses.map((lens, index) => (
+                <LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} isReference={false} />
+              ))}
+            </div>
            </div>
         </section>
 
-        {/* ... MODALE SETTINGS (Inchangée) ... */}
         {showSettings && (
-          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
-             {/* Contenu Settings... */}
-             <div className="bg-white p-8 rounded-3xl w-full max-w-2xl">
-                <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
-                {/* Formulaires de prix... */}
-                <div className="flex justify-end"><button onClick={() => setShowSettings(false)} className="px-6 py-2 bg-blue-600 text-white rounded-lg">FERMER</button></div>
-             </div>
+          <div 
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" 
+            onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}
+          >
+            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
+              <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <div className="flex items-center gap-4 text-slate-800">
+                  <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm"><Settings className="w-6 h-6 text-slate-600" /></div>
+                  <div><h3 className="font-bold text-xl leading-tight">CONFIGURATION</h3><p className="text-xs text-slate-500 font-bold">PERSONNALISATION & LIMITES</p><p className="text-[10px] text-slate-400 mt-1">VERSION {APP_VERSION}</p></div>
+                </div>
+                <button onClick={() => setShowSettings(false)} className="p-3 hover:bg-slate-200 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
+              </div>
+              <div className="p-8 overflow-y-auto">
+                {/* ... Contenu des Paramètres (avec config prix pour Multifocal ajoutée) ... */}
+                <div className="space-y-10">
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">GESTION CATALOGUE</h4>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <label className="block text-xs font-bold text-slate-600 mb-2">LIEN GOOGLE SHEETS (PUBLIÉ WEB CSV)</label>
+                        <div className="flex gap-2">
+                           <input 
+                            type="text" 
+                            value={sheetsUrl} 
+                            onChange={(e) => handleSheetsUrlChange(e.target.value)} 
+                            placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" 
+                            className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"
+                          />
+                          <button onClick={triggerSync} disabled={syncLoading || !sheetsUrl} className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+                             {syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>} SYNCHRO
+                          </button>
+                        </div>
+                        {syncStatus && (<div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{syncStatus.msg}</div>)}
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">CONNEXION SERVEUR</h4>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label>
+                        <div className="relative">
+                          <input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://api-podium-..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
+                          <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">FORMULE PRIX DE VENTE (MARCHÉ LIBRE)</h4>
+                    <div className="space-y-4">
+                      {/* UNIFOCAL STOCK */}
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      {/* UNIFOCAL FAB */}
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      {/* PROGRESSIF */}
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      {/* DEGRESSIF */}
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">DÉGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.degressif.x} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.degressif.b} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      {/* INTERIEUR */}
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">INTÉRIEUR</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.interieur.x} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.interieur.b} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      {/* MULTIFOCAL */}
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">MULTIFOCAL</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.multifocal.x} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.multifocal.b} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">IDENTITÉ DU POINT DE VENTE</h4>
+                    <div className="grid grid-cols-1 gap-6">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">NOM DU MAGASIN</label>
+                        <div className="relative">
+                          <input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} placeholder="EX: MON OPTICIEN" className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
+                          <Store className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">LOGO DU MAGASIN</label>
+                        <div className="flex items-center gap-4">
+                          {userSettings.shopLogo && (
+                            <div className="h-16 w-16 relative bg-white rounded-xl border border-slate-200 p-2 flex-shrink-0 shadow-sm">
+                               <img src={userSettings.shopLogo} alt="Logo" className="h-full w-full object-contain" />
+                               <button onClick={() => setUserSettings(prev => ({...prev, shopLogo: ""}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-sm transition-colors"><X className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                          <div className="relative flex-1">
+                            <div className="relative">
+                               <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"/>
+                               <div className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-200 border-dashed rounded-xl text-slate-500 text-xs font-bold flex items-center hover:bg-slate-100 transition-colors uppercase">{userSettings.shopLogo ? "CHANGER LE FICHIER..." : "CLIQUEZ POUR CHOISIR UN FICHIER..."}</div>
+                               <Upload className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">THÈME & COULEURS</h4>
+                    <div className="grid grid-cols-5 gap-3">
+                      {Object.keys(themes).map(colorKey => (
+                        <button key={colorKey} onClick={() => handleSettingChange('branding', 'themeColor', colorKey)} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${userSettings.themeColor === colorKey ? `border-${colorKey}-500 bg-${colorKey}-50` : 'border-transparent hover:bg-slate-50'}`}>
+                          <div className={`w-10 h-10 rounded-full ${themes[colorKey].primary} shadow-sm ring-4 ring-white`}></div>
+                          <span className="text-[10px] font-bold text-slate-500">{themes[colorKey].name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-4">
+                <button onClick={() => setShowSettings(false)} className="px-6 py-3 font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors text-sm">FERMER</button>
+                <button onClick={() => { setShowSettings(false); fetchData(); }} className={`px-8 py-3 ${currentTheme.primary} ${currentTheme.hover} text-white font-bold rounded-xl shadow-lg ${currentTheme.shadow} transition-transform active:scale-95 flex items-center gap-2 text-sm`}><Save className="w-5 h-5" />SAUVEGARDER</button>
+              </div>
+            </div>
           </div>
         )}
       </main>
