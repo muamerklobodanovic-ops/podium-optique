@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.18"; // Fix Crash BrandLogo (DOM Error)
+const APP_VERSION = "1.19"; // Fix Modale Settings (Position + Crash proof)
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -14,28 +14,23 @@ const hexToRgb = (hex) => {
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
 
-// --- COMPOSANT LOGOS (CORRIGÉ & SÉCURISÉ) ---
+// --- COMPOSANT LOGOS ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
-  const [imageError, setImageError] = useState(false);
   const safeBrand = brand || 'unknown';
-  const displayLabel = brand === '' ? 'TOUTES' : brand;
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
-
-  // Si erreur ou pas de marque, on affiche le texte proprement
-  if (imageError || !brand) {
-    return (
-      <span className="text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full px-2">
-        {displayLabel}
-      </span>
-    );
-  }
 
   return (
     <img 
       src={logoUrl} 
-      alt={displayLabel} 
+      alt={safeBrand} 
       className={`${className} object-contain`}
-      onError={() => setImageError(true)}
+      onError={(e) => {
+        e.target.style.display = 'none';
+        const span = document.createElement('span');
+        span.innerText = safeBrand === '' ? 'TOUTES' : safeBrand;
+        span.className = "text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full";
+        if(e.target.parentNode) e.target.parentNode.appendChild(span);
+      }}
     />
   );
 };
@@ -117,10 +112,8 @@ function App() {
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
   
-  // Sidebar Mobile
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Synchro
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
@@ -131,7 +124,7 @@ function App() {
     themeColor: "blue", 
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
-    // Règles de prix pour le marché libre (AxX+B)
+    // Règles de prix (Valeurs par défaut robustes)
     pricing: {
         uniStock: { x: 2.5, b: 20 },   
         uniFab: { x: 3.0, b: 30 },     
@@ -163,7 +156,7 @@ function App() {
   const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : serverUrl;
   const SYNC_URL = isLocal ? "http://127.0.0.1:8000/sync" : serverUrl.replace('/lenses', '/sync');
 
-  // --- GESTION DES COULEURS ---
+  // --- COULEURS ---
   useEffect(() => {
     const root = document.documentElement;
     if (userSettings.themeColor === 'custom') {
@@ -180,7 +173,6 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
-  // Responsive
   useEffect(() => {
     const handleResize = () => { if (window.innerWidth < 1024) { } };
     window.addEventListener('resize', handleResize);
@@ -197,7 +189,6 @@ function App() {
   };
 
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
-
   const brands = [ 
     { id: '', label: 'TOUTES' },
     { id: 'HOYA', label: 'HOYA' }, 
@@ -206,8 +197,6 @@ function App() {
     { id: 'CODIR', label: 'CODIR' }, 
     { id: 'ORUS', label: 'ORUS' } 
   ];
-
-  // --- 5 GÉOMÉTRIES ---
   const lensTypes = [ 
     { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
     { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
@@ -221,7 +210,7 @@ function App() {
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
-  // 1. RECHARGEMENT DES DONNÉES (CRITÈRES MAJEURS)
+  // 1. RECHARGEMENT
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -234,27 +223,29 @@ function App() {
     fetchData(); 
   }, [formData.brand, formData.network, formData.type]); 
 
-  // 2. FILTRAGE LOCAL STRICT (CRITÈRES MINEURS)
+  // 2. FILTRAGE LOCAL
   useEffect(() => {
     if (lenses.length > 0) {
        let workingList = lenses.map(l => ({...l}));
 
-       // --- FILTRE MARQUE STRICT ---
+       // Marque Strict
        if (formData.brand && formData.brand !== '') {
            workingList = workingList.filter(l => l.brand.toUpperCase() === formData.brand.toUpperCase());
        }
 
-       // --- PRIX ---
+       // Prix Marché Libre avec Sécurité (Optional Chaining)
        if (formData.network === 'HORS_RESEAU') {
           workingList = workingList.map(lens => {
-             let rule = userSettings.pricing.prog; 
+             // Sélection règle de prix (avec fallback si la config est corrompue)
+             let rule = userSettings.pricing?.prog || {x: 3.2, b: 50}; 
+             
              if (lens.type === 'UNIFOCAL') {
                  const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
-                 rule = isStock ? userSettings.pricing.uniStock : userSettings.pricing.uniFab;
+                 rule = isStock ? (userSettings.pricing?.uniStock || {x: 2.5, b: 20}) : (userSettings.pricing?.uniFab || {x: 3.0, b: 30});
              } 
-             else if (lens.type === 'DEGRESSIF') { rule = userSettings.pricing.degressif; } 
-             else if (lens.type.includes('INTERIEUR')) { rule = userSettings.pricing.interieur; }
-             else if (lens.type === 'MULTIFOCAL') { rule = userSettings.pricing.multifocal; }
+             else if (lens.type === 'DEGRESSIF') { rule = userSettings.pricing?.degressif || {x: 3.0, b: 40}; } 
+             else if (lens.type.includes('INTERIEUR')) { rule = userSettings.pricing?.interieur || {x: 3.0, b: 40}; }
+             else if (lens.type === 'MULTIFOCAL') { rule = userSettings.pricing?.multifocal || {x: 3.0, b: 40}; }
 
              const newSelling = (lens.purchasePrice * rule.x) + rule.b;
              const newMargin = newSelling - lens.purchasePrice;
@@ -265,14 +256,14 @@ function App() {
          workingList = workingList.filter(l => l.sellingPrice > 0);
        }
 
-       // --- INDICE STRICT ---
+       // Indice Strict
        workingList = workingList.filter(l => {
            const lIdx = l.index_mat.replace(',', '.');
            const fIdx = formData.materialIndex.replace(',', '.');
            return parseFloat(lIdx) === parseFloat(fIdx);
        });
 
-       // --- PHOTOCHROMIQUE ---
+       // Photochromique
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
           return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR");
@@ -283,7 +274,7 @@ function App() {
          workingList = workingList.filter(l => !isPhotoC(l));
        }
 
-       // --- TRAITEMENT STRICT ---
+       // Traitement Strict
        if (formData.coating) {
           const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
           if (selectedCoatingObj) {
@@ -295,16 +286,15 @@ function App() {
           }
        }
 
-       // --- MYOPIE ---
+       // Myopie
        if (formData.myopiaControl) {
           workingList = workingList.filter(l => l.name.toUpperCase().includes("MIYO"));
        }
 
-       // --- DESIGNS DISPONIBLES (BASÉ SUR LE FILTRAGE PRÉCÉDENT) ---
+       // Designs
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
-       // --- FILTRE DESIGN FINAL ---
        if (formData.design) {
          setFilteredLenses(workingList.filter(l => l.design === formData.design));
        } else {
@@ -331,7 +321,6 @@ function App() {
     setError(null); 
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(MOCK_LENSES); setLoading(false); return; }
 
-    // On demande large : Type et Marque (si sélectionnée)
     const params = {
         type: formData.type, 
         network: formData.network, 
@@ -351,7 +340,7 @@ function App() {
       });
   };
 
-  // HANDLERS (Inchangés)
+  // HANDLERS
   const triggerSync = () => {
       if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
       setSyncLoading(true);
@@ -400,6 +389,16 @@ function App() {
   const uvOptionLabel = (formData.brand === 'CODIR' || formData.brand === 'ORUS') ? 'OPTION SUV (UV 400)' : 'OPTION IP+ (UV)';
   const isUvOptionMandatory = formData.materialIndex !== '1.50';
 
+  // Fallback pour éviter le crash si pricing est undefined dans un vieux state
+  const safePricing = userSettings.pricing || {
+        uniStock: { x: 2.5, b: 20 },   
+        uniFab: { x: 3.0, b: 30 },     
+        prog: { x: 3.2, b: 50 },       
+        degressif: { x: 3.0, b: 40 },  
+        interieur: { x: 3.0, b: 40 },
+        multifocal: { x: 3.0, b: 40 }
+  };
+
   return (
     <div className="min-h-screen flex flex-col text-slate-800 bg-slate-50 relative font-['Arial'] uppercase">
       <header className="bg-white border-b border-slate-200 px-6 py-6 flex items-center justify-between sticky top-0 z-40 shadow-sm">
@@ -433,6 +432,7 @@ function App() {
         </div>
       </header>
 
+      {/* CONTENU PRINCIPAL */}
       <main className="flex-1 flex overflow-hidden relative z-0">
         <aside className={`bg-white border-r border-slate-200 flex flex-col overflow-y-auto z-20 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-full lg:w-[420px] translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-0 opacity-0 pointer-events-none'} absolute lg:relative h-full`}>
           <div className="lg:hidden p-4 border-b border-slate-100 flex justify-between items-center">
@@ -440,7 +440,7 @@ function App() {
              <button onClick={() => setIsSidebarOpen(false)}><ChevronLeft className="w-6 h-6 text-slate-400"/></button>
           </div>
           <div className="p-6 space-y-8">
-             <button onClick={() => setIsSidebarOpen(false)} className="hidden lg:flex absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-500 hover:bg-slate-100 rounded-full"><ChevronLeft className="w-5 h-5"/></button>
+             <button onClick={() => setIsSidebarOpen(false)} className="hidden lg:flex absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-500 hover:bg-slate-100 rounded-full" title="Masquer le panneau"><ChevronLeft className="w-5 h-5"/></button>
             
             {/* SECTION RESEAU & MARQUE */}
             <div className="space-y-3">
@@ -622,6 +622,7 @@ function App() {
         </section>
 
         {showSettings && (
+          // MODALE FIXÉE AU PREMIER PLAN (Z-INDEX 100)
           <div 
             className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" 
             onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}
@@ -635,7 +636,6 @@ function App() {
                 <button onClick={() => setShowSettings(false)} className="p-3 hover:bg-slate-200 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
               </div>
               <div className="p-8 overflow-y-auto">
-                {/* ... Contenu des Paramètres (avec config prix pour Multifocal ajoutée) ... */}
                 <div className="space-y-10">
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">GESTION CATALOGUE</h4>
@@ -649,11 +649,20 @@ function App() {
                             placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" 
                             className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"
                           />
-                          <button onClick={triggerSync} disabled={syncLoading || !sheetsUrl} className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                             {syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>} SYNCHRO
+                          <button 
+                             onClick={triggerSync}
+                             disabled={syncLoading || !sheetsUrl}
+                             className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                          >
+                             {syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>}
+                             SYNCHRO
                           </button>
                         </div>
-                        {syncStatus && (<div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{syncStatus.msg}</div>)}
+                        {syncStatus && (
+                           <div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                             {syncStatus.msg}
+                           </div>
+                        )}
                     </div>
                   </div>
                   <div className="space-y-5">
@@ -672,7 +681,6 @@ function App() {
                                 handleSettingChange('branding', 'customColor', e.target.value);
                                 handleSettingChange('branding', 'themeColor', 'custom');
                             }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
-                            <div className="pointer-events-none absolute inset-0 rounded ring-1 ring-inset ring-black/10" />
                         </div>
                         <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
                     </div>
@@ -681,12 +689,12 @@ function App() {
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">FORMULE PRIX DE VENTE (MARCHÉ LIBRE)</h4>
                     <div className="space-y-4">
-                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">DÉGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.degressif.x} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.degressif.b} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">INTÉRIEUR</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.interieur.x} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.interieur.b} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">MULTIFOCAL</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.multifocal.x} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.multifocal.b} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">DÉGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.degressif.x} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.degressif.b} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">INTÉRIEUR</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.interieur.x} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.interieur.b} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">MULTIFOCAL</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.multifocal.x} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.multifocal.b} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                     </div>
                   </div>
 
