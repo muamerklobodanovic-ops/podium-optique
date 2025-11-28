@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.13"; // Architecture Filtres Stricts Client-Side
+const APP_VERSION = "1.14"; // Filtre Traitement Strict (Colonne J)
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -14,7 +14,7 @@ const hexToRgb = (hex) => {
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
 
-// --- COMPOSANT LOGOS ---
+// --- COMPOSANT LOGOS (IMAGES PNG) ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const safeBrand = brand || 'unknown';
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
@@ -100,11 +100,8 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
 
 function App() {
   // --- ETATS ---
-  // 'lenses' contient TOUT le catalogue pour la Marque/Type choisis (Base de donnée locale)
   const [lenses, setLenses] = useState([]); 
-  // 'filteredLenses' est la liste affichée après application de tous les filtres
   const [filteredLenses, setFilteredLenses] = useState([]); 
-  // 'availableDesigns' est la liste des gammes disponibles dans 'lenses'
   const [availableDesigns, setAvailableDesigns] = useState([]); 
 
   const [loading, setLoading] = useState(false);
@@ -114,14 +111,13 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
+  
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Etats Synchro
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
 
-  // Config & Formulaire
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
     shopLogo: "", 
@@ -175,7 +171,6 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
-  // --- DONNÉES STATIQUES ---
   const themes = {
     blue: { name: 'OCÉAN', primary: 'bg-blue-700', hover: 'hover:bg-blue-800', text: 'text-blue-700', textDark: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-200', ring: 'ring-blue-300', shadow: 'shadow-blue-200' },
     emerald: { name: 'ÉMERAUDE', primary: 'bg-emerald-700', hover: 'hover:bg-emerald-800', text: 'text-emerald-700', textDark: 'text-emerald-900', light: 'bg-emerald-50', border: 'border-emerald-200', ring: 'ring-emerald-300', shadow: 'shadow-emerald-200' },
@@ -194,9 +189,6 @@ function App() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // 1. INITIALISATION ET RECHARGEMENT GLOBAL
-  // On recharge la "Grosse Liste" uniquement si la Marque ou le Type change
-  // Cela permet d'avoir tous les indices/traitements/designs disponibles pour ce couple Marque/Type
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -208,19 +200,21 @@ function App() {
 
     fetchData(); 
   }, [
-    formData.brand, 
-    formData.network, // Change la marque implicitement
-    formData.type
+    formData.materialIndex, formData.brand, formData.network, formData.type, 
+    formData.coating, formData.sphere, formData.cylinder, formData.addition, 
+    formData.myopiaControl, formData.uvOption
   ]); 
 
-  // 2. MOTEUR DE FILTRAGE CLIENT (Le coeur de la logique stricte)
   useEffect(() => {
     if (lenses.length > 0) {
-       let workingList = lenses.map(l => ({...l}));
-
-       // A. Calcul des Prix (Si Hors Réseau)
+       let validLenses = lenses;
+       if (formData.network === 'KALIXIA') {
+         validLenses = lenses.filter(l => l.sellingPrice > 0);
+       }
+       
+       // Calcul Prix Marché Libre
        if (formData.network === 'HORS_RESEAU') {
-          workingList = workingList.map(lens => {
+          validLenses = validLenses.map(lens => {
              let rule = userSettings.pricing.prog; 
              if (lens.type === 'UNIFOCAL') {
                  const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
@@ -232,91 +226,62 @@ function App() {
              const newMargin = newSelling - lens.purchasePrice;
              return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
           });
-          workingList.sort((a, b) => b.margin - a.margin);
-       } 
-       // B. Filtre Prix Kalixia (> 0)
-       else if (formData.network === 'KALIXIA') {
-         workingList = workingList.filter(l => l.sellingPrice > 0);
+          validLenses.sort((a, b) => b.margin - a.margin);
        }
 
-       // C. Calcul des Designs Disponibles (Avant filtrage technique)
-       // On regarde TOUS les verres de cette géométrie/marque pour lister les designs
-       // Cela garantit que les boutons ne disparaissent pas si on sélectionne un indice rare
-       const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
-       setAvailableDesigns(designs);
-
-       // D. Filtres Techniques Stricts
-       // 1. Indice
-       workingList = workingList.filter(l => {
-           const lIdx = l.index_mat.replace(',', '.');
-           const fIdx = formData.materialIndex.replace(',', '.');
-           return parseFloat(lIdx) === parseFloat(fIdx);
-       });
-
-       // 2. Photochromique
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
           return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR");
        };
        if (formData.photochromic) {
-         workingList = workingList.filter(l => isPhotoC(l));
+         validLenses = validLenses.filter(l => isPhotoC(l));
        } else {
-         workingList = workingList.filter(l => !isPhotoC(l));
+         validLenses = validLenses.filter(l => !isPhotoC(l));
        }
 
-       // 3. Traitement (Strict)
+       // FILTRE TRAITEMENT STRICT (MODIFIÉ)
        if (formData.coating) {
           const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
           if (selectedCoatingObj) {
              const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
-             workingList = workingList.filter(l => {
+             validLenses = validLenses.filter(l => {
                 const lensCoating = (l.coating || "").toUpperCase().trim();
-                return lensCoating.includes(targetLabel); 
+                return lensCoating === targetLabel; 
              });
           }
        }
 
-       // 4. Myopie
-       if (formData.myopiaControl) {
-          workingList = workingList.filter(l => l.name.toUpperCase().includes("MIYO"));
-       }
+       // Filtre Indice Strict
+       validLenses = validLenses.filter(l => {
+           const lIdx = l.index_mat.replace(',', '.');
+           const fIdx = formData.materialIndex.replace(',', '.');
+           return parseFloat(lIdx) === parseFloat(fIdx);
+       });
 
-       // E. Filtre Design Final
+       const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
+       setAvailableDesigns(designs);
+
        if (formData.design) {
-         setFilteredLenses(workingList.filter(l => l.design === formData.design));
+         setFilteredLenses(validLenses.filter(l => l.design === formData.design));
        } else {
-         setFilteredLenses(workingList);
+         setFilteredLenses(validLenses);
        }
-
     } else {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [
-    lenses, // Déclenché quand le serveur répond
-    formData.design, 
-    formData.network, 
-    formData.photochromic, 
-    formData.coating, 
-    formData.materialIndex,
-    formData.myopiaControl,
-    userSettings.pricing
-  ]);
+  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating, formData.materialIndex, userSettings.pricing]);
 
-  const fetchData = () => {
+
+  const fetchData = (ignoreFilters = false) => {
     setLoading(true);
     setError(null); 
-    
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(MOCK_LENSES); setLoading(false); return; }
 
-    // On demande LARGE au serveur (Juste Type et Marque)
-    // On ne filtre PAS par indice/traitement ici pour avoir tout le stock en mémoire
-    const params = {
-        type: formData.type, 
-        network: formData.network, 
-        brand: formData.brand, 
-        // Pas d'autres filtres envoyés au serveur
-        pocketLimit: 0 
+    const params = ignoreFilters ? {} : {
+        type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
+        index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
+        myopia: formData.myopiaControl, uvOption: formData.uvOption, pocketLimit: 0
     };
 
     axios.get(API_URL, { params })
@@ -331,7 +296,6 @@ function App() {
       });
   };
 
-  // ... HANDLERS (Copier-coller du bloc précédent pour la concision) ...
   const triggerSync = () => {
       if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
       setSyncLoading(true);
@@ -341,6 +305,7 @@ function App() {
           .catch(err => { setSyncStatus({ type: 'error', msg: "Erreur : Vérifiez que le lien est bien public (CSV)." }); })
           .finally(() => setSyncLoading(false));
   };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -355,17 +320,21 @@ function App() {
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
+
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); }
   };
+
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
   };
+  
   const handlePriceRuleChange = (category, field, value) => {
       setUserSettings(prev => ({ ...prev, pricing: { ...prev.pricing, [category]: { ...prev.pricing[category], [field]: parseFloat(value) || 0 } } }));
   };
+
   const handleUrlChange = (value) => { setServerUrl(value); localStorage.setItem("optique_server_url", value); };
   const handleSheetsUrlChange = (value) => { setSheetsUrl(value); localStorage.setItem("optique_sheets_url", value); };
   const handleTypeChange = (newType) => {
