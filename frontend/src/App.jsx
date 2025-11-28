@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.14"; // Filtre Traitement Strict (Colonne J)
+const APP_VERSION = "1.15"; // 5 Géométries + Config Prix Étendue
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -124,12 +124,14 @@ function App() {
     themeColor: "blue", 
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
+    // Règles de prix pour le marché libre (AxX+B)
     pricing: {
         uniStock: { x: 2.5, b: 20 },   
         uniFab: { x: 3.0, b: 30 },     
         prog: { x: 3.2, b: 50 },       
         degressif: { x: 3.0, b: 40 },  
-        interieur: { x: 3.0, b: 40 }   
+        interieur: { x: 3.0, b: 40 }, // Pour PROGRESSIF D'INTÉRIEUR
+        multifocal: { x: 3.0, b: 40 } // NOUVEAU: Pour MULTIFOCAL
     }
   });
 
@@ -171,6 +173,15 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
+  // Responsive
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) { }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const themes = {
     blue: { name: 'OCÉAN', primary: 'bg-blue-700', hover: 'hover:bg-blue-800', text: 'text-blue-700', textDark: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-200', ring: 'ring-blue-300', shadow: 'shadow-blue-200' },
     emerald: { name: 'ÉMERAUDE', primary: 'bg-emerald-700', hover: 'hover:bg-emerald-800', text: 'text-emerald-700', textDark: 'text-emerald-900', light: 'bg-emerald-50', border: 'border-emerald-200', ring: 'ring-emerald-300', shadow: 'shadow-emerald-200' },
@@ -179,9 +190,19 @@ function App() {
     rose: { name: 'RUBIS', primary: 'bg-rose-700', hover: 'hover:bg-rose-800', text: 'text-rose-700', textDark: 'text-rose-900', light: 'bg-rose-50', border: 'border-rose-200', ring: 'ring-rose-300', shadow: 'shadow-rose-200' },
     custom: { name: 'PERSO', primary: 'bg-[var(--theme-primary)]', hover: 'hover:opacity-90', text: 'text-[var(--theme-primary)]', textDark: 'text-black', light: 'bg-[var(--theme-light)]', border: 'border-[var(--theme-border)]', ring: 'ring-[var(--theme-ring)]', shadow: 'shadow-md' }
   };
+
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
   const brands = [ { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
-  const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'INTERIEUR', label: 'INTER. / BUREAU' } ];
+  
+  // MODIFICATION ICI : 5 GÉOMÉTRIES
+  const lensTypes = [ 
+    { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
+    { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
+    { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, 
+    { id: 'MULTIFOCAL', label: 'MULTIFOCAL' },
+    { id: 'PROGRESSIF_INTERIEUR', label: "PROGRESSIF D'INTÉRIEUR" }
+  ];
+  
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
@@ -207,26 +228,28 @@ function App() {
 
   useEffect(() => {
     if (lenses.length > 0) {
-       let validLenses = lenses;
-       if (formData.network === 'KALIXIA') {
-         validLenses = lenses.filter(l => l.sellingPrice > 0);
-       }
-       
-       // Calcul Prix Marché Libre
+       let processedLenses = lenses.map(l => ({...l}));
+
+       // --- RECALCUL DES PRIX (MARCHÉ LIBRE) ---
        if (formData.network === 'HORS_RESEAU') {
-          validLenses = validLenses.map(lens => {
+          processedLenses = processedLenses.map(lens => {
+             // Choix de la règle de prix selon le type
              let rule = userSettings.pricing.prog; 
              if (lens.type === 'UNIFOCAL') {
                  const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
                  rule = isStock ? userSettings.pricing.uniStock : userSettings.pricing.uniFab;
-             } else if (lens.type === 'DEGRESSIF') { rule = userSettings.pricing.degressif; } 
-             else if (lens.type === 'INTERIEUR') { rule = userSettings.pricing.interieur; }
+             } 
+             else if (lens.type === 'DEGRESSIF') { rule = userSettings.pricing.degressif; } 
+             else if (lens.type === 'INTERIEUR' || lens.type === "PROGRESSIF D'INTÉRIEUR") { rule = userSettings.pricing.interieur; }
+             else if (lens.type === 'MULTIFOCAL') { rule = userSettings.pricing.multifocal; }
 
              const newSelling = (lens.purchasePrice * rule.x) + rule.b;
              const newMargin = newSelling - lens.purchasePrice;
              return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
           });
-          validLenses.sort((a, b) => b.margin - a.margin);
+          processedLenses.sort((a, b) => b.margin - a.margin);
+       } else if (formData.network === 'KALIXIA') {
+         processedLenses = processedLenses.filter(l => l.sellingPrice > 0);
        }
 
        const isPhotoC = (item) => {
@@ -234,17 +257,17 @@ function App() {
           return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR");
        };
        if (formData.photochromic) {
-         validLenses = validLenses.filter(l => isPhotoC(l));
+         processedLenses = processedLenses.filter(l => isPhotoC(l));
        } else {
-         validLenses = validLenses.filter(l => !isPhotoC(l));
+         processedLenses = processedLenses.filter(l => !isPhotoC(l));
        }
 
-       // FILTRE TRAITEMENT STRICT (MODIFIÉ)
+       // Filtre Traitement Strict
        if (formData.coating) {
           const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
           if (selectedCoatingObj) {
              const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
-             validLenses = validLenses.filter(l => {
+             processedLenses = processedLenses.filter(l => {
                 const lensCoating = (l.coating || "").toUpperCase().trim();
                 return lensCoating === targetLabel; 
              });
@@ -252,26 +275,25 @@ function App() {
        }
 
        // Filtre Indice Strict
-       validLenses = validLenses.filter(l => {
+       processedLenses = processedLenses.filter(l => {
            const lIdx = l.index_mat.replace(',', '.');
            const fIdx = formData.materialIndex.replace(',', '.');
            return parseFloat(lIdx) === parseFloat(fIdx);
        });
 
-       const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
+       const designs = [...new Set(processedLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
        if (formData.design) {
-         setFilteredLenses(validLenses.filter(l => l.design === formData.design));
+         setFilteredLenses(processedLenses.filter(l => l.design === formData.design));
        } else {
-         setFilteredLenses(validLenses);
+         setFilteredLenses(processedLenses);
        }
     } else {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
   }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating, formData.materialIndex, userSettings.pricing]);
-
 
   const fetchData = (ignoreFilters = false) => {
     setLoading(true);
@@ -296,6 +318,7 @@ function App() {
       });
   };
 
+  // ... (Handlers inchangés) ...
   const triggerSync = () => {
       if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
       setSyncLoading(true);
@@ -305,7 +328,6 @@ function App() {
           .catch(err => { setSyncStatus({ type: 'error', msg: "Erreur : Vérifiez que le lien est bien public (CSV)." }); })
           .finally(() => setSyncLoading(false));
   };
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -320,21 +342,17 @@ function App() {
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
-
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); }
   };
-
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
   };
-  
   const handlePriceRuleChange = (category, field, value) => {
       setUserSettings(prev => ({ ...prev, pricing: { ...prev.pricing, [category]: { ...prev.pricing[category], [field]: parseFloat(value) || 0 } } }));
   };
-
   const handleUrlChange = (value) => { setServerUrl(value); localStorage.setItem("optique_server_url", value); };
   const handleSheetsUrlChange = (value) => { setSheetsUrl(value); localStorage.setItem("optique_sheets_url", value); };
   const handleTypeChange = (newType) => {
@@ -394,7 +412,7 @@ function App() {
           </div>
           <div className="p-6 space-y-8">
              <button onClick={() => setIsSidebarOpen(false)} className="hidden lg:flex absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-500 hover:bg-slate-100 rounded-full" title="Masquer le panneau"><ChevronLeft className="w-5 h-5"/></button>
-            {/* ... SECTIONS FILTRES (Réseau, Marque, Correction, Type) INCHANGEES ... */}
+            {/* ... FILTRES ... */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Shield className="w-5 h-5" /> RÉSEAU DE SOIN</label>
               <div className="relative">
@@ -497,13 +515,9 @@ function App() {
             </div>
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
-              
-              {/* LISTE TRAITEMENTS */}
               <div className="mb-2">
                  <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
               </div>
-
-              {/* BOUTON PHOTOCHROMIQUE */}
               <div className="mb-2">
                   <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${formData.photochromic ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                     <div className="relative flex items-center">
@@ -513,7 +527,6 @@ function App() {
                     <span className={`text-sm font-bold ${formData.photochromic ? 'text-yellow-700' : 'text-slate-500'}`}>PHOTOCHROMIQUE</span>
                   </label>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 {currentCoatings.map(c => (
                   <button key={c.id} onClick={() => handleCoatingChange(c.id)} className={`p-4 rounded-xl border-2 text-left transition-all relative overflow-hidden ${formData.coating === c.id ? `${currentTheme.light} ${currentTheme.border} ${currentTheme.textDark} ring-1 ${currentTheme.ring.replace('focus:', '')}` : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'}`}>
@@ -677,6 +690,7 @@ function App() {
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">DÉGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.degressif.x} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.degressif.b} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">INTÉRIEUR</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.interieur.x} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.interieur.b} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">MULTIFOCAL</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.multifocal.x} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.multifocal.b} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                     </div>
                   </div>
 
