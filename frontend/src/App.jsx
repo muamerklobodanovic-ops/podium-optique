@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "2.00"; // Support Complet Structure A-T
+const APP_VERSION = "2.01"; // Fix Variable Name Mismatch (purchase_price)
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -61,6 +61,11 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
     ? ((lens.margin / lens.sellingPrice) * 100).toFixed(0) 
     : 0;
 
+  // Sécurité Prix Achat (peut être null dans certains cas DB)
+  const displayPurchase = lens.purchase_price ? parseFloat(lens.purchase_price).toFixed(2) : "0.00";
+  const displaySelling = lens.sellingPrice ? lens.sellingPrice.toFixed(2) : "0.00";
+  const displayMarginVal = lens.margin ? lens.margin.toFixed(2) : "0.00";
+
   return (
     <div className={`group bg-white rounded-3xl border-2 transition-all duration-300 overflow-hidden relative flex flex-col ${style.border} ${isReference ? 'scale-100' : 'hover:-translate-y-2'}`}>
         <div className="absolute top-5 right-5 z-10">
@@ -70,7 +75,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
         </div>
 
         <div className="p-8 pt-14 border-b border-slate-50 relative">
-          {/* NOUVEAU : CODE COMMERCIAL */}
+          {/* CODE COMMERCIAL */}
           <p className="text-[10px] font-mono text-slate-400 mb-2 tracking-widest uppercase">{lens.commercial_code || "REF-UNK"}</p>
           
           <h3 className="font-bold text-2xl text-slate-800 mb-2 leading-tight">{lens.name || "Verre Inconnu"}</h3>
@@ -86,19 +91,19 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
           {showMargins ? (
             <>
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"><span className="block text-[10px] text-slate-400 font-bold mb-1">ACHAT HT</span><span className="block text-slate-400 line-through font-bold text-lg">{lens.purchase_price.toFixed(2)} €</span></div>
-                <div className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"><span className="block text-[10px] text-slate-400 font-bold mb-1">VENTE TTC</span><span className="block text-slate-800 font-bold text-2xl">{lens.sellingPrice.toFixed(2)} €</span></div>
+                <div className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"><span className="block text-[10px] text-slate-400 font-bold mb-1">ACHAT HT</span><span className="block text-slate-400 line-through font-bold text-lg">{displayPurchase} €</span></div>
+                <div className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"><span className="block text-[10px] text-slate-400 font-bold mb-1">VENTE TTC</span><span className="block text-slate-800 font-bold text-2xl">{displaySelling} €</span></div>
               </div>
               <div className="pt-2">
                 <div className="flex justify-between items-end mb-2"><span className="text-xs font-bold text-green-700 tracking-wide">MARGE NETTE</span><span className="text-xs font-bold text-green-700 bg-green-100 px-3 py-1 rounded-lg">{displayMargin}%</span></div>
-                <div className="bg-green-50 p-4 rounded-2xl border border-green-100 flex items-center justify-between"><div className="text-4xl font-bold text-green-700 tracking-tight">+{lens.margin.toFixed(2)} €</div><Trophy className="w-8 h-8 text-green-200" /></div>
+                <div className="bg-green-50 p-4 rounded-2xl border border-green-100 flex items-center justify-between"><div className="text-4xl font-bold text-green-700 tracking-tight">+{displayMarginVal} €</div><Trophy className="w-8 h-8 text-green-200" /></div>
               </div>
             </>
           ) : (
             <div className="pt-2 flex flex-col h-full">
-                <div className="bg-green-50 p-6 rounded-2xl border border-green-100 text-center mb-4 flex-1 flex flex-col justify-center items-center"><span className="block text-xs font-bold text-green-600 mb-2 uppercase tracking-wider">PRIX CONSEILLÉ</span><span className="text-5xl font-bold text-green-600 tracking-tighter">{lens.sellingPrice.toFixed(2)} €</span></div>
+                <div className="bg-green-50 p-6 rounded-2xl border border-green-100 text-center mb-4 flex-1 flex flex-col justify-center items-center"><span className="block text-xs font-bold text-green-600 mb-2 uppercase tracking-wider">PRIX CONSEILLÉ</span><span className="text-5xl font-bold text-green-600 tracking-tighter">{displaySelling} €</span></div>
                 
-                {/* NOUVEAU : FLUX (Stock / Fab) */}
+                {/* FLUX (Stock / Fab) */}
                 <div className="flex justify-between items-center px-2">
                    <span className="text-[10px] font-mono text-slate-300 tracking-widest">REF-{lens.commercial_code}</span>
                    {lens.commercial_flow && (
@@ -207,7 +212,6 @@ function App() {
   };
 
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
-  
   const brands = [ 
     { id: '', label: 'TOUTES' },
     { id: 'HOYA', label: 'HOYA' }, 
@@ -224,8 +228,9 @@ function App() {
     { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" }
   ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
-  
-  // Les traitements sont maintenant dynamiques via le serveur, plus besoin de liste hardcodée
+  const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
+  const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
+  const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
   // 1. RECHARGEMENT DONNÉES
   useEffect(() => {
@@ -266,7 +271,8 @@ function App() {
                     rule = pRules.multifocal || defaultPricingConfig;
                 }
 
-                finalSellingPrice = (parseFloat(lens.purchase_price) * rule.x) + rule.b;
+                // Utilisation de purchase_price (snake_case)
+                finalSellingPrice = (parseFloat(lens.purchase_price || 0) * rule.x) + rule.b;
             } else {
                 // Récupération du prix catalogue réseau
                 const priceMap = {
@@ -283,7 +289,7 @@ function App() {
             return {
                 ...lens,
                 sellingPrice: Math.round(finalSellingPrice),
-                margin: Math.round(finalSellingPrice - parseFloat(lens.purchase_price))
+                margin: Math.round(finalSellingPrice - parseFloat(lens.purchase_price || 0))
             };
        });
 
@@ -304,7 +310,7 @@ function App() {
 
        // --- PHOTOCHROMIQUE ---
        const isPhotoC = (item) => {
-          const text = ((item.name || "") + " " + (item.material || "")).toUpperCase(); // Modifié : check matière aussi
+          const text = ((item.name || "") + " " + (item.material || "")).toUpperCase(); 
           return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLA") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR");
        };
        if (formData.photochromic) {
@@ -313,13 +319,17 @@ function App() {
          workingList = workingList.filter(l => !isPhotoC(l));
        }
 
-       // --- EXTRACTION TRAITEMENTS DYNAMIQUES ---
-       const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
-       setAvailableCoatings(coatings);
-
-       // --- FILTRE TRAITEMENT ---
+       // --- TRAITEMENT STRICT (EGALITE EXACTE) ---
        if (formData.coating && formData.coating !== '') {
-          workingList = workingList.filter(l => l.coating === formData.coating);
+          const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
+          if (selectedCoatingObj) {
+             const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
+             workingList = workingList.filter(l => {
+                // On compare le label (ex: "QUATTRO UV") avec ce qu'on a en base
+                const lensCoating = (l.coating || "").toUpperCase().trim();
+                return lensCoating === targetLabel; 
+             });
+          }
        }
 
        // --- MYOPIE ---
@@ -327,13 +337,15 @@ function App() {
           workingList = workingList.filter(l => (l.name || "").toUpperCase().includes("MIYO"));
        }
 
-       // --- DESIGNS ---
+       // --- DESIGNS DISPONIBLES (SUR LISTE FILTRÉE) ---
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
-       // --- FILTRE DESIGN ---
+       // --- FILTRE DESIGN (FINAL) ---
        if (formData.design && formData.design !== '') {
-         setFilteredLenses(workingList.filter(l => l.design === formData.design));
+         setFilteredLenses(workingList.filter(l => 
+           l.design && l.design.toUpperCase().trim() === formData.design.toUpperCase().trim()
+         ));
        } else {
          setFilteredLenses(workingList);
        }
@@ -361,7 +373,6 @@ function App() {
     setError(null); 
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(MOCK_LENSES); setLoading(false); return; }
 
-    // On demande large pour laisser le front filtrer
     const params = {
         type: formData.type, 
         brand: formData.brand === '' ? undefined : formData.brand, 
@@ -390,7 +401,8 @@ function App() {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
-    // Logique réseau : on change juste le réseau, pas la marque (suppression de l'automatisme)
+    if (name === 'addition') { const val = parseFloat(value); if (val > 4.00) newValue = 4.00; if (val < 0) newValue = 0.00; }
+    // Suppression de l'effet de bord sur la marque quand on change de réseau
     if (name === 'myopiaControl') { if (newValue === true) { setFormData(prev => ({ ...prev, [name]: newValue, materialIndex: '1.58' })); return; } }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
@@ -563,7 +575,7 @@ function App() {
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
               
-              {/* LISTE TRAITEMENTS DYNAMIQUE */}
+              {/* LISTE TRAITEMENTS */}
               <div className="mb-2">
                  <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
               </div>
@@ -579,15 +591,26 @@ function App() {
                   </label>
               </div>
 
-              <div className="flex flex-col gap-2">
-                {availableCoatings.map(c => (
-                  <button key={c} onClick={() => handleCoatingChange(c)} className={`p-3 rounded-xl border text-left text-xs font-bold transition-all ${formData.coating === c ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>
-                    {c}
+              <div className="grid grid-cols-2 gap-3">
+                {currentCoatings.map(c => (
+                  <button key={c.id} onClick={() => handleCoatingChange(c.id)} className={`p-4 rounded-xl border-2 text-left transition-all relative overflow-hidden ${formData.coating === c.id ? `bg-blue-50 border-blue-200` : 'bg-white border-slate-100'}`}>
+                    <div className="text-[10px] font-bold mb-1 opacity-60 flex items-center gap-1.5">{c.icon} {c.type === 'BLUE' ? 'LUMIÈRE BLEUE' : c.type === 'SUN' ? 'SOLEIL' : c.type === 'DRIVE' ? 'CONDUITE' : c.type === 'CLEAN' ? 'NETTOYAGE' : 'ANTIREFLET'}</div>
+                    <div className="font-bold text-sm">{c.label}</div>
                   </button>
                 ))}
               </div>
+              <div className={`transition-all duration-300 overflow-hidden ${isUvOptionVisible ? 'max-h-24 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+                <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${isUvOptionMandatory ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-80' : 'bg-orange-50 border-orange-200 hover:bg-orange-100'}`}>
+                  <div className="relative flex items-center">
+                    <input type="checkbox" name="uvOption" checked={formData.uvOption} onChange={handleChange} disabled={isUvOptionMandatory} className={`peer h-5 w-5 rounded-md border bg-white transition-all ${isUvOptionMandatory ? 'border-slate-400 bg-slate-400 checked:bg-slate-500' : 'border-orange-300 checked:border-orange-600 checked:bg-orange-600 cursor-pointer'}`}/>
+                    {(formData.uvOption || isUvOptionMandatory) && <Sparkles className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white" />}
+                  </div>
+                  <div><span className={`text-sm font-bold select-none ${isUvOptionMandatory ? 'text-slate-600' : 'text-orange-900'}`}>{uvOptionLabel}</span>{isUvOptionMandatory && <span className="ml-2 text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded font-bold">OBLIGATOIRE</span>}</div>
+                </label>
+              </div>
             </div>
-            <div className="pt-4 pb-8"></div>
+            <div className="pt-4 pb-8">
+            </div>
           </div>
         </aside>
 
@@ -630,7 +653,7 @@ function App() {
                {formData.myopiaControl && (<span className="bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200 text-purple-800 shadow-sm text-xs flex items-center gap-2"><Eye className="w-4 h-4"/> FREINATION MYOPIE</span>)}
                {(formData.uvOption) && isUvOptionVisible && (<span className="bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 text-orange-800 shadow-sm text-xs">{uvOptionLabel}</span>)}
                <span className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">SPH {formData.sphere > 0 ? '+' : ''}{formData.sphere}</span>
-               <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs`}>{formData.coating === '' ? 'TOUS TRAITEMENTS' : formData.coating}</span>
+               <span className={`bg-white px-3 py-1.5 rounded-lg border border-slate-200 ${currentTheme.text} shadow-sm text-xs`}>{formData.coating === '' ? 'TOUS TRAITEMENTS' : currentCoatings.find(c => c.id === formData.coating)?.label}</span>
                {formData.photochromic && (<span className="bg-yellow-100 px-3 py-1.5 rounded-lg border border-yellow-200 text-yellow-800 shadow-sm text-xs flex items-center gap-2"><Sun className="w-4 h-4"/> PHOTOCHROMIQUE</span>)}
             </div>
             
@@ -667,7 +690,7 @@ function App() {
                 <button onClick={() => setShowSettings(false)} className="p-3 hover:bg-slate-200 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
               </div>
               <div className="p-8 overflow-y-auto">
-                {/* ... (Contenu Settings Identique) ... */}
+                {/* ... Contenu des Paramètres avec les 5 catégories de prix ... */}
                 <div className="space-y-10">
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">GESTION CATALOGUE</h4>
@@ -688,11 +711,30 @@ function App() {
                         {syncStatus && (<div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{syncStatus.msg}</div>)}
                     </div>
                   </div>
-                  {/* ... Reste des settings ... */}
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">CONNEXION SERVEUR</h4>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label>
+                        <div className="relative">
+                          <input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://api-podium-..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
+                          <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4">
+                        <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
+                        <div className="relative">
+                            <input type="color" value={userSettings.customColor} onChange={(e) => {
+                                handleSettingChange('branding', 'customColor', e.target.value);
+                                handleSettingChange('branding', 'themeColor', 'custom');
+                            }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
+                        </div>
+                        <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
+                    </div>
+                  </div>
+
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">FORMULE PRIX DE VENTE (MARCHÉ LIBRE)</h4>
                     <div className="space-y-4">
-                      {/* UNIFOCAL STOCK */}
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
@@ -712,6 +754,35 @@ function App() {
                           <Store className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
                         </div>
                       </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">LOGO DU MAGASIN</label>
+                        <div className="flex items-center gap-4">
+                          {userSettings.shopLogo && (
+                            <div className="h-16 w-16 relative bg-white rounded-xl border border-slate-200 p-2 flex-shrink-0 shadow-sm">
+                               <img src={userSettings.shopLogo} alt="Logo" className="h-full w-full object-contain" />
+                               <button onClick={() => setUserSettings(prev => ({...prev, shopLogo: ""}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-sm transition-colors"><X className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                          <div className="relative flex-1">
+                            <div className="relative">
+                               <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"/>
+                               <div className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-200 border-dashed rounded-xl text-slate-500 text-xs font-bold flex items-center hover:bg-slate-100 transition-colors uppercase">{userSettings.shopLogo ? "CHANGER LE FICHIER..." : "CLIQUEZ POUR CHOISIR UN FICHIER..."}</div>
+                               <Upload className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">THÈME & COULEURS</h4>
+                    <div className="grid grid-cols-5 gap-3">
+                      {Object.keys(themes).map(colorKey => (
+                        <button key={colorKey} onClick={() => handleSettingChange('branding', 'themeColor', colorKey)} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${userSettings.themeColor === colorKey ? `border-${colorKey}-500 bg-${colorKey}-50` : 'border-transparent hover:bg-slate-50'}`}>
+                          <div className={`w-10 h-10 rounded-full ${themes[colorKey].primary} shadow-sm ring-4 ring-white`}></div>
+                          <span className="text-[10px] font-bold text-slate-500">{themes[colorKey].name}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
