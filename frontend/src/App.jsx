@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.05"; // Ajout Filtre Photochromique
+const APP_VERSION = "1.06"; // Mise à jour Codes Photochromiques (TGNS, SABR, SAGR)
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -142,7 +142,7 @@ function App() {
     cleanOption: false, 
     myopiaControl: false,
     uvOption: true,
-    photochromic: false // NOUVEAU: État pour le bouton Photochromique
+    photochromic: false 
   });
 
   const [serverUrl, setServerUrl] = useState(localStorage.getItem("optique_server_url") || "https://api-podium-optique.onrender.com/lenses");
@@ -235,7 +235,12 @@ function App() {
        // B. Filtre Photochromique
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
-          return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE");
+          return text.includes("TRANSITIONS") || 
+                 text.includes("GEN S") || 
+                 text.includes("SOLACTIVE") ||
+                 text.includes("TGNS") || 
+                 text.includes("SABR") || 
+                 text.includes("SAGR");
        };
 
        if (formData.photochromic) {
@@ -258,7 +263,7 @@ function App() {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [lenses, formData.design, formData.network, formData.photochromic]); // Ajout dépendance photochromic
+  }, [lenses, formData.design, formData.network, formData.photochromic]); 
 
 
   const fetchData = (ignoreFilters = false) => {
@@ -287,6 +292,21 @@ function App() {
       });
   };
 
+  const triggerSync = () => {
+      if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
+      setSyncLoading(true);
+      setSyncStatus(null);
+      axios.post(SYNC_URL, { url: sheetsUrl })
+          .then(res => {
+              setSyncStatus({ type: 'success', msg: `Succès ! ${res.data.count} verres importés.` });
+              fetchData(); // Rafraîchir les données
+          })
+          .catch(err => {
+              setSyncStatus({ type: 'error', msg: "Erreur : Vérifiez que le lien est bien public (CSV)." });
+          })
+          .finally(() => setSyncLoading(false));
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -304,8 +324,7 @@ function App() {
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
-  
-  // ... (Handlers inchangés: handleLogoUpload, handleSettingChange, etc.) ...
+
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) {
@@ -316,6 +335,7 @@ function App() {
       reader.readAsDataURL(file);
     }
   };
+
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
