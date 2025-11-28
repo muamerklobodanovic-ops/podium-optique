@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, Database, DownloadCloud
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, ChevronDown, ChevronUp, Sliders
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.06"; // Mise à jour Codes Photochromiques (TGNS, SABR, SAGR)
+const APP_VERSION = "1.07"; // Fix Modale Settings + Sidebar Mobile
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -112,6 +112,9 @@ function App() {
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
   
+  // Nouvel état pour gérer l'affichage du panneau latéral
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
   // Etat pour la synchro Google Sheets
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
@@ -166,6 +169,17 @@ function App() {
       root.style.removeProperty('--theme-ring');
     }
   }, [userSettings.themeColor, userSettings.customColor]);
+
+  // Gestion responsive : masquer le panneau sur mobile au chargement
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        // Sur mobile/tablette, on peut vouloir masquer par défaut ou laisser l'utilisateur choisir
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const themes = {
     blue: { name: 'OCÉAN', primary: 'bg-blue-700', hover: 'hover:bg-blue-800', text: 'text-blue-700', textDark: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-200', ring: 'ring-blue-300', shadow: 'shadow-blue-200' },
@@ -222,17 +236,17 @@ function App() {
     formData.myopiaControl, formData.uvOption
   ]); 
 
-  // 2. FILTRAGE LOCAL (DESIGN + PHOTOCHROMIQUE)
+  // 2. FILTRAGE LOCAL
   useEffect(() => {
     if (lenses.length > 0) {
        let validLenses = lenses;
        
-       // A. Filtre Prix Kalixia
+       // Filtre Prix Kalixia
        if (formData.network === 'KALIXIA') {
          validLenses = lenses.filter(l => l.sellingPrice > 0);
        }
 
-       // B. Filtre Photochromique
+       // Filtre Photochromique
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
           return text.includes("TRANSITIONS") || 
@@ -249,11 +263,9 @@ function App() {
          validLenses = validLenses.filter(l => !isPhotoC(l));
        }
 
-       // C. Extraction designs
        const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
-       // D. Filtre Design
        if (formData.design) {
          setFilteredLenses(validLenses.filter(l => l.design === formData.design));
        } else {
@@ -299,7 +311,7 @@ function App() {
       axios.post(SYNC_URL, { url: sheetsUrl })
           .then(res => {
               setSyncStatus({ type: 'success', msg: `Succès ! ${res.data.count} verres importés.` });
-              fetchData(); // Rafraîchir les données
+              fetchData(); 
           })
           .catch(err => {
               setSyncStatus({ type: 'error', msg: "Erreur : Vérifiez que le lien est bien public (CSV)." });
@@ -356,6 +368,9 @@ function App() {
   const handleCoatingChange = (newCoating) => { setFormData(prev => ({ ...prev, coating: newCoating, cleanOption: false })); };
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const clearComparison = () => { setComparisonLens(null); };
+  
+  // Fonction pour basculer le volet latéral
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
   const isMyopiaEligible = formData.type === 'UNIFOCAL' && (formData.brand === 'HOYA' || formData.brand === 'SEIKO');
@@ -380,7 +395,12 @@ function App() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          {/* Bouton de toggle sidebar pour mobile */}
+          <button onClick={toggleSidebar} className="lg:hidden p-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-colors" title="Afficher/Masquer Filtres">
+             <Sliders className="w-8 h-8" />
+          </button>
+
+          <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
             {isOnline ? <Wifi className="w-4 h-4"/> : <WifiOff className="w-4 h-4"/>}
             {isOnline ? "EN LIGNE" : "HORS LIGNE"}
           </div>
@@ -393,9 +413,34 @@ function App() {
         </div>
       </header>
 
+      {/* Container principal responsive */}
       <main className="flex-1 flex overflow-hidden relative z-0">
-        <aside className="w-[420px] bg-white border-r border-slate-200 flex flex-col overflow-y-auto z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+        
+        {/* Colonne Gauche : Filtres (Rétractable sur mobile) */}
+        <aside 
+          className={`
+            bg-white border-r border-slate-200 flex flex-col overflow-y-auto z-20 transition-all duration-300 ease-in-out
+            ${isSidebarOpen ? 'w-full lg:w-[420px] translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-0 opacity-0 pointer-events-none'}
+            absolute lg:relative h-full
+          `}
+        >
+          {/* Bouton pour fermer le volet sur mobile */}
+          <div className="lg:hidden p-4 border-b border-slate-100 flex justify-between items-center">
+             <span className="font-bold text-slate-500">FILTRES</span>
+             <button onClick={() => setIsSidebarOpen(false)}><ChevronLeft className="w-6 h-6 text-slate-400"/></button>
+          </div>
+
           <div className="p-6 space-y-8">
+             
+             {/* Flèche de rétractation pour Desktop */}
+             <button 
+               onClick={() => setIsSidebarOpen(false)} 
+               className="hidden lg:flex absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-500 hover:bg-slate-100 rounded-full"
+               title="Masquer le panneau"
+             >
+               <ChevronLeft className="w-5 h-5"/>
+             </button>
+
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Shield className="w-5 h-5" /> RÉSEAU DE SOIN</label>
               <div className="relative">
@@ -411,6 +456,8 @@ function App() {
               </div>
             </div>
             <hr className="border-slate-100" />
+            
+            {/* ... (Le reste du formulaire reste identique) ... */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Tag className="w-5 h-5" /> MARQUE VERRIER</label>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2 rounded-2xl">
@@ -549,9 +596,31 @@ function App() {
           </div>
         </aside>
 
-        {/* ... Reste du code (Section Résultats, Settings) inchangé ... */}
+        {/* BOUTON FLOTTANT POUR REOUVRIR LE VOLET (Visible seulement si volet fermé) */}
+        {!isSidebarOpen && (
+          <button 
+             onClick={() => setIsSidebarOpen(true)}
+             className="absolute bottom-6 left-6 z-30 bg-blue-600 text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-all animate-in fade-in zoom-in lg:hidden"
+          >
+            <Sliders className="w-6 h-6"/>
+          </button>
+        )}
+        
+        {/* BOUTON REOUVRIR DESKTOP */}
+        {!isSidebarOpen && (
+          <div className="hidden lg:flex w-12 bg-white border-r border-slate-200 flex-col items-center py-6 z-20">
+              <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400">
+                 <ChevronRight className="w-6 h-6"/>
+              </button>
+              <div className="mt-8 writing-vertical-lr text-xs font-bold text-slate-300 tracking-widest rotate-180">
+                  FILTRES
+              </div>
+          </div>
+        )}
+
         <section className="flex-1 p-8 overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto">
+            {/* ... (Comparaison et Résultats inchangés) ... */}
             {comparisonLens && (
               <div className="mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
                  <div className="flex justify-between items-end mb-4 pb-2 border-b border-blue-100">
@@ -600,7 +669,11 @@ function App() {
         </section>
 
         {showSettings && (
-          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
+          // FIX MODALE : FIXED + Z-INDEX MAX + CLIC OUTSIDE
+          <div 
+             className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4"
+             onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}
+          >
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
               <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-4 text-slate-800">
@@ -610,6 +683,7 @@ function App() {
                 <button onClick={() => setShowSettings(false)} className="p-3 hover:bg-slate-200 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
               </div>
               <div className="p-8 overflow-y-auto">
+                {/* ... Contenu Settings ... */}
                 <div className="space-y-10">
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">GESTION CATALOGUE</h4>
