@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.20"; // Fix Crash BrandLogo (Safe Mode) & Pricing Safety
+const APP_VERSION = "1.21"; // Fix Duplicate Variable & Modal Z-Index
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -15,7 +15,6 @@ const hexToRgb = (hex) => {
 };
 
 // --- COMPOSANT LOGOS (SÉCURISÉ) ---
-// Utilise useState au lieu de manipuler le DOM directement pour éviter les crashs
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const [hasError, setHasError] = useState(false);
   const safeBrand = brand || 'unknown';
@@ -123,7 +122,8 @@ function App() {
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
 
   // Configuration Par Défaut Solide
-  const defaultPricing = { x: 2.5, b: 20 };
+  const defaultPricingConfig = { x: 2.5, b: 20 };
+  
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
     shopLogo: "", 
@@ -180,7 +180,11 @@ function App() {
 
   // Responsive
   useEffect(() => {
-    const handleResize = () => { if (window.innerWidth < 1024) { } };
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        // Logic mobile si nécessaire
+      }
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -247,15 +251,15 @@ function App() {
           const pRules = userSettings.pricing || {};
           
           workingList = workingList.map(lens => {
-             let rule = pRules.prog || defaultPricing; 
+             let rule = pRules.prog || defaultPricingConfig; 
              
              if (lens.type === 'UNIFOCAL') {
                  const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
-                 rule = isStock ? (pRules.uniStock || defaultPricing) : (pRules.uniFab || defaultPricing);
+                 rule = isStock ? (pRules.uniStock || defaultPricingConfig) : (pRules.uniFab || defaultPricingConfig);
              } 
-             else if (lens.type === 'DEGRESSIF') { rule = pRules.degressif || defaultPricing; } 
-             else if (lens.type.includes('INTERIEUR')) { rule = pRules.interieur || defaultPricing; }
-             else if (lens.type === 'MULTIFOCAL') { rule = pRules.multifocal || defaultPricing; }
+             else if (lens.type === 'DEGRESSIF') { rule = pRules.degressif || defaultPricingConfig; } 
+             else if (lens.type.includes('INTERIEUR')) { rule = pRules.interieur || defaultPricingConfig; }
+             else if (lens.type === 'MULTIFOCAL') { rule = pRules.multifocal || defaultPricingConfig; }
 
              const newSelling = (lens.purchasePrice * rule.x) + rule.b;
              const newMargin = newSelling - lens.purchasePrice;
@@ -349,7 +353,7 @@ function App() {
       });
   };
 
-  // HANDLERS (Identiques)
+  // HANDLERS
   const triggerSync = () => {
       if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
       setSyncLoading(true);
@@ -407,9 +411,6 @@ function App() {
         interieur: { x: 3.0, b: 40 },
         multifocal: { x: 3.0, b: 40 }
   };
-  
-  // Fallback par défaut pour le calcul
-  const defaultPricing = { x: 3.0, b: 30 };
 
   return (
     <div className="min-h-screen flex flex-col text-slate-800 bg-slate-50 relative font-['Arial'] uppercase">
@@ -536,7 +537,7 @@ function App() {
                 {indices.map(idx => {
                   const isDisabled = formData.myopiaControl && idx !== '1.58';
                   return (
-                    <button key={idx} disabled={isDisabled} onClick={() => setFormData({...formData, materialIndex: idx})} className={`flex-1 py-3 text-xs font-bold rounded-lg ${formData.materialIndex === idx ? 'bg-white shadow-sm' : 'text-slate-500'}`}>{idx}</button>
+                    <button key={idx} disabled={isDisabled} onClick={() => setFormData({...formData, materialIndex: idx})} className={`flex-1 py-3 text-xs font-bold rounded-lg transition-all duration-200 ${formData.materialIndex === idx ? `bg-white ${currentTheme.text} shadow-sm ring-1 ring-black/5` : isDisabled ? 'text-slate-300 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-200/50'}`}>{idx}</button>
                   )
                 })}
               </div>
@@ -666,22 +667,44 @@ function App() {
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                         <label className="block text-xs font-bold text-slate-600 mb-2">LIEN GOOGLE SHEETS (PUBLIÉ WEB CSV)</label>
                         <div className="flex gap-2">
-                           <input type="text" value={sheetsUrl} onChange={(e) => handleSheetsUrlChange(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"/>
-                          <button onClick={triggerSync} disabled={syncLoading || !sheetsUrl} className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">{syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>} SYNCHRO</button>
+                           <input 
+                            type="text" 
+                            value={sheetsUrl} 
+                            onChange={(e) => handleSheetsUrlChange(e.target.value)} 
+                            placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" 
+                            className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"
+                          />
+                          <button onClick={triggerSync} disabled={syncLoading || !sheetsUrl} className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+                             {syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>} SYNCHRO
+                          </button>
                         </div>
                         {syncStatus && (<div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{syncStatus.msg}</div>)}
                     </div>
                   </div>
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">CONNEXION SERVEUR</h4>
-                    <div><label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label><div className="relative"><input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://api-podium-..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/><Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" /></div></div>
-                    <div className="flex items-center gap-2 mt-4"><label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label><div className="relative"><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" /></div></div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label>
+                        <div className="relative">
+                          <input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://api-podium-..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
+                          <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4">
+                        <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
+                        <div className="relative">
+                            <input type="color" value={userSettings.customColor} onChange={(e) => {
+                                handleSettingChange('branding', 'customColor', e.target.value);
+                                handleSettingChange('branding', 'themeColor', 'custom');
+                            }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
+                        </div>
+                        <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
+                    </div>
                   </div>
 
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">FORMULE PRIX DE VENTE (MARCHÉ LIBRE)</h4>
                     <div className="space-y-4">
-                      {/* 5 Catégories de Prix */}
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
