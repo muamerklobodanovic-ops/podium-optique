@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.08"; // Ajout Logo Magasin + Suppression Plafonds
+const APP_VERSION = "1.11"; // Suppression définitive Plafonds + Logo Magasin
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -45,7 +45,7 @@ const MOCK_LENSES = [
 const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReference = false }) => {
   const podiumStyles = [
     { border: "border-yellow-400 ring-4 ring-yellow-50 shadow-xl shadow-yellow-100", badge: "bg-yellow-400 text-white border-yellow-500", icon: <Trophy className="w-5 h-5 text-white" />, label: "MEILLEUR CHOIX" },
-    { border: `border-slate-200 shadow-lg ${currentTheme.shadow}`, badge: `${currentTheme.light} ${currentTheme.textDark} ${currentTheme.border}`, icon: <Shield className={`w-5 h-5 ${currentTheme.text}`} />, label: "RESTE À CHARGE OPTIMISÉ" },
+    { border: `border-slate-200 shadow-lg ${currentTheme.shadow}`, badge: `${currentTheme.light} ${currentTheme.textDark} ${currentTheme.border}`, icon: <Shield className={`w-5 h-5 ${currentTheme.text}`} />, label: "OFFRE OPTIMISÉE" },
     { border: "border-slate-200 shadow-lg", badge: "bg-slate-100 text-slate-600 border-slate-200", icon: <Star className="w-5 h-5 text-orange-400" />, label: "PREMIUM" }
   ];
 
@@ -126,10 +126,14 @@ function App() {
     themeColor: "blue", 
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
-    // UNIFOCAL: { maxPocket: 40 }, // Supprimé
-    // PROGRESSIF: { maxPocket: 100 }, // Supprimé
-    // DEGRESSIF: { maxPocket: 70 }, // Supprimé
-    // INTERIEUR: { maxPocket: 70 } // Supprimé
+    // Règles de prix pour le marché libre (AxX+B)
+    pricing: {
+        uniStock: { x: 2.5, b: 20 },   // Unifocal Stock (ST)
+        uniFab: { x: 3.0, b: 30 },     // Unifocal Fab
+        prog: { x: 3.2, b: 50 },       // Progressif
+        degressif: { x: 3.0, b: 40 },  // Dégressif
+        interieur: { x: 3.0, b: 40 }   // Intérieur
+    }
   });
 
   const [formData, setFormData] = useState({
@@ -239,14 +243,28 @@ function App() {
   // 2. FILTRAGE LOCAL (DESIGN + PHOTOCHROMIQUE)
   useEffect(() => {
     if (lenses.length > 0) {
-       let validLenses = lenses;
-       
-       // A. Filtre Prix Kalixia
-       if (formData.network === 'KALIXIA') {
-         validLenses = lenses.filter(l => l.sellingPrice > 0);
+       let processedLenses = lenses.map(l => ({...l}));
+
+       // --- RECALCUL DES PRIX POUR MARCHÉ LIBRE ---
+       if (formData.network === 'HORS_RESEAU') {
+          processedLenses = processedLenses.map(lens => {
+             let rule = userSettings.pricing.prog; // Par défaut
+             if (lens.type === 'UNIFOCAL') {
+                 const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
+                 rule = isStock ? userSettings.pricing.uniStock : userSettings.pricing.uniFab;
+             } else if (lens.type === 'DEGRESSIF') { rule = userSettings.pricing.degressif; } 
+             else if (lens.type === 'INTERIEUR') { rule = userSettings.pricing.interieur; }
+
+             const newSelling = (lens.purchasePrice * rule.x) + rule.b;
+             const newMargin = newSelling - lens.purchasePrice;
+             return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
+          });
+          processedLenses.sort((a, b) => b.margin - a.margin);
+       } else if (formData.network === 'KALIXIA') {
+         processedLenses = processedLenses.filter(l => l.sellingPrice > 0);
        }
 
-       // B. Filtre Photochromique
+       // Filtre Photochromique
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
           return text.includes("TRANSITIONS") || 
@@ -258,39 +276,36 @@ function App() {
        };
 
        if (formData.photochromic) {
-         validLenses = validLenses.filter(l => isPhotoC(l));
+         processedLenses = processedLenses.filter(l => isPhotoC(l));
        } else {
-         validLenses = validLenses.filter(l => !isPhotoC(l));
+         processedLenses = processedLenses.filter(l => !isPhotoC(l));
        }
 
-       // C. Filtre Traitement Strict (Ajouté)
-       // Si un traitement est sélectionné, on vérifie que le nom correspond exactement
+       // Filtre Traitement Strict
        if (formData.coating) {
           const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
           if (selectedCoatingObj) {
              const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
-             validLenses = validLenses.filter(l => {
+             processedLenses = processedLenses.filter(l => {
                 const lensCoating = (l.coating || "").toUpperCase().trim();
                 return lensCoating === targetLabel;
              });
           }
        }
 
-       // D. Extraction designs
-       const designs = [...new Set(validLenses.map(l => l.design).filter(Boolean))].sort();
+       const designs = [...new Set(processedLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
-       // E. Filtre Design
        if (formData.design) {
-         setFilteredLenses(validLenses.filter(l => l.design === formData.design));
+         setFilteredLenses(processedLenses.filter(l => l.design === formData.design));
        } else {
-         setFilteredLenses(validLenses);
+         setFilteredLenses(processedLenses);
        }
     } else {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating]); // Ajout coating
+  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating, userSettings.pricing]);
 
 
   const fetchData = (ignoreFilters = false) => {
@@ -662,7 +677,10 @@ function App() {
         </section>
 
         {showSettings && (
-          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
+          <div 
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" 
+            onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}
+          >
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
               <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-4 text-slate-800">
@@ -718,80 +736,19 @@ function App() {
                     <div className="flex items-center gap-2 mt-4">
                         <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
                         <div className="relative">
-                            <input type="color" value={userSettings.customColor} onChange={(e) => {
-                                handleSettingChange('branding', 'customColor', e.target.value);
-                                handleSettingChange('branding', 'themeColor', 'custom');
-                            }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
-                            <div className="pointer-events-none absolute inset-0 rounded ring-1 ring-inset ring-black/10" />
+                            <input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
                         </div>
-                        <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
                     </div>
                   </div>
 
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">FORMULE PRIX DE VENTE (MARCHÉ LIBRE)</h4>
-                    <p className="text-[10px] text-slate-500 mb-2">Calcul automatique : (Prix Achat x Coefficient) + Forfait Montage</p>
-                    
                     <div className="space-y-4">
-                      <div className="grid grid-cols-3 gap-4 items-center">
-                        <label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">COEFF:</span>
-                          <input type="number" step="0.1" value={userSettings.pricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">FIXE €:</span>
-                          <input type="number" step="1" value={userSettings.pricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 items-center">
-                        <label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">COEFF:</span>
-                          <input type="number" step="0.1" value={userSettings.pricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">FIXE €:</span>
-                          <input type="number" step="1" value={userSettings.pricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 items-center">
-                        <label className="text-xs font-bold text-slate-600">PROGRESSIF</label>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">COEFF:</span>
-                          <input type="number" step="0.1" value={userSettings.pricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">FIXE €:</span>
-                          <input type="number" step="1" value={userSettings.pricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 items-center">
-                        <label className="text-xs font-bold text-slate-600">DÉGRESSIF</label>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">COEFF:</span>
-                          <input type="number" step="0.1" value={userSettings.pricing.degressif.x} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">FIXE €:</span>
-                          <input type="number" step="1" value={userSettings.pricing.degressif.b} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 items-center">
-                        <label className="text-xs font-bold text-slate-600">INTÉRIEUR</label>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">COEFF:</span>
-                          <input type="number" step="0.1" value={userSettings.pricing.interieur.x} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400">FIXE €:</span>
-                          <input type="number" step="1" value={userSettings.pricing.interieur.b} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/>
-                        </div>
-                      </div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">DÉGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.degressif.x} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.degressif.b} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">INTÉRIEUR</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.interieur.x} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.interieur.b} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                     </div>
                   </div>
 
