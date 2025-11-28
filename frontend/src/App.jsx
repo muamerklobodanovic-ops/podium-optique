@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, Calculator
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.09"; // Formule Prix Marché Libre (AxX+B)
+const APP_VERSION = "1.07"; // Fix Modale Settings + Sidebar Mobile
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -14,7 +14,7 @@ const hexToRgb = (hex) => {
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
 
-// --- COMPOSANT LOGOS ---
+// --- COMPOSANT LOGOS (IMAGES PNG) ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const safeBrand = brand || 'unknown';
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
@@ -45,7 +45,7 @@ const MOCK_LENSES = [
 const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReference = false }) => {
   const podiumStyles = [
     { border: "border-yellow-400 ring-4 ring-yellow-50 shadow-xl shadow-yellow-100", badge: "bg-yellow-400 text-white border-yellow-500", icon: <Trophy className="w-5 h-5 text-white" />, label: "MEILLEUR CHOIX" },
-    { border: `border-slate-200 shadow-lg ${currentTheme.shadow}`, badge: `${currentTheme.light} ${currentTheme.textDark} ${currentTheme.border}`, icon: <Shield className={`w-5 h-5 ${currentTheme.text}`} />, label: "OFFRE OPTIMISÉE" },
+    { border: `border-slate-200 shadow-lg ${currentTheme.shadow}`, badge: `${currentTheme.light} ${currentTheme.textDark} ${currentTheme.border}`, icon: <Shield className={`w-5 h-5 ${currentTheme.text}`} />, label: "RESTE À CHARGE OPTIMISÉ" },
     { border: "border-slate-200 shadow-lg", badge: "bg-slate-100 text-slate-600 border-slate-200", icon: <Star className="w-5 h-5 text-orange-400" />, label: "PREMIUM" }
   ];
 
@@ -112,15 +112,14 @@ function App() {
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
   
-  // Sidebar Mobile
+  // Nouvel état pour gérer l'affichage du panneau latéral
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Synchro Google
+  // Etat pour la synchro Google Sheets
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
 
-  // CONFIGURATION UTILISATEUR AVEC FORMULE PRIX
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
     shopLogo: "", 
@@ -158,7 +157,7 @@ function App() {
   const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : serverUrl;
   const SYNC_URL = isLocal ? "http://127.0.0.1:8000/sync" : serverUrl.replace('/lenses', '/sync');
 
-  // --- GESTION DES COULEURS ---
+  // --- GESTION DES COULEURS DYNAMIQUES ---
   useEffect(() => {
     const root = document.documentElement;
     if (userSettings.themeColor === 'custom') {
@@ -175,9 +174,13 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
-  // Gestion responsive
+  // Gestion responsive : masquer le panneau sur mobile au chargement
   useEffect(() => {
-    const handleResize = () => { if (window.innerWidth < 1024) { /* ... */ } };
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        // Sur mobile/tablette, on peut vouloir masquer par défaut ou laisser l'utilisateur choisir
+      }
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -202,15 +205,25 @@ function App() {
   };
 
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
+
   const brands = [ { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'INTERIEUR', label: 'INTER. / BUREAU' } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
-  const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
+  
+  const codirCoatings = [
+    { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> },
+    { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
+    { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> },
+    { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
+    { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> },
+    { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> },
+  ];
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
   useEffect(() => { fetchData(); }, []);
 
+  // 1. RECHARGEMENT DES DONNÉES QUAND LES CRITÈRES CHANGENT
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -227,51 +240,40 @@ function App() {
     formData.myopiaControl, formData.uvOption
   ]); 
 
-  // LOGIQUE DE CALCUL DE PRIX ET FILTRAGE
+  // 2. FILTRAGE LOCAL (DESIGN + PHOTOCHROMIQUE)
   useEffect(() => {
     if (lenses.length > 0) {
-       let processedLenses = lenses.map(l => ({...l})); // Copie pour ne pas muter
+       let processedLenses = lenses.map(l => ({...l}));
 
        // --- RECALCUL DES PRIX POUR MARCHÉ LIBRE ---
        if (formData.network === 'HORS_RESEAU') {
           processedLenses = processedLenses.map(lens => {
-             let rule = userSettings.pricing.prog; // Par défaut progressif
-             
-             // Détection de la catégorie pour la formule
+             let rule = userSettings.pricing.prog; // Par défaut
              if (lens.type === 'UNIFOCAL') {
-                 // Stock = contient 'ST' ou 'STOCK'
                  const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
                  rule = isStock ? userSettings.pricing.uniStock : userSettings.pricing.uniFab;
-             } else if (lens.type === 'DEGRESSIF') {
-                 rule = userSettings.pricing.degressif;
-             } else if (lens.type === 'INTERIEUR') {
-                 rule = userSettings.pricing.interieur;
-             }
+             } else if (lens.type === 'DEGRESSIF') { rule = userSettings.pricing.degressif; } 
+             else if (lens.type === 'INTERIEUR') { rule = userSettings.pricing.interieur; }
 
-             // Application formule : A * X + B
              const newSelling = (lens.purchasePrice * rule.x) + rule.b;
              const newMargin = newSelling - lens.purchasePrice;
-             
-             return {
-                 ...lens,
-                 sellingPrice: Math.round(newSelling),
-                 margin: Math.round(newMargin)
-             };
+             return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
           });
-          // Tri par marge décroissante après recalcul
           processedLenses.sort((a, b) => b.margin - a.margin);
-       } else {
-         // Pour Kalixia/Autres, on filtre ceux sans prix
-         if (formData.network === 'KALIXIA') {
-            processedLenses = processedLenses.filter(l => l.sellingPrice > 0);
-         }
+       } else if (formData.network === 'KALIXIA') {
+         processedLenses = processedLenses.filter(l => l.sellingPrice > 0);
        }
 
-       // Filtre Photochromique
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
-          return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR");
+          return text.includes("TRANSITIONS") || 
+                 text.includes("GEN S") || 
+                 text.includes("SOLACTIVE") ||
+                 text.includes("TGNS") || 
+                 text.includes("SABR") || 
+                 text.includes("SAGR");
        };
+
        if (formData.photochromic) {
          processedLenses = processedLenses.filter(l => isPhotoC(l));
        } else {
@@ -290,11 +292,9 @@ function App() {
           }
        }
 
-       // Extraction designs
        const designs = [...new Set(processedLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
-       // Filtre Design
        if (formData.design) {
          setFilteredLenses(processedLenses.filter(l => l.design === formData.design));
        } else {
@@ -304,19 +304,21 @@ function App() {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating, userSettings.pricing]); // Ajout userSettings.pricing pour recalcul immédiat
+  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating, userSettings.pricing]);
 
 
   const fetchData = (ignoreFilters = false) => {
     setLoading(true);
     setError(null); 
-    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(MOCK_LENSES); setLoading(false); return; }
+    
+    if (!isLocal && API_URL.includes("VOTRE-URL")) {
+      setLenses(MOCK_LENSES); setLoading(false); return;
+    }
 
-    // On ne passe plus de pocketLimit au backend, car on gère le prix localement pour le marché libre
     const params = ignoreFilters ? {} : {
         type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
         index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
-        myopia: formData.myopiaControl, uvOption: formData.uvOption
+        myopia: formData.myopiaControl, uvOption: formData.uvOption, pocketLimit: userSettings[formData.type]?.maxPocket || 0
     };
 
     axios.get(API_URL, { params })
@@ -336,8 +338,13 @@ function App() {
       setSyncLoading(true);
       setSyncStatus(null);
       axios.post(SYNC_URL, { url: sheetsUrl })
-          .then(res => { setSyncStatus({ type: 'success', msg: `Succès ! ${res.data.count} verres importés.` }); fetchData(); })
-          .catch(err => { setSyncStatus({ type: 'error', msg: "Erreur : Vérifiez que le lien est bien public (CSV)." }); })
+          .then(res => {
+              setSyncStatus({ type: 'success', msg: `Succès ! ${res.data.count} verres importés.` });
+              fetchData(); 
+          })
+          .catch(err => {
+              setSyncStatus({ type: 'error', msg: "Erreur : Vérifiez que le lien est bien public (CSV)." });
+          })
           .finally(() => setSyncLoading(false));
   };
 
@@ -358,21 +365,23 @@ function App() {
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
-  
+
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } };
+      reader.onloadend = () => {
+        if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } 
+      };
       reader.readAsDataURL(file);
     }
   };
+
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
   };
   
-  // Handler spécifique pour les règles de prix
   const handlePriceRuleChange = (category, field, value) => {
       setUserSettings(prev => ({
           ...prev,
@@ -386,8 +395,14 @@ function App() {
       }));
   };
 
-  const handleUrlChange = (value) => { setServerUrl(value); localStorage.setItem("optique_server_url", value); };
-  const handleSheetsUrlChange = (value) => { setSheetsUrl(value); localStorage.setItem("optique_sheets_url", value); };
+  const handleUrlChange = (value) => {
+    setServerUrl(value);
+    localStorage.setItem("optique_server_url", value); 
+  };
+  const handleSheetsUrlChange = (value) => {
+    setSheetsUrl(value);
+    localStorage.setItem("optique_sheets_url", value);
+  };
   const handleTypeChange = (newType) => {
     const shouldDisableAdd = newType === 'UNIFOCAL' || newType === 'DEGRESSIF';
     setFormData(prev => ({ ...prev, type: newType, design: '', addition: shouldDisableAdd ? 0.00 : prev.addition, myopiaControl: newType === 'UNIFOCAL' ? prev.myopiaControl : false }));
@@ -513,6 +528,7 @@ function App() {
                 ))}
               </div>
 
+              {/* CHOIX DU DESIGN */}
               {availableDesigns.length > 0 && (
                 <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
@@ -524,8 +540,7 @@ function App() {
                    </div>
                 </div>
               )}
-              
-              {/* ... (Freination myopie inchangée) ... */}
+
               <div className={`transition-all duration-300 overflow-hidden ${isMyopiaEligible ? 'max-h-24 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
                 <label className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer border-2 transition-colors ${formData.myopiaControl ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                   <div className="relative flex items-center">
@@ -536,8 +551,6 @@ function App() {
                 </label>
               </div>
             </div>
-
-            {/* ... (Indices, Traitements, Bouton Calculer) ... */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Layers className="w-5 h-5" /> INDICE</label>
               <div className="flex bg-slate-100 p-1.5 rounded-xl gap-1.5">
@@ -551,9 +564,13 @@ function App() {
             </div>
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
+              
+              {/* LISTE TRAITEMENTS */}
               <div className="mb-2">
                  <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
               </div>
+
+              {/* BOUTON PHOTOCHROMIQUE */}
               <div className="mb-2">
                   <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${formData.photochromic ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                     <div className="relative flex items-center">
@@ -563,6 +580,7 @@ function App() {
                     <span className={`text-sm font-bold ${formData.photochromic ? 'text-yellow-700' : 'text-slate-500'}`}>PHOTOCHROMIQUE</span>
                   </label>
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 {currentCoatings.map(c => (
                   <button key={c.id} onClick={() => handleCoatingChange(c.id)} className={`p-4 rounded-xl border-2 text-left transition-all relative overflow-hidden ${formData.coating === c.id ? `${currentTheme.light} ${currentTheme.border} ${currentTheme.textDark} ring-1 ${currentTheme.ring.replace('focus:', '')}` : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'}`}>
@@ -581,7 +599,8 @@ function App() {
                 </label>
               </div>
             </div>
-            <div className="pt-4 pb-8"></div>
+            <div className="pt-4 pb-8">
+            </div>
           </div>
         </aside>
 
@@ -647,7 +666,6 @@ function App() {
           </div>
         </section>
 
-        {/* === MODALE SETTINGS === */}
         {showSettings && (
           <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
@@ -755,9 +773,13 @@ function App() {
                              {syncStatus.msg}
                            </div>
                         )}
+                        <p className="text-[10px] text-slate-400 mt-2">
+                          1. Dans Google Sheets : Fichier {'>'} Partager {'>'} Publier sur le web<br/>
+                          2. Choisissez "Feuille 1" et format "CSV"<br/>
+                          3. Copiez le lien et collez-le ici.
+                        </p>
                     </div>
                   </div>
-
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">CONNEXION SERVEUR</h4>
                     <div>
@@ -774,7 +796,6 @@ function App() {
                         </div>
                     </div>
                   </div>
-
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">IDENTITÉ DU POINT DE VENTE</h4>
                     <div className="grid grid-cols-1 gap-6">
@@ -785,24 +806,31 @@ function App() {
                           <Store className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-2">LOGO DU MAGASIN</label>
-                        <div className="flex items-center gap-4">
-                          {userSettings.shopLogo && (
-                            <div className="h-16 w-16 relative bg-white rounded-xl border border-slate-200 p-2 flex-shrink-0 shadow-sm">
-                               <img src={userSettings.shopLogo} alt="Logo" className="h-full w-full object-contain" />
-                               <button onClick={() => setUserSettings(prev => ({...prev, shopLogo: ""}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-sm transition-colors"><X className="w-3 h-3" /></button>
-                            </div>
-                          )}
-                          <div className="relative flex-1">
-                            <div className="relative">
-                               <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"/>
-                               <div className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-200 border-dashed rounded-xl text-slate-500 text-xs font-bold flex items-center hover:bg-slate-100 transition-colors uppercase">{userSettings.shopLogo ? "CHANGER LE FICHIER..." : "CLIQUEZ POUR CHOISIR UN FICHIER..."}</div>
-                               <Upload className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
-                            </div>
-                          </div>
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">THÈME & COULEURS</h4>
+                    <div className="grid grid-cols-5 gap-3">
+                      {Object.keys(themes).map(colorKey => (
+                        <button key={colorKey} onClick={() => handleSettingChange('branding', 'themeColor', colorKey)} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${userSettings.themeColor === colorKey ? `border-${colorKey}-500 bg-${colorKey}-50` : 'border-transparent hover:bg-slate-50'}`}>
+                          <div className={`w-10 h-10 rounded-full ${themes[colorKey].primary} shadow-sm ring-4 ring-white`}></div>
+                          <span className="text-[10px] font-bold text-slate-500">{themes[colorKey].name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">PLAFONDS RESTE À CHARGE</h4>
+                    <div className="grid grid-cols-2 gap-6">
+                      {lensTypes.map(type => (
+                        <div key={type.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                           <label className="block text-xs font-bold text-slate-600 mb-2">{type.label}</label>
+                           <div className="relative">
+                              <input type="number" value={userSettings[type.id]?.maxPocket || ''} onChange={(e) => handleSettingChange(type.id, 'maxPocket', e.target.value)} className="w-full p-3 pr-10 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none text-right text-lg"/>
+                              <span className="absolute right-4 top-3.5 text-sm text-slate-400 font-bold">€</span>
+                           </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
                 </div>
