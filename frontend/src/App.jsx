@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.21"; // Fix Duplicate Variable & Modal Z-Index
+const APP_VERSION = "1.22"; // Version Stable & Sécurisée
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -20,7 +20,8 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const safeBrand = brand || 'unknown';
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
 
-  if (hasError) {
+  // Si erreur de chargement ou pas de marque, on affiche le texte
+  if (hasError || !brand) {
     return (
       <span className="text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full px-1 text-center">
         {safeBrand === '' ? 'TOUTES' : safeBrand}
@@ -56,6 +57,11 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
     ? { border: "border-blue-500 ring-4 ring-blue-50 shadow-xl", badge: "bg-blue-600 text-white", icon: <ArrowRightLeft className="w-5 h-5"/>, label: "RÉFÉRENCE" }
     : (podiumStyles[index] || podiumStyles[1]);
 
+  // Calcul sécurisé pour éviter NaN
+  const displayMargin = (lens.sellingPrice > 0) 
+    ? ((lens.margin / lens.sellingPrice) * 100).toFixed(0) 
+    : 0;
+
   return (
     <div className={`group bg-white rounded-3xl border-2 transition-all duration-300 overflow-hidden relative flex flex-col ${style.border} ${isReference ? 'scale-100' : 'hover:-translate-y-2'}`}>
         <div className="absolute top-5 right-5 z-10">
@@ -65,7 +71,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
         </div>
 
         <div className="p-8 pt-14 border-b border-slate-50 relative">
-          <h3 className="font-bold text-2xl text-slate-800 mb-2 leading-tight">{lens.name}</h3>
+          <h3 className="font-bold text-2xl text-slate-800 mb-2 leading-tight">{lens.name || "Verre Inconnu"}</h3>
           <div className="flex flex-wrap gap-2 mt-3">
              <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">{lens.brand}</span>
              <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">{lens.design || "STANDARD"}</span>
@@ -81,7 +87,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
                 <div className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"><span className="block text-[10px] text-slate-400 font-bold mb-1">VENTE TTC</span><span className="block text-slate-800 font-bold text-2xl">{lens.sellingPrice} €</span></div>
               </div>
               <div className="pt-2">
-                <div className="flex justify-between items-end mb-2"><span className="text-xs font-bold text-green-700 tracking-wide">MARGE NETTE</span><span className="text-xs font-bold text-green-700 bg-green-100 px-3 py-1 rounded-lg">{lens.sellingPrice > 0 ? ((lens.margin / lens.sellingPrice) * 100).toFixed(0) : 0}%</span></div>
+                <div className="flex justify-between items-end mb-2"><span className="text-xs font-bold text-green-700 tracking-wide">MARGE NETTE</span><span className="text-xs font-bold text-green-700 bg-green-100 px-3 py-1 rounded-lg">{displayMargin}%</span></div>
                 <div className="bg-green-50 p-4 rounded-2xl border border-green-100 flex items-center justify-between"><div className="text-4xl font-bold text-green-700 tracking-tight">+{lens.margin} €</div><Trophy className="w-8 h-8 text-green-200" /></div>
               </div>
             </>
@@ -117,11 +123,12 @@ function App() {
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Synchro Google Sheets
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
 
-  // Configuration Par Défaut Solide
+  // Configuration par défaut (Fallback anti-crash)
   const defaultPricingConfig = { x: 2.5, b: 20 };
   
   const [userSettings, setUserSettings] = useState({
@@ -130,6 +137,7 @@ function App() {
     themeColor: "blue", 
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
+    // 5 Catégories de prix pour le marché libre
     pricing: {
         uniStock: { x: 2.5, b: 20 },   
         uniFab: { x: 3.0, b: 30 },     
@@ -178,13 +186,8 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
-  // Responsive
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        // Logic mobile si nécessaire
-      }
-    };
+    const handleResize = () => { if (window.innerWidth < 1024) { } };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -199,7 +202,6 @@ function App() {
   };
 
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
-
   const brands = [ 
     { id: '', label: 'TOUTES' },
     { id: 'HOYA', label: 'HOYA' }, 
@@ -208,7 +210,6 @@ function App() {
     { id: 'CODIR', label: 'CODIR' }, 
     { id: 'ORUS', label: 'ORUS' } 
   ];
-
   const lensTypes = [ 
     { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
     { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
@@ -216,7 +217,6 @@ function App() {
     { id: 'MULTIFOCAL', label: 'MULTIFOCAL' },
     { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" }
   ];
-  
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
@@ -235,31 +235,32 @@ function App() {
     fetchData(); 
   }, [formData.brand, formData.network, formData.type]); 
 
-  // 2. FILTRAGE LOCAL
+  // 2. FILTRAGE LOCAL (SÉCURISÉ)
   useEffect(() => {
-    if (lenses.length > 0) {
+    if (lenses && lenses.length > 0) {
        let workingList = lenses.map(l => ({...l}));
 
        // Marque Strict
        if (formData.brand && formData.brand !== '') {
-           workingList = workingList.filter(l => l.brand.toUpperCase() === formData.brand.toUpperCase());
+           workingList = workingList.filter(l => l.brand && l.brand.toUpperCase() === formData.brand.toUpperCase());
        }
 
-       // Prix & Formules avec Sécurité
+       // Prix Marché Libre (Sécurisé)
        if (formData.network === 'HORS_RESEAU') {
-          // Récupération sûre des règles de prix (évite le crash si undefined)
           const pRules = userSettings.pricing || {};
           
           workingList = workingList.map(lens => {
              let rule = pRules.prog || defaultPricingConfig; 
-             
-             if (lens.type === 'UNIFOCAL') {
-                 const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
+             const lensType = lens.type || ""; 
+             const lensName = (lens.name || "").toUpperCase();
+
+             if (lensType === 'UNIFOCAL') {
+                 const isStock = lensName.includes(' ST') || lensName.includes('_ST');
                  rule = isStock ? (pRules.uniStock || defaultPricingConfig) : (pRules.uniFab || defaultPricingConfig);
              } 
-             else if (lens.type === 'DEGRESSIF') { rule = pRules.degressif || defaultPricingConfig; } 
-             else if (lens.type.includes('INTERIEUR')) { rule = pRules.interieur || defaultPricingConfig; }
-             else if (lens.type === 'MULTIFOCAL') { rule = pRules.multifocal || defaultPricingConfig; }
+             else if (lensType === 'DEGRESSIF') { rule = pRules.degressif || defaultPricingConfig; } 
+             else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || defaultPricingConfig; }
+             else if (lensType === 'MULTIFOCAL') { rule = pRules.multifocal || defaultPricingConfig; }
 
              const newSelling = (lens.purchasePrice * rule.x) + rule.b;
              const newMargin = newSelling - lens.purchasePrice;
@@ -272,6 +273,7 @@ function App() {
 
        // Indice Strict
        workingList = workingList.filter(l => {
+           if(!l.index_mat) return false;
            const lIdx = l.index_mat.replace(',', '.');
            const fIdx = formData.materialIndex.replace(',', '.');
            return parseFloat(lIdx) === parseFloat(fIdx);
@@ -279,7 +281,7 @@ function App() {
 
        // Photochromique
        const isPhotoC = (item) => {
-          const text = (item.name + " " + item.coating).toUpperCase();
+          const text = ((item.name || "") + " " + (item.coating || "")).toUpperCase();
           return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR");
        };
        if (formData.photochromic) {
@@ -302,12 +304,14 @@ function App() {
 
        // Myopie
        if (formData.myopiaControl) {
-          workingList = workingList.filter(l => l.name.toUpperCase().includes("MIYO"));
+          workingList = workingList.filter(l => (l.name || "").toUpperCase().includes("MIYO"));
        }
 
+       // Designs
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
+       // Filtre Design Final
        if (formData.design) {
          setFilteredLenses(workingList.filter(l => l.design === formData.design));
        } else {
@@ -344,7 +348,7 @@ function App() {
     axios.get(API_URL, { params })
       .then(response => {
         setIsOnline(true);
-        setLenses(response.data || []);
+        setLenses(Array.isArray(response.data) ? response.data : []);
         setLoading(false);
       })
       .catch(err => {
@@ -402,7 +406,7 @@ function App() {
   const uvOptionLabel = (formData.brand === 'CODIR' || formData.brand === 'ORUS') ? 'OPTION SUV (UV 400)' : 'OPTION IP+ (UV)';
   const isUvOptionMandatory = formData.materialIndex !== '1.50';
 
-  // Fallback pour éviter le crash
+  // Fallback pour éviter le crash si pricing est undefined
   const safePricing = userSettings.pricing || {
         uniStock: { x: 2.5, b: 20 },   
         uniFab: { x: 3.0, b: 30 },     
@@ -579,8 +583,7 @@ function App() {
                 </label>
               </div>
             </div>
-            <div className="pt-4 pb-8">
-            </div>
+            <div className="pt-4 pb-8"></div>
           </div>
         </aside>
 
