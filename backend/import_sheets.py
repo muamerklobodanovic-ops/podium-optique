@@ -1,9 +1,17 @@
-import csv
-from sqlalchemy import create_engine, text
 import os
-from dotenv import load_dotenv
 import re
+from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
 
+# On essaie d'importer openpyxl pour lire l'Excel
+try:
+    import openpyxl
+except ImportError:
+    print("❌ ERREUR : La librairie 'openpyxl' est manquante.")
+    print("👉 Installez-la avec la commande : pip install openpyxl")
+    exit()
+
+# 1. Chargement de la configuration
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -11,6 +19,7 @@ if not DATABASE_URL:
     print("❌ Erreur : Impossible de trouver DATABASE_URL dans le fichier .env")
     exit()
 
+# --- OUTILS DE NETTOYAGE ---
 def clean_price(value):
     if not value or value == '' or value == '-': return 0.0
     try:
@@ -24,96 +33,124 @@ def clean_index(value):
     match = re.search(r"\d+\.?\d*", clean_val)
     return "{:.2f}".format(float(match.group(0))) if match else "1.50"
 
-def get_column_value(row, candidates):
-    headers = list(row.keys())
-    for candidate in candidates:
-        for header in headers:
-            h_clean = header.upper().encode('ascii', 'ignore').decode()
-            c_clean = candidate.upper()
-            if c_clean in header.upper() or c_clean in h_clean:
-                return row[header]
-    return None
+# Fonction pour trouver la colonne par nom (insensible à la casse)
+def find_col_index(headers, candidates):
+    for i, h in enumerate(headers):
+        if h is None: continue
+        h_str = str(h).upper().strip()
+        for c in candidates:
+            # Nettoyage basique des accents pour comparaison
+            c_clean = c.upper()
+            if c_clean in h_str:
+                return i
+    return -1
 
-def import_data_from_csv():
-    print("🚀 Démarrage de l'importation...")
-    csv_file = "catalogue.csv"
-    if not os.path.exists(csv_file):
-        print(f"❌ Erreur : '{csv_file}' introuvable.")
+def import_data_from_excel():
+    print("🚀 Démarrage de l'importation EXCEL MULTI-ONGLETS...")
+    
+    excel_file = "catalogue.xlsx"
+    
+    if not os.path.exists(excel_file):
+        print(f"❌ Erreur : Le fichier '{excel_file}' est introuvable dans le dossier backend.")
+        print("👉 Veuillez enregistrer votre fichier au format .xlsx")
         return
 
     engine = create_engine(DATABASE_URL)
-
+    
     try:
-        with engine.connect() as conn:
-            print("🧹 Recréation de la table avec colonne DESIGN...")
-            conn.execute(text("DROP TABLE IF EXISTS lenses;"))
-            conn.execute(text("""
-                CREATE TABLE lenses (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(200),
-                    brand VARCHAR(50),
-                    type VARCHAR(50),
-                    design VARCHAR(100),
-                    index_mat VARCHAR(10),
-                    coating VARCHAR(50),
-                    purchase_price DECIMAL(10, 2),
-                    selling_price DECIMAL(10, 2)
-                );
-            """))
+        # Chargement du fichier Excel
+        print(f"📂 Ouverture de {excel_file}...")
+        workbook = openpyxl.load_workbook(excel_file, data_only=True)
+        
+        with engine.begin() as conn:
+            print("🧹 Réinitialisation de la base de données...")
+            conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY;"))
             
-            print("📥 Lecture du CSV...")
-            count = 0
+            total_count = 0
             
             stmt = text("""
                 INSERT INTO lenses (name, brand, type, design, index_mat, coating, purchase_price, selling_price)
                 VALUES (:name, :brand, :type, :design, :index, :coating, :purchase, :selling)
             """)
 
-            encodings = ['utf-8-sig', 'latin-1', 'cp1252']
-            file_content = None
-            for enc in encodings:
-                try:
-                    with open(csv_file, mode='r', encoding=enc) as f:
-                        file_content = f.readlines()
-                    break
-                except UnicodeDecodeError: continue
-            
-            if not file_content: return
-
-            try: dialect = csv.Sniffer().sniff(file_content[0])
-            except: dialect = csv.excel; dialect.delimiter = ','
-
-            reader = csv.DictReader(file_content, dialect=dialect)
-
-            for row in reader:
-                raw_geo = str(get_column_value(row, ['GEOMETRIE', 'GÃ‰OMETRIE', 'GÉOMETRIE']) or '').upper()
-                lens_type = 'UNIFOCAL'
-                if 'PROG' in raw_geo: lens_type = 'PROGRESSIF'
-                elif 'DEGRESSIF' in raw_geo or 'INTERIEUR' in raw_geo or 'PROX' in raw_geo: lens_type = 'DEGRESSIF'
+            # --- BOUCLE SUR CHAQUE FEUILLE (MARQUE) ---
+            for sheet_name in workbook.sheetnames:
+                sheet = workbook[sheet_name]
+                print(f"   🔹 Traitement de la feuille : {sheet_name}")
                 
-                name = get_column_value(row, ['MODELE COMMERCIAL', 'LIBELLE']) or 'Inconnu'
-                brand = get_column_value(row, ['MARQUE', 'FABRICANT']) or 'GENERIQUE'
+                # Lecture des en-têtes (Ligne 1)
+                headers = [cell.value for cell in sheet[1]]
                 
-                # --- NOUVEAU : Récupération du DESIGN ---
-                design = get_column_value(row, ['DESIGN', 'GAMME', 'FAMILLE']) or 'STANDARD'
+                # Identification des colonnes
+                col_marque = find_col_index(headers, ['MARQUE', 'FABRICANT'])
+                col_modele = find_col_index(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE'])
+                col_geo = find_col_index(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE'])
+                col_design = find_col_index(headers, ['DESIGN', 'GAMME', 'FAMILLE'])
+                col_indice = find_col_index(headers, ['INDICE'])
+                col_traitement = find_col_index(headers, ['TRAITEMENT'])
+                col_matiere = find_col_index(headers, ['MATIERE'])
+                col_achat = find_col_index(headers, ['PRIX 2*NETS', '2*NETS', 'ACHAT'])
+                col_vente = find_col_index(headers, ['KALIXIA', 'VENTE', 'PRIX PUBLIC'])
+
+                # Vérification minimale
+                if col_modele == -1:
+                    print(f"      ⚠️ Colonne Modèle introuvable, feuille ignorée.")
+                    continue
+
+                sheet_count = 0
                 
-                idx = clean_index(get_column_value(row, ['INDICE']))
-                coating = get_column_value(row, ['TRAITEMENT']) or 'DURCI'
-                purchase = clean_price(get_column_value(row, ['PRIX 2*NETS', 'PRIX 2 NETS', '2*NETS']))
-                selling = clean_price(get_column_value(row, ['KALIXIA']))
+                # Parcours des lignes (à partir de la ligne 2)
+                for row in sheet.iter_rows(min_row=2, values_only=True):
+                    if not row[col_modele]: continue # Ignorer lignes vides
+                    
+                    # Récupération des valeurs
+                    raw_name = str(row[col_modele])
+                    
+                    # Marque : Soit colonne A, soit nom de la feuille
+                    brand = str(row[col_marque]) if col_marque != -1 and row[col_marque] else sheet_name
+                    
+                    # Type / Géométrie
+                    raw_geo = str(row[col_geo] if col_geo != -1 else "").upper()
+                    lens_type = 'UNIFOCAL'
+                    if 'PROG' in raw_geo: lens_type = 'PROGRESSIF'
+                    elif 'DEGRESSIF' in raw_geo or 'INTERIEUR' in raw_geo: lens_type = 'DEGRESSIF'
+                    elif 'MULTIFOCAL' in raw_geo: lens_type = 'MULTIFOCAL'
+                    
+                    design = str(row[col_design]) if col_design != -1 and row[col_design] else 'STANDARD'
+                    idx = clean_index(row[col_indice] if col_indice != -1 else "1.50")
+                    coating = str(row[col_traitement]) if col_traitement != -1 and row[col_traitement] else 'DURCI'
+                    
+                    purchase = clean_price(row[col_achat] if col_achat != -1 else 0)
+                    selling = clean_price(row[col_vente] if col_vente != -1 else 0)
 
-                if name != 'Inconnu':
-                    params = {
-                        "name": name, "brand": brand, "type": lens_type, "design": design,
-                        "index": idx, "coating": coating, "purchase": purchase, "selling": selling
-                    }
-                    conn.execute(stmt, params)
-                    count += 1
-            
-            conn.commit()
-            print(f"🎉 Succès ! {count} verres importés avec DESIGN.")
+                    # Gestion Photochromique (Ajout au nom)
+                    if col_matiere != -1 and row[col_matiere]:
+                        matiere = str(row[col_matiere]).upper()
+                        if any(x in matiere for x in ['TRANS', 'GEN', 'SOLA', 'TGNS', 'SABR', 'SAGR']):
+                            raw_name = f"{raw_name} {matiere}"
 
-    except Exception as e: print(f"❌ Erreur : {e}")
+                    # Insertion
+                    if purchase > 0: # On garde si on a un prix d'achat
+                        params = {
+                            "name": raw_name,
+                            "brand": brand,
+                            "type": lens_type,
+                            "design": design,
+                            "index": idx,
+                            "coating": coating,
+                            "purchase": purchase,
+                            "selling": selling
+                        }
+                        conn.execute(stmt, params)
+                        sheet_count += 1
+                        total_count += 1
+
+                print(f"      ✅ {sheet_count} verres ajoutés.")
+
+            print(f"\n🎉 TERMINÉ : {total_count} verres importés au total dans la base Neon.")
+
+    except Exception as e:
+        print(f"❌ Erreur technique : {e}")
 
 if __name__ == "__main__":
-    import_data_from_csv()
+    import_data_from_excel()
