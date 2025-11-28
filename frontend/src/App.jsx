@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.12"; // Nettoyage final (Suppression Plafonds UI)
+const APP_VERSION = "1.13"; // Architecture Filtres Stricts Client-Side
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -14,7 +14,7 @@ const hexToRgb = (hex) => {
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
 
-// --- COMPOSANT LOGOS (IMAGES PNG) ---
+// --- COMPOSANT LOGOS ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const safeBrand = brand || 'unknown';
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
@@ -100,8 +100,11 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
 
 function App() {
   // --- ETATS ---
+  // 'lenses' contient TOUT le catalogue pour la Marque/Type choisis (Base de donnée locale)
   const [lenses, setLenses] = useState([]); 
+  // 'filteredLenses' est la liste affichée après application de tous les filtres
   const [filteredLenses, setFilteredLenses] = useState([]); 
+  // 'availableDesigns' est la liste des gammes disponibles dans 'lenses'
   const [availableDesigns, setAvailableDesigns] = useState([]); 
 
   const [loading, setLoading] = useState(false);
@@ -111,13 +114,14 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
-  
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Etats Synchro
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
 
+  // Config & Formulaire
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
     shopLogo: "", 
@@ -154,7 +158,7 @@ function App() {
   const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : serverUrl;
   const SYNC_URL = isLocal ? "http://127.0.0.1:8000/sync" : serverUrl.replace('/lenses', '/sync');
 
-  // --- GESTION DES COULEURS ---
+  // --- COULEURS ---
   useEffect(() => {
     const root = document.documentElement;
     if (userSettings.themeColor === 'custom') {
@@ -171,54 +175,28 @@ function App() {
     }
   }, [userSettings.themeColor, userSettings.customColor]);
 
-  // Responsive
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        // Logic mobile si nécessaire
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
+  // --- DONNÉES STATIQUES ---
   const themes = {
     blue: { name: 'OCÉAN', primary: 'bg-blue-700', hover: 'hover:bg-blue-800', text: 'text-blue-700', textDark: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-200', ring: 'ring-blue-300', shadow: 'shadow-blue-200' },
     emerald: { name: 'ÉMERAUDE', primary: 'bg-emerald-700', hover: 'hover:bg-emerald-800', text: 'text-emerald-700', textDark: 'text-emerald-900', light: 'bg-emerald-50', border: 'border-emerald-200', ring: 'ring-emerald-300', shadow: 'shadow-emerald-200' },
     violet: { name: 'AMÉTHYSTE', primary: 'bg-violet-700', hover: 'hover:bg-violet-800', text: 'text-violet-700', textDark: 'text-violet-900', light: 'bg-violet-50', border: 'border-violet-200', ring: 'ring-violet-300', shadow: 'shadow-violet-200' },
     amber: { name: 'AMBRE', primary: 'bg-amber-700', hover: 'hover:bg-amber-800', text: 'text-amber-700', textDark: 'text-amber-900', light: 'bg-amber-50', border: 'border-amber-200', ring: 'ring-amber-300', shadow: 'shadow-amber-200' },
     rose: { name: 'RUBIS', primary: 'bg-rose-700', hover: 'hover:bg-rose-800', text: 'text-rose-700', textDark: 'text-rose-900', light: 'bg-rose-50', border: 'border-rose-200', ring: 'ring-rose-300', shadow: 'shadow-rose-200' },
-    custom: { 
-        name: 'PERSO', 
-        primary: 'bg-[var(--theme-primary)]', 
-        hover: 'hover:opacity-90', 
-        text: 'text-[var(--theme-primary)]', 
-        textDark: 'text-black', 
-        light: 'bg-[var(--theme-light)]', 
-        border: 'border-[var(--theme-border)]', 
-        ring: 'ring-[var(--theme-ring)]', 
-        shadow: 'shadow-md' 
-    }
+    custom: { name: 'PERSO', primary: 'bg-[var(--theme-primary)]', hover: 'hover:opacity-90', text: 'text-[var(--theme-primary)]', textDark: 'text-black', light: 'bg-[var(--theme-light)]', border: 'border-[var(--theme-border)]', ring: 'ring-[var(--theme-ring)]', shadow: 'shadow-md' }
   };
-
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
-
   const brands = [ { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'INTERIEUR', label: 'INTER. / BUREAU' } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
-  
-  const codirCoatings = [
-    { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> },
-    { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
-    { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> },
-    { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> },
-    { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> },
-    { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> },
-  ];
+  const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
   const brandCoatings = { CODIR: codirCoatings, ORUS: codirCoatings, SEIKO: [ { id: 'SRC_ONE', label: 'SRC-ONE', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'SRC_ULTRA', label: 'SRC-ULTRA', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'SRC_SCREEN', label: 'SRC-SCREEN', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'SRC_ROAD', label: 'SRC-ROAD', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, { id: 'SRC_SUN', label: 'SRC-SUN', type: 'SUN', icon: <Sun className="w-3 h-3"/> }, ], HOYA: [ { id: 'HA', label: 'HA', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'HVLL', label: 'HVLL', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_UV', label: 'HVLL UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'HVLL_BC', label: 'HVLL BC', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'HVLL_BCUV', label: 'HVLL BCUV', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, ], ZEISS: [ { id: 'DV_SILVER', label: 'DV SILVER', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'DV_PLATINUM', label: 'DV PLATINUM', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'DV_BP', label: 'DV BLUEPROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'DV_DRIVE', label: 'DV DRIVESAFE', type: 'DRIVE', icon: <Car className="w-3 h-3"/> }, ] };
   const currentCoatings = brandCoatings[formData.brand] || brandCoatings.CODIR;
 
-  // 1. RECHARGEMENT DES DONNÉES
+  useEffect(() => { fetchData(); }, []);
+
+  // 1. INITIALISATION ET RECHARGEMENT GLOBAL
+  // On recharge la "Grosse Liste" uniquement si la Marque ou le Type change
+  // Cela permet d'avoir tous les indices/traitements/designs disponibles pour ce couple Marque/Type
   useEffect(() => {
     if (['CODIR', 'SEIKO', 'HOYA', 'ORUS'].includes(formData.brand)) {
       if (formData.materialIndex !== '1.50') {
@@ -230,19 +208,19 @@ function App() {
 
     fetchData(); 
   }, [
-    formData.materialIndex, formData.brand, formData.network, formData.type, 
-    formData.coating, formData.sphere, formData.cylinder, formData.addition, 
-    formData.myopiaControl, formData.uvOption
+    formData.brand, 
+    formData.network, // Change la marque implicitement
+    formData.type
   ]); 
 
-  // 2. FILTRAGE LOCAL
+  // 2. MOTEUR DE FILTRAGE CLIENT (Le coeur de la logique stricte)
   useEffect(() => {
     if (lenses.length > 0) {
-       let processedLenses = lenses.map(l => ({...l}));
+       let workingList = lenses.map(l => ({...l}));
 
-       // --- RECALCUL DES PRIX ---
+       // A. Calcul des Prix (Si Hors Réseau)
        if (formData.network === 'HORS_RESEAU') {
-          processedLenses = processedLenses.map(lens => {
+          workingList = workingList.map(lens => {
              let rule = userSettings.pricing.prog; 
              if (lens.type === 'UNIFOCAL') {
                  const isStock = lens.name.toUpperCase().includes(' ST') || lens.name.toUpperCase().includes('_ST');
@@ -254,66 +232,91 @@ function App() {
              const newMargin = newSelling - lens.purchasePrice;
              return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
           });
-          processedLenses.sort((a, b) => b.margin - a.margin);
-       } else if (formData.network === 'KALIXIA') {
-         processedLenses = processedLenses.filter(l => l.sellingPrice > 0);
+          workingList.sort((a, b) => b.margin - a.margin);
+       } 
+       // B. Filtre Prix Kalixia (> 0)
+       else if (formData.network === 'KALIXIA') {
+         workingList = workingList.filter(l => l.sellingPrice > 0);
        }
 
-       // --- FILTRES ---
+       // C. Calcul des Designs Disponibles (Avant filtrage technique)
+       // On regarde TOUS les verres de cette géométrie/marque pour lister les designs
+       // Cela garantit que les boutons ne disparaissent pas si on sélectionne un indice rare
+       const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
+       setAvailableDesigns(designs);
+
+       // D. Filtres Techniques Stricts
+       // 1. Indice
+       workingList = workingList.filter(l => {
+           const lIdx = l.index_mat.replace(',', '.');
+           const fIdx = formData.materialIndex.replace(',', '.');
+           return parseFloat(lIdx) === parseFloat(fIdx);
+       });
+
+       // 2. Photochromique
        const isPhotoC = (item) => {
           const text = (item.name + " " + item.coating).toUpperCase();
           return text.includes("TRANSITIONS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR");
        };
        if (formData.photochromic) {
-         processedLenses = processedLenses.filter(l => isPhotoC(l));
+         workingList = workingList.filter(l => isPhotoC(l));
        } else {
-         processedLenses = processedLenses.filter(l => !isPhotoC(l));
+         workingList = workingList.filter(l => !isPhotoC(l));
        }
 
-       // Traitement Strict
+       // 3. Traitement (Strict)
        if (formData.coating) {
           const selectedCoatingObj = currentCoatings.find(c => c.id === formData.coating);
           if (selectedCoatingObj) {
              const targetLabel = selectedCoatingObj.label.toUpperCase().trim();
-             processedLenses = processedLenses.filter(l => {
+             workingList = workingList.filter(l => {
                 const lensCoating = (l.coating || "").toUpperCase().trim();
                 return lensCoating.includes(targetLabel); 
              });
           }
        }
 
-       // Indice Strict
-       processedLenses = processedLenses.filter(l => {
-           const lIdx = l.index_mat.replace(',', '.');
-           const fIdx = formData.materialIndex.replace(',', '.');
-           return parseFloat(lIdx) === parseFloat(fIdx);
-       });
-
-       // Designs
-       const designs = [...new Set(processedLenses.map(l => l.design).filter(Boolean))].sort();
-       setAvailableDesigns(designs);
-
-       if (formData.design) {
-         setFilteredLenses(processedLenses.filter(l => l.design === formData.design));
-       } else {
-         setFilteredLenses(processedLenses);
+       // 4. Myopie
+       if (formData.myopiaControl) {
+          workingList = workingList.filter(l => l.name.toUpperCase().includes("MIYO"));
        }
+
+       // E. Filtre Design Final
+       if (formData.design) {
+         setFilteredLenses(workingList.filter(l => l.design === formData.design));
+       } else {
+         setFilteredLenses(workingList);
+       }
+
     } else {
        setAvailableDesigns([]);
        setFilteredLenses([]);
     }
-  }, [lenses, formData.design, formData.network, formData.photochromic, formData.coating, formData.materialIndex, userSettings.pricing]);
+  }, [
+    lenses, // Déclenché quand le serveur répond
+    formData.design, 
+    formData.network, 
+    formData.photochromic, 
+    formData.coating, 
+    formData.materialIndex,
+    formData.myopiaControl,
+    userSettings.pricing
+  ]);
 
-
-  const fetchData = (ignoreFilters = false) => {
+  const fetchData = () => {
     setLoading(true);
     setError(null); 
+    
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(MOCK_LENSES); setLoading(false); return; }
 
-    const params = ignoreFilters ? {} : {
-        type: formData.type, network: formData.network, brand: formData.brand, sphere: formData.sphere,
-        index: formData.materialIndex, coating: formData.coating, clean: formData.cleanOption,
-        myopia: formData.myopiaControl, uvOption: formData.uvOption, pocketLimit: 0
+    // On demande LARGE au serveur (Juste Type et Marque)
+    // On ne filtre PAS par indice/traitement ici pour avoir tout le stock en mémoire
+    const params = {
+        type: formData.type, 
+        network: formData.network, 
+        brand: formData.brand, 
+        // Pas d'autres filtres envoyés au serveur
+        pocketLimit: 0 
     };
 
     axios.get(API_URL, { params })
@@ -328,21 +331,16 @@ function App() {
       });
   };
 
+  // ... HANDLERS (Copier-coller du bloc précédent pour la concision) ...
   const triggerSync = () => {
       if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
       setSyncLoading(true);
       setSyncStatus(null);
       axios.post(SYNC_URL, { url: sheetsUrl })
-          .then(res => {
-              setSyncStatus({ type: 'success', msg: `Succès ! ${res.data.count} verres importés.` });
-              fetchData(); 
-          })
-          .catch(err => {
-              setSyncStatus({ type: 'error', msg: "Erreur : Vérifiez que le lien est bien public (CSV)." });
-          })
+          .then(res => { setSyncStatus({ type: 'success', msg: `Succès ! ${res.data.count} verres importés.` }); fetchData(); })
+          .catch(err => { setSyncStatus({ type: 'error', msg: "Erreur : Vérifiez que le lien est bien public (CSV)." }); })
           .finally(() => setSyncLoading(false));
   };
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
@@ -353,51 +351,23 @@ function App() {
       return;
     }
     if (name === 'myopiaControl') {
-      if (newValue === true) {
-        setFormData(prev => ({ ...prev, [name]: newValue, materialIndex: '1.58' }));
-        return;
-      }
+      if (newValue === true) { setFormData(prev => ({ ...prev, [name]: newValue, materialIndex: '1.58' })); return; }
     }
     setFormData(prev => ({ ...prev, [name]: newValue }));
   };
-
   const handleLogoUpload = (e, target = 'shop') => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } 
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); }
   };
-
   const handleSettingChange = (section, field, value) => {
     if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } 
     else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); }
   };
-  
   const handlePriceRuleChange = (category, field, value) => {
-      setUserSettings(prev => ({
-          ...prev,
-          pricing: {
-              ...prev.pricing,
-              [category]: {
-                  ...prev.pricing[category],
-                  [field]: parseFloat(value) || 0
-              }
-          }
-      }));
+      setUserSettings(prev => ({ ...prev, pricing: { ...prev.pricing, [category]: { ...prev.pricing[category], [field]: parseFloat(value) || 0 } } }));
   };
-
-  const handleUrlChange = (value) => {
-    setServerUrl(value);
-    localStorage.setItem("optique_server_url", value); 
-  };
-  const handleSheetsUrlChange = (value) => {
-    setSheetsUrl(value);
-    localStorage.setItem("optique_sheets_url", value);
-  };
+  const handleUrlChange = (value) => { setServerUrl(value); localStorage.setItem("optique_server_url", value); };
+  const handleSheetsUrlChange = (value) => { setSheetsUrl(value); localStorage.setItem("optique_sheets_url", value); };
   const handleTypeChange = (newType) => {
     const shouldDisableAdd = newType === 'UNIFOCAL' || newType === 'DEGRESSIF';
     setFormData(prev => ({ ...prev, type: newType, design: '', addition: shouldDisableAdd ? 0.00 : prev.addition, myopiaControl: newType === 'UNIFOCAL' ? prev.myopiaControl : false }));
@@ -455,6 +425,7 @@ function App() {
           </div>
           <div className="p-6 space-y-8">
              <button onClick={() => setIsSidebarOpen(false)} className="hidden lg:flex absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-500 hover:bg-slate-100 rounded-full" title="Masquer le panneau"><ChevronLeft className="w-5 h-5"/></button>
+            {/* ... SECTIONS FILTRES (Réseau, Marque, Correction, Type) INCHANGEES ... */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Shield className="w-5 h-5" /> RÉSEAU DE SOIN</label>
               <div className="relative">
@@ -470,7 +441,6 @@ function App() {
               </div>
             </div>
             <hr className="border-slate-100" />
-            {/* ... (Reste du volet inchangé) ... */}
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Tag className="w-5 h-5" /> MARQUE VERRIER</label>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2 rounded-2xl">
@@ -522,6 +492,7 @@ function App() {
                 ))}
               </div>
 
+              {/* CHOIX DU DESIGN */}
               {availableDesigns.length > 0 && (
                 <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
@@ -558,9 +529,12 @@ function App() {
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Sparkles className="w-5 h-5" /> TRAITEMENTS</label>
               
+              {/* LISTE TRAITEMENTS */}
               <div className="mb-2">
                  <button onClick={() => handleCoatingChange('')} className={`w-full py-2 px-3 text-xs font-bold rounded-lg transition-all border ${formData.coating === '' ? `bg-white ${currentTheme.text} border-slate-200 shadow-sm` : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>TOUS LES TRAITEMENTS</button>
               </div>
+
+              {/* BOUTON PHOTOCHROMIQUE */}
               <div className="mb-2">
                   <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${formData.photochromic ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                     <div className="relative flex items-center">
@@ -716,8 +690,13 @@ function App() {
                     <div className="flex items-center gap-2 mt-4">
                         <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
                         <div className="relative">
-                            <input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
+                            <input type="color" value={userSettings.customColor} onChange={(e) => {
+                                handleSettingChange('branding', 'customColor', e.target.value);
+                                handleSettingChange('branding', 'themeColor', 'custom');
+                            }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
+                            <div className="pointer-events-none absolute inset-0 rounded ring-1 ring-inset ring-black/10" />
                         </div>
+                        <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
                     </div>
                   </div>
 
