@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "1.17"; // Rollback UI Stable + Filtres Stricts
+const APP_VERSION = "1.18"; // Fix Crash BrandLogo (DOM Error)
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -14,23 +14,28 @@ const hexToRgb = (hex) => {
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
 
-// --- COMPOSANT LOGOS ---
+// --- COMPOSANT LOGOS (CORRIGÉ & SÉCURISÉ) ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
+  const [imageError, setImageError] = useState(false);
   const safeBrand = brand || 'unknown';
+  const displayLabel = brand === '' ? 'TOUTES' : brand;
   const logoUrl = `/logos/${safeBrand.toLowerCase()}.png`;
+
+  // Si erreur ou pas de marque, on affiche le texte proprement
+  if (imageError || !brand) {
+    return (
+      <span className="text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full px-2">
+        {displayLabel}
+      </span>
+    );
+  }
 
   return (
     <img 
       src={logoUrl} 
-      alt={safeBrand} 
+      alt={displayLabel} 
       className={`${className} object-contain`}
-      onError={(e) => {
-        e.target.style.display = 'none';
-        const span = document.createElement('span');
-        span.innerText = safeBrand === '' ? 'TOUTES' : safeBrand;
-        span.className = "text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full";
-        if(e.target.parentNode) e.target.parentNode.appendChild(span);
-      }}
+      onError={() => setImageError(true)}
     />
   );
 };
@@ -112,6 +117,7 @@ function App() {
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
   
+  // Sidebar Mobile
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Synchro
@@ -125,6 +131,7 @@ function App() {
     themeColor: "blue", 
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
+    // Règles de prix pour le marché libre (AxX+B)
     pricing: {
         uniStock: { x: 2.5, b: 20 },   
         uniFab: { x: 3.0, b: 30 },     
@@ -156,7 +163,7 @@ function App() {
   const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : serverUrl;
   const SYNC_URL = isLocal ? "http://127.0.0.1:8000/sync" : serverUrl.replace('/lenses', '/sync');
 
-  // --- COULEURS ---
+  // --- GESTION DES COULEURS ---
   useEffect(() => {
     const root = document.documentElement;
     if (userSettings.themeColor === 'custom') {
@@ -410,13 +417,19 @@ function App() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={toggleSidebar} className="lg:hidden p-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-colors"><Sliders className="w-8 h-8" /></button>
+          <button onClick={toggleSidebar} className="lg:hidden p-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-colors" title="Afficher/Masquer Filtres">
+             <Sliders className="w-8 h-8" />
+          </button>
           <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
             {isOnline ? <Wifi className="w-4 h-4"/> : <WifiOff className="w-4 h-4"/>}
             {isOnline ? "EN LIGNE" : "HORS LIGNE"}
           </div>
-          <button onClick={() => setShowMargins(!showMargins)} className="p-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-colors"><EyeOff className="w-8 h-8" /></button>
-          <button onClick={() => setShowSettings(true)} className="p-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-colors"><Settings className="w-8 h-8" /></button>
+          <button onClick={() => setShowMargins(!showMargins)} className="p-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-colors" title={showMargins ? "MASQUER LES MARGES" : "AFFICHER LES MARGES"}>
+            {showMargins ? <EyeOff className="w-8 h-8" /> : <Eye className="w-8 h-8" />}
+          </button>
+          <button onClick={() => setShowSettings(true)} className="p-4 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-colors group" title="PARAMÈTRES">
+            <Settings className={`w-8 h-8 group-hover:${currentTheme.text} transition-colors`} />
+          </button>
         </div>
       </header>
 
@@ -559,8 +572,7 @@ function App() {
         )}
 
         <section className="flex-1 p-8 overflow-y-auto bg-slate-50">
-           {/* ... (Section Résultats & Comparaison inchangée, conservée par défaut) ... */}
-           <div className="max-w-7xl mx-auto">
+          <div className="max-w-7xl mx-auto">
             {comparisonLens && (
               <div className="mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
                  <div className="flex justify-between items-end mb-4 pb-2 border-b border-blue-100">
@@ -606,7 +618,7 @@ function App() {
                 <LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} isReference={false} />
               ))}
             </div>
-           </div>
+          </div>
         </section>
 
         {showSettings && (
@@ -653,22 +665,27 @@ function App() {
                           <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
                         </div>
                     </div>
+                    <div className="flex items-center gap-2 mt-4">
+                        <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
+                        <div className="relative">
+                            <input type="color" value={userSettings.customColor} onChange={(e) => {
+                                handleSettingChange('branding', 'customColor', e.target.value);
+                                handleSettingChange('branding', 'themeColor', 'custom');
+                            }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
+                            <div className="pointer-events-none absolute inset-0 rounded ring-1 ring-inset ring-black/10" />
+                        </div>
+                        <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
+                    </div>
                   </div>
 
                   <div className="space-y-5">
                     <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">FORMULE PRIX DE VENTE (MARCHÉ LIBRE)</h4>
                     <div className="space-y-4">
-                      {/* UNIFOCAL STOCK */}
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      {/* UNIFOCAL FAB */}
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      {/* PROGRESSIF */}
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      {/* DEGRESSIF */}
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">DÉGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.degressif.x} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.degressif.b} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      {/* INTERIEUR */}
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">INTÉRIEUR</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.interieur.x} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.interieur.b} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                      {/* MULTIFOCAL */}
                       <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">MULTIFOCAL</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={userSettings.pricing.multifocal.x} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={userSettings.pricing.multifocal.b} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
                     </div>
                   </div>
