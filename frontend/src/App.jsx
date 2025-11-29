@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.04"; // Fix Crash 'networks' undefined
+const APP_VERSION = "3.05"; // Persistance Identité & Paramètres
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -183,7 +183,7 @@ function App() {
   const [showMargins, setShowMargins] = useState(false);
   const [selectedLens, setSelectedLens] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [comparisonLens, setComparisonLens] = useState(null); // Ajout manquant
+  const [comparisonLens, setComparisonLens] = useState(null); 
 
   // Synchro
   const [syncLoading, setSyncLoading] = useState(false);
@@ -196,21 +196,30 @@ function App() {
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 });
   const [secondPairPrice, setSecondPairPrice] = useState(0);
   
-  const [userSettings, setUserSettings] = useState({
-    shopName: "MON OPTICIEN",
-    shopLogo: "", 
-    themeColor: "blue", 
-    customColor: "#2563eb",
-    brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
-    pricing: {
-        uniStock: { x: 2.5, b: 20 },   
-        uniFab: { x: 3.0, b: 30 },     
-        prog: { x: 3.2, b: 50 },       
-        degressif: { x: 3.0, b: 40 },  
-        interieur: { x: 3.0, b: 40 },
-        multifocal: { x: 3.0, b: 40 }
-    }
+  // Initialisation avec localStorage pour persistance des réglages
+  const [userSettings, setUserSettings] = useState(() => {
+    const saved = localStorage.getItem("optique_user_settings");
+    return saved ? JSON.parse(saved) : {
+        shopName: "MON OPTICIEN",
+        shopLogo: "", 
+        themeColor: "blue", 
+        customColor: "#2563eb",
+        brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
+        pricing: {
+            uniStock: { x: 2.5, b: 20 },   
+            uniFab: { x: 3.0, b: 30 },     
+            prog: { x: 3.2, b: 50 },       
+            degressif: { x: 3.0, b: 40 },  
+            interieur: { x: 3.0, b: 40 },
+            multifocal: { x: 3.0, b: 40 }
+        }
+    };
   });
+
+  // Sauvegarde automatique des réglages
+  useEffect(() => {
+    localStorage.setItem("optique_user_settings", JSON.stringify(userSettings));
+  }, [userSettings]);
 
   const [formData, setFormData] = useState({
     network: 'HORS_RESEAU',
@@ -269,7 +278,6 @@ function App() {
     { id: 'ORUS', label: 'ORUS' } 
   ];
   
-  // LISTE RÉSEAUX (DÉFINIE ICI POUR ÉVITER LE CRASH)
   const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
 
   const lensTypes = [ 
@@ -281,7 +289,7 @@ function App() {
   ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
-  const currentCoatings = codirCoatings; // Fallback
+  const currentCoatings = codirCoatings; 
 
   // 1. RECHARGEMENT
   useEffect(() => {
@@ -291,7 +299,6 @@ function App() {
 
   // 2. FILTRAGE LOCAL
   useEffect(() => {
-    // Protection anti-crash : si lenses est null, on utilise []
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
        let workingList = safeLenses.map(l => ({...l}));
@@ -416,7 +423,7 @@ function App() {
 
   // Handlers
   const triggerSync = () => {
-      if (!sheetsUrl) return alert("URL?");
+      if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
       setSyncLoading(true);
       axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { fetchData(); }).finally(() => setSyncLoading(false));
   };
