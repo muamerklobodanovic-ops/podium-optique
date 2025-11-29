@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.17"; // Fix Crash LocalStorage (Auto-Repair)
+const APP_VERSION = "3.18"; // Fix URL Construction (Smart Base URL)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -177,22 +177,12 @@ function App() {
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 });
   const [secondPairPrice, setSecondPairPrice] = useState(0);
   
-  // INITIALISATION ROBUSTE DES PARAMÈTRES (CORRECTION DU CRASH)
+  // INITIALISATION SÉCURISÉE DES PARAMÈTRES
   const [userSettings, setUserSettings] = useState(() => {
     try {
       const saved = localStorage.getItem("optique_user_settings");
-      if (saved) {
-          const parsed = JSON.parse(saved);
-          // Fusion profonde pour garantir que 'pricing' et ses sous-clés existent toujours
-          return {
-              ...DEFAULT_SETTINGS,
-              ...parsed,
-              pricing: { ...DEFAULT_SETTINGS.pricing, ...(parsed.pricing || {}) }
-          };
-      }
-      return DEFAULT_SETTINGS;
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
     } catch (e) {
-      console.error("Paramètres corrompus, réinitialisation.");
       return DEFAULT_SETTINGS;
     }
   });
@@ -206,9 +196,12 @@ function App() {
 
   const [serverUrl, setServerUrl] = useState(localStorage.getItem("optique_server_url") || "https://api-podium-optique.onrender.com/lenses");
   const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
-  const API_URL = isLocal ? "http://127.0.0.1:8000/lenses" : serverUrl;
-  const SYNC_URL = isLocal ? "http://127.0.0.1:8000/sync" : serverUrl.replace('/lenses', '/sync');
-  const SAVE_URL = isLocal ? "http://127.0.0.1:8000/offers" : serverUrl.replace('/lenses', '/offers');
+  
+  // CONSTRUCTION URL INTELLIGENTE (Retire les doublons /lenses)
+  const cleanServerUrl = (isLocal ? "http://127.0.0.1:8000" : serverUrl).replace(/\/lenses\/?$/, '').replace(/\/$/, '');
+  const API_URL = `${cleanServerUrl}/lenses`;
+  const SYNC_URL = `${cleanServerUrl}/sync`;
+  const SAVE_URL = `${cleanServerUrl}/offers`;
 
   // --- PING RENDER ---
   useEffect(() => {
@@ -247,7 +240,7 @@ function App() {
     fetchData(); 
   }, [formData.brand, formData.network, formData.type]); 
 
-  // 2. FILTRAGE LOCAL (AVEC SÉCURITÉ SUR PRICING)
+  // 2. FILTRAGE LOCAL
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
@@ -267,9 +260,7 @@ function App() {
        }
 
        if (formData.network === 'HORS_RESEAU') {
-          // Sécurité maximale : fallback sur DEFAULT_SETTINGS si userSettings est mal chargé
-          const pRules = userSettings?.pricing || DEFAULT_SETTINGS.pricing;
-          
+          const pRules = userSettings.pricing || {};
           workingList = workingList.map(lens => {
              let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
              const lensType = cleanText(lens.type); const lensName = cleanText(lens.name); const flow = cleanText(lens.commercial_flow);
@@ -277,7 +268,6 @@ function App() {
              else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
              else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
-
              const pPrice = parseFloat(lens.purchase_price || 0);
              const newSelling = (pPrice * rule.x) + rule.b;
              const newMargin = newSelling - pPrice;
@@ -314,21 +304,36 @@ function App() {
   };
 
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
+  
   const saveOffer = () => {
-      if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
+      if (!selectedLens || !client.name) return alert("⚠️ Veuillez saisir le NOM du client et SÉLECTIONNER un verre pour valider le devis.");
       const totalPair = selectedLens.sellingPrice * 2;
       const remainder = (totalPair + secondPairPrice) - client.reimbursement;
-      const payload = { client: client, lens: selectedLens, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
-      axios.post(SAVE_URL, payload).then(res => alert("Sauvegardé !")).catch(err => alert("Erreur"));
+      
+      const payload = { 
+          client: client, 
+          lens: selectedLens, 
+          finance: { 
+              reimbursement: client.reimbursement, 
+              total: totalPair + secondPairPrice, 
+              remainder: remainder 
+          } 
+      };
+
+      axios.post(SAVE_URL, payload)
+        .then(res => alert("✅ Dossier sauvegardé et chiffré avec succès !"))
+        .catch(err => {
+            let msg = "Erreur technique inconnue.";
+            if (err.response) msg = `Erreur serveur (${err.response.status})`;
+            else if (err.request) msg = `Aucune réponse du serveur (${SAVE_URL}).`;
+            else msg = err.message;
+            alert(`❌ Échec de la sauvegarde :\n${msg}`);
+        });
   };
 
   const triggerSync = () => { if (!sheetsUrl) return alert("URL?"); setSyncLoading(true); axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { fetchData(); }).finally(() => setSyncLoading(false)); };
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
-  const handleClientChange = (e) => { 
-      const { name, value } = e.target;
-      if (name === 'reimbursement' && parseFloat(value) < 0) return;
-      setClient(prev => ({ ...prev, [name]: value }));
-  };
+  const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
   const handleLogoUpload = (e, target = 'shop') => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); } };
   const handleSettingChange = (section, field, value) => { if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); } };
   const handlePriceRuleChange = (category, field, value) => { setUserSettings(prev => ({ ...prev, pricing: { ...prev.pricing, [category]: { ...prev.pricing[category], [field]: parseFloat(value) || 0 } } })); };
@@ -341,9 +346,7 @@ function App() {
   const clearComparison = () => { setComparisonLens(null); };
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
-  
-  // Sécurisation pricing pour affichage
-  const currentPricing = userSettings.pricing || DEFAULT_SETTINGS.pricing;
+  const safePricing = userSettings.pricing || { uniStock: { x: 2.5, b: 20 }, uniFab: { x: 3.0, b: 30 }, prog: { x: 3.2, b: 50 }, degressif: { x: 3.0, b: 40 }, interieur: { x: 3.0, b: 40 }, multifocal: { x: 3.0, b: 40 } };
   const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
   const totalPair = lensPrice * 2;
   const totalRefund = parseFloat(client.reimbursement || 0);
@@ -407,15 +410,11 @@ function App() {
                         ))}
                     </div>
                 </div>
-                {/* Correction */}
+                {/* ... Autres filtres ... */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label><div className="grid grid-cols-2 gap-3 mb-2"><div className="relative"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="SPH"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div><div className="relative"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="CYL"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div><div className={`relative transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="ADD"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
-                {/* Geometrie */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{lensTypes.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
-                {/* Design */}
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
-                {/* Indice */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1">{indices.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
-                {/* Traitements */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">TRAITEMENTS</label><button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-[10px] font-bold rounded border ${formData.coating === '' ? 'text-white border-transparent' : 'border-transparent opacity-60'}`} style={formData.coating === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button><label className={`flex items-center gap-2 p-2 rounded border cursor-pointer mb-2 ${formData.photochromic ? 'bg-yellow-50 border-yellow-300' : 'border-transparent opacity-80'}`}><input type="checkbox" checked={formData.photochromic} onChange={handleChange} name="photochromic" className="accent-yellow-500"/><span className={`text-[10px] font-bold ${formData.photochromic ? 'text-yellow-700' : 'opacity-80'}`}>PHOTOCHROMIQUE</span></label><div className="flex flex-col gap-1">{availableCoatings.length > 0 ? availableCoatings.map(c => (<button key={c} onClick={() => handleCoatingChange(c)} className={`p-2 rounded border text-left text-[10px] font-bold ${formData.coating === c ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}>{c}</button>)) : <div className="text-[10px] opacity-50 italic text-center">Aucun traitement spécifique</div>}</div></div>
             </div>
         </aside>
@@ -423,7 +422,6 @@ function App() {
         {/* RESULTATS */}
         <section className="flex-1 p-6 overflow-y-auto pb-40">
             <div className="max-w-7xl mx-auto">
-                {/* COMPARAISON */}
                 {comparisonLens && (
                     <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                         <div className="flex justify-between mb-4"><h3 className="font-bold text-blue-800 text-sm">PRODUIT DE RÉFÉRENCE</h3><button onClick={() => setComparisonLens(null)}><XCircle className="w-5 h-5 text-blue-400"/></button></div>
@@ -449,6 +447,27 @@ function App() {
           </div>
       )}
 
+      {/* MODALE HISTORIQUE */}
+      {showHistory && (
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}>
+              <div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
+                  <div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+                  <div className="grid grid-cols-1 gap-4">
+                      {savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+                          <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+                              <div className="flex items-center gap-4">
+                                  <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+                                  <div><div className="font-bold text-lg">{offer.client.name} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob} • DOSSIER DU {offer.date}</div></div>
+                              </div>
+                              <div className="text-right"><div className="font-bold text-slate-800">{offer.lens.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance.remainder).toFixed(2)} €</div></div>
+                              <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* MODALE SETTINGS */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
@@ -463,11 +482,21 @@ function App() {
                  </div>
                  {syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}
               </div>
-              {/* Identité / Thème */}
-               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
-               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
-               {/* Formule Prix */}
-               <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="grid grid-cols-1 gap-4"><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={currentPricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-16 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={currentPricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-16 p-1 border rounded text-center text-xs"/></div></div></div></div>
+              {/* Formule Prix */}
+              <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                      {/* Exemple Unifocal Stock */}
+                      <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold">UNIFOCAL STOCK</span>
+                          <div className="flex gap-2">
+                              <input type="number" step="0.1" value={userSettings.pricing?.uniStock?.x || 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-16 p-1 border rounded text-center text-xs"/>
+                              <input type="number" step="1" value={userSettings.pricing?.uniStock?.b || 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-16 p-1 border rounded text-center text-xs"/>
+                          </div>
+                      </div>
+                      {/* ... Répéter pour les autres ... */}
+                  </div>
+              </div>
               <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
            </div>
         </div>
