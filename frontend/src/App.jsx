@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.25"; // Fix White Screen on Selection (Safe Math)
+const APP_VERSION = "3.26"; // Fix Server URL (api-podium.onrender.com)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -31,6 +31,8 @@ const DEFAULT_SETTINGS = {
 const DEMO_LENSES = [
   { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
   { id: 102, name: "VARILUX XR SERIES", brand: "ESSILOR", commercial_code: "VXR-16", type: "PROGRESSIF", index_mat: "1.60", design: "ULTRA", coating: "CRIZAL ROCK", purchase_price: 140, sellingPrice: 420, margin: 280, commercial_flow: "FAB" },
+  { id: 103, name: "ID LIFESTYLE 3", brand: "HOYA", commercial_code: "IDL3-16", type: "PROGRESSIF", index_mat: "1.60", design: "CONFORT", coating: "HI-VISION LONGLIFE", purchase_price: 110, sellingPrice: 330, margin: 220, commercial_flow: "FAB" },
+  { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
 ];
 
 // --- OUTILS ---
@@ -108,7 +110,7 @@ function App() {
   const [syncLoading, setSyncLoading] = useState(false); const [syncStatus, setSyncStatus] = useState(null); const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
   const [stats, setStats] = useState({ total: 0, filtered: 0 });
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 }); 
-  const [secondPairPrice, setSecondPairPrice] = useState(0); // Garder en number ou string "safe"
+  const [secondPairPrice, setSecondPairPrice] = useState(0); 
 
   const [userSettings, setUserSettings] = useState(() => {
     try { const saved = localStorage.getItem("optique_user_settings"); return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS; } catch (e) { return DEFAULT_SETTINGS; }
@@ -117,16 +119,26 @@ function App() {
 
   const [formData, setFormData] = useState({ network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '1.60', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false });
 
-  const [serverUrl, setServerUrl] = useState(localStorage.getItem("optique_server_url") || "https://api-podium-optique.onrender.com/lenses");
+  // --- CORRECTION URL API (VERSION 3.26) ---
+  const [serverUrl, setServerUrl] = useState(localStorage.getItem("optique_server_url") || "https://api-podium.onrender.com");
   const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
+  
+  // Construction URL robuste
   const cleanBaseUrl = (url) => url.replace(/\/lenses\/?$/, '').replace(/\/sync\/?$/, '').replace(/\/offers\/?$/, '').replace(/\/$/, '');
   const baseBackendUrl = cleanBaseUrl(isLocal ? "http://127.0.0.1:8000" : serverUrl);
+  
   const API_URL = `${baseBackendUrl}/lenses`;
   const SYNC_URL = `${baseBackendUrl}/sync`;
   const SAVE_URL = `${baseBackendUrl}/offers`;
 
-  useEffect(() => { if (isLocal) return; const pingInterval = setInterval(() => { axios.get(API_URL, { params: { pocketLimit: -1 } }).catch(() => {}); }, 14 * 60 * 1000); return () => clearInterval(pingInterval); }, [API_URL, isLocal]);
+  // --- PING RENDER ---
+  useEffect(() => {
+    if (isLocal) return; 
+    const pingInterval = setInterval(() => { axios.get(API_URL, { params: { pocketLimit: -1 } }).catch(() => {}); }, 14 * 60 * 1000); 
+    return () => clearInterval(pingInterval);
+  }, [API_URL, isLocal]);
 
+  // --- COULEURS DYNAMIQUES ---
   useEffect(() => {
     const root = document.documentElement;
     if (userSettings.themeColor === 'custom') { const rgb = hexToRgb(userSettings.customColor); root.style.setProperty('--theme-primary', userSettings.customColor); } else { root.style.removeProperty('--theme-primary'); }
@@ -198,20 +210,18 @@ function App() {
   };
 
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
-  
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("⚠️ Veuillez saisir le NOM du client et SÉLECTIONNER un verre pour valider le devis.");
       const totalPair = selectedLens.sellingPrice * 2;
       const remainder = (totalPair + secondPairPrice) - client.reimbursement;
       const payload = { client: client, lens: selectedLens, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
-      
       const config = { headers: { 'Content-Type': 'application/json' } };
       axios.post(SAVE_URL, payload, config)
         .then(res => alert("✅ Dossier sauvegardé et chiffré avec succès !"))
         .catch(err => {
-            let msg = "Erreur technique inconnue.";
+            let msg = "Erreur technique.";
             if (err.response) msg = `Erreur serveur (${err.response.status})`;
-            else if (err.request) msg = `Aucune réponse du serveur.\nEst-il réveillé ? (Attendre 1 min)\nURL : ${SAVE_URL}`;
+            else if (err.request) msg = `Aucune réponse du serveur.\nURL : ${SAVE_URL}`;
             else msg = err.message;
             alert(`❌ Échec de la sauvegarde :\n${msg}`);
         });
@@ -237,18 +247,14 @@ function App() {
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
   const safePricing = userSettings.pricing || { uniStock: { x: 2.5, b: 20 }, uniFab: { x: 3.0, b: 30 }, prog: { x: 3.2, b: 50 }, degressif: { x: 3.0, b: 40 }, interieur: { x: 3.0, b: 40 }, multifocal: { x: 3.0, b: 40 } };
-  
-  // CALCULS FOOTER (SÉCURISÉS)
-  const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice || 0) : 0;
+  const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
   const totalPair = lensPrice * 2;
   const totalRefund = parseFloat(client.reimbursement || 0);
-  // On s'assure que secondPairPrice est un nombre, sinon 0
-  const safeSecondPair = isNaN(parseFloat(secondPairPrice)) ? 0 : parseFloat(secondPairPrice);
-  const remainder = (totalPair + safeSecondPair) - totalRefund;
+  const remainder = (totalPair + secondPairPrice) - totalRefund;
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* HEADER ... (Identique) ... */}
+      {/* HEADER CLIENT & RESEAU */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 w-full lg:w-auto">
@@ -268,7 +274,12 @@ function App() {
                     {/* LISTE RESEAUX EN HAUT (LOGOS) */}
                     <div className="flex items-center gap-2 ml-4 overflow-x-auto pb-1">
                          {networks.map(net => (
-                            <NetworkLogo key={net} network={net} isSelected={formData.network === net} onClick={() => setFormData(prev => ({...prev, network: net}))}/>
+                            <NetworkLogo 
+                               key={net} 
+                               network={net} 
+                               isSelected={formData.network === net} 
+                               onClick={() => setFormData(prev => ({...prev, network: net}))}
+                            />
                          ))}
                     </div>
 
@@ -293,13 +304,20 @@ function App() {
         {/* SIDEBAR FILTRES */}
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-20 transition-all duration-300 w-80 ${isSidebarOpen ? '' : 'hidden'}`}>
             <div className="p-6 space-y-6 pb-32">
-                {/* MARQUE */}
+                {/* MARQUE - GRILLE COMPACTE 3 COLONNES */}
                 <div>
                     <label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label>
                     <div className="grid grid-cols-3 gap-1.5">
                         {brands.map(b => (
-                            <button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}>
-                                <div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div>
+                            <button 
+                                key={b.id} 
+                                onClick={() => setFormData({...formData, brand: b.id})} 
+                                className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} 
+                                style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}
+                            >
+                                <div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">
+                                    {b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}
+                                </div>
                             </button>
                         ))}
                     </div>
@@ -331,7 +349,7 @@ function App() {
         </section>
       </div>
 
-      {/* FOOTER DEVIS (FIXE EN BAS) */}
+      {/* FOOTER DEVIS */}
       {selectedLens && (
           <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800">
               <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
@@ -342,35 +360,36 @@ function App() {
           </div>
       )}
 
+      {/* MODALE HISTORIQUE */}
+      {showHistory && (
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}>
+              <div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
+                  <div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+                  <div className="grid grid-cols-1 gap-4">
+                      {savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+                          <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+                              <div className="flex items-center gap-4">
+                                  <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+                                  <div><div className="font-bold text-lg">{offer.client.name} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob} • DOSSIER DU {offer.date}</div></div>
+                              </div>
+                              <div className="text-right"><div className="font-bold text-slate-800">{offer.lens.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance.remainder).toFixed(2)} €</div></div>
+                              <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* MODALE SETTINGS */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
            <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
               <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
-              {/* Gestion Catalogue */}
-              <div className="mb-6">
-                 <label className="block text-xs font-bold text-slate-500 mb-2">URL GOOGLE SHEETS</label>
-                 <div className="flex gap-2">
-                    <input type="text" value={sheetsUrl} onChange={(e) => handleSheetsUrlChange(e.target.value)} className="flex-1 p-2 border rounded"/>
-                    <button onClick={triggerSync} disabled={syncLoading} className="bg-blue-600 text-white px-4 rounded text-xs font-bold">SYNCHRO</button>
-                 </div>
-                 {syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}
-              </div>
-              {/* Formule Prix */}
-              <div className="mb-6">
-                  <h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4>
-                  <div className="grid grid-cols-1 gap-4">
-                      {/* Exemple Unifocal Stock */}
-                      <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold">UNIFOCAL STOCK</span>
-                          <div className="flex gap-2">
-                              <input type="number" step="0.1" value={userSettings.pricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-16 p-1 border rounded text-center text-xs"/>
-                              <input type="number" step="1" value={userSettings.pricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-16 p-1 border rounded text-center text-xs"/>
-                          </div>
-                      </div>
-                      {/* ... Répéter pour les autres ... */}
-                  </div>
-              </div>
+              <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL DE L'API (BACKEND)</label><div className="flex gap-2"><input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={testConnection} disabled={syncLoading} className="bg-gray-800 text-white px-4 rounded text-xs font-bold">{syncLoading ? <Activity className="w-4 h-4 animate-spin"/> : "TEST CONNEXION"}</button></div><p className="text-[10px] text-slate-400 mt-1">Si le test échoue, vérifiez que le serveur Render est actif.</p></div>
+              <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL GOOGLE SHEETS</label><div className="flex gap-2"><input type="text" value={sheetsUrl} onChange={(e) => setSheetsUrl(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={triggerSync} disabled={syncLoading} className="bg-blue-600 text-white px-4 rounded text-xs font-bold">SYNCHRO</button></div>{syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}</div>
+               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
+               {/* ... Apparence / Prix ... */}
               <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
            </div>
         </div>
