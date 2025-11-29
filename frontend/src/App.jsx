@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.41"; // Fix Settings Crash (Null Storage)
+const APP_VERSION = "3.42"; // Fix ReferenceError (Brands Order)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -102,6 +102,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
 };
 
 function App() {
+  // --- ETATS ---
   const [lenses, setLenses] = useState([]); const [filteredLenses, setFilteredLenses] = useState([]); const [availableDesigns, setAvailableDesigns] = useState([]); const [availableCoatings, setAvailableCoatings] = useState([]);
   const [loading, setLoading] = useState(false); const [error, setError] = useState(null); const [isOnline, setIsOnline] = useState(true); 
   const [showSettings, setShowSettings] = useState(false); const [showMargins, setShowMargins] = useState(false); const [selectedLens, setSelectedLens] = useState(null); const [isSidebarOpen, setIsSidebarOpen] = useState(true); const [comparisonLens, setComparisonLens] = useState(null); const [showHistory, setShowHistory] = useState(false); const [savedOffers, setSavedOffers] = useState([]); 
@@ -110,20 +111,24 @@ function App() {
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 }); const [secondPairPrice, setSecondPairPrice] = useState(0);
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
 
-  // INITIALISATION ROBUSTE (FUSION PROFONDE + CHECK NULL)
+  // --- LISTES DE RÉFÉRENCE (PLACÉES AVANT LES FONCTIONS QUI LES UTILISENT) ---
+  const brands = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
+  const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
+  const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" } ];
+  const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
+  const currentCoatings = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
+
+  // INITIALISATION ROBUSTE
   const [userSettings, setUserSettings] = useState(() => {
     try { 
       const saved = localStorage.getItem("optique_user_settings");
       if (saved) {
           const parsed = JSON.parse(saved);
-          // Protection contre "null" ou types non-objets stockés par erreur
-          if (parsed && typeof parsed === 'object') {
-              return {
-                  ...DEFAULT_SETTINGS,
-                  ...parsed,
-                  pricing: { ...DEFAULT_SETTINGS.pricing, ...(parsed.pricing || {}) }
-              };
-          }
+          return {
+              ...DEFAULT_SETTINGS,
+              ...parsed,
+              pricing: { ...DEFAULT_SETTINGS.pricing, ...(parsed.pricing || {}) }
+          };
       }
       return DEFAULT_SETTINGS;
     } catch (e) { 
@@ -149,13 +154,17 @@ function App() {
   useEffect(() => { const root = document.documentElement; if (userSettings.themeColor === 'custom') { const rgb = hexToRgb(userSettings.customColor); root.style.setProperty('--theme-primary', userSettings.customColor); } else { root.style.removeProperty('--theme-primary'); } }, [userSettings.themeColor, userSettings.customColor]);
 
   const bgClass = userSettings.bgColor || "bg-slate-50"; const isDarkTheme = bgClass.includes("900") || bgClass.includes("black"); const textClass = isDarkTheme ? "text-white" : "text-slate-800"; const currentTheme = { primary: userSettings.themeColor === 'custom' ? 'bg-[var(--theme-primary)]' : 'bg-blue-700' };
-  const brands = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
-  const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
-  const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" } ];
-  const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
-  const currentCoatings = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
-
+  
   useEffect(() => { setFormData(prev => ({ ...prev, coating: '' })); fetchData(); }, [formData.brand, formData.network, formData.type]); 
+
+  // --- LOGIQUE DE FILTRAGE DES MARQUES ---
+  const getFilteredBrandsList = () => {
+      const net = formData.network;
+      if (net === 'HORS_RESEAU') return brands; 
+      if (net === 'SANTECLAIR') return brands.filter(b => b.id === '' || b.id === 'SEIKO' || b.id === 'ZEISS');
+      return brands.filter(b => b.id !== 'ORUS' && b.id !== 'ZEISS');
+  };
+  const activeBrands = getFilteredBrandsList();
 
   useEffect(() => {
     const safeLenses = lenses || [];
@@ -264,7 +273,6 @@ function App() {
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
   
-  // Utilisation sécurisée de safePricing pour l'affichage
   const safePricing = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
   const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
   const totalPair = lensPrice * 2;
@@ -273,7 +281,7 @@ function App() {
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* HEADER ... (Identique) */}
+      {/* HEADER ... */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 w-full lg:w-auto">
@@ -290,7 +298,7 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative z-0">
-        {/* SIDEBAR FILTRES ... Identique */}
+        {/* SIDEBAR FILTRES */}
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-20 transition-all duration-300 w-80 ${isSidebarOpen ? '' : 'hidden'}`}>
             <div className="p-6 space-y-6 pb-32">
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
