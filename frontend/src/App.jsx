@@ -6,12 +6,12 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.06"; // Handled Network Error & Safe Fallback
+const APP_VERSION = "3.07"; // Marques Compactes (Grid 3 cols)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
 
-// --- DONNÉES DE SECOURS ---
+// --- DONNÉES DE SECOURS (RÉTABLIES) ---
 const MOCK_LENSES = [
   { 
     id: 1, 
@@ -26,20 +26,6 @@ const MOCK_LENSES = [
     sellingPrice: 240, 
     margin: 160, 
     commercial_flow: "STOCK"
-  },
-  { 
-    id: 2, 
-    name: "EXEMPLE PROGRESSIF", 
-    brand: "HOYA", 
-    commercial_code: "TEST-02",
-    type: "PROGRESSIF", 
-    index_mat: "1.67", 
-    design: "INFINI", 
-    coating: "QUATTRO UV", 
-    purchase_price: 110, 
-    sellingPrice: 310, 
-    margin: 200, 
-    commercial_flow: "FAB"
   },
 ];
 
@@ -63,7 +49,7 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
 
   if (hasError || !brand) {
     return (
-      <span className="text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full px-1 text-center border border-dashed border-slate-200 rounded bg-slate-50">
+      <span className="text-[9px] font-bold text-slate-400 flex items-center justify-center h-full w-full text-center leading-none">
         {safeBrand === '' ? 'TOUTES' : safeBrand}
       </span>
     );
@@ -470,6 +456,15 @@ function App() {
   const uvOptionLabel = (formData.brand === 'CODIR' || formData.brand === 'ORUS') ? 'OPTION SUV (UV 400)' : 'OPTION IP+ (UV)';
   const isUvOptionMandatory = formData.materialIndex !== '1.50';
 
+  const safePricing = userSettings.pricing || { uniStock: { x: 2.5, b: 20 }, uniFab: { x: 3.0, b: 30 }, prog: { x: 3.2, b: 50 }, degressif: { x: 3.0, b: 40 }, interieur: { x: 3.0, b: 40 }, multifocal: { x: 3.0, b: 40 } };
+
+  // CALCUL PRIX FINAL
+  const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
+  const totalPair = lensPrice * 2;
+  const totalSecondPair = parseFloat(secondPairPrice || 0);
+  const totalRefund = parseFloat(client.reimbursement || 0);
+  const remainder = (totalPair + totalSecondPair) - totalRefund;
+
   return (
     <div className="min-h-screen flex flex-col text-slate-800 bg-slate-50 relative font-['Arial'] uppercase">
       {/* HEADER CLIENT & RESEAU */}
@@ -523,20 +518,20 @@ function App() {
         {/* SIDEBAR FILTRES */}
         <aside className={`bg-white border-r border-slate-200 flex flex-col overflow-y-auto z-20 transition-all duration-300 w-80 ${isSidebarOpen ? '' : 'hidden'}`}>
             <div className="p-6 space-y-6 pb-32">
-                {/* MARQUE */}
+                {/* MARQUE - GRILLE COMPACTE 3 COLONNES */}
                 <div>
                     <label className="text-[10px] font-bold text-slate-400 mb-2 block">MARQUE</label>
-                    <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-3 gap-1.5">
                         {brands.map(b => (
                             <button 
                                 key={b.id} 
                                 onClick={() => setFormData({...formData, brand: b.id})} 
-                                className={`w-full p-3 border rounded-lg flex items-center gap-3 transition-all ${formData.brand === b.id ? 'bg-slate-800 text-white border-slate-800' : 'hover:bg-slate-50 border-slate-200'}`}
+                                className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-14 ${formData.brand === b.id ? 'bg-slate-800 text-white border-slate-800' : 'hover:bg-slate-50 border-slate-200'}`}
                             >
-                                <div className="w-8 h-8 flex items-center justify-center bg-white rounded p-0.5 shadow-sm">
-                                    {b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}
+                                <div className="w-8 h-6 flex items-center justify-center mb-0.5">
+                                    {b.id === '' ? <span className={`font-bold text-[10px] ${formData.brand === '' ? 'text-white' : 'text-slate-800'}`}>TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}
                                 </div>
-                                <span className="text-xs font-bold">{b.label}</span>
+                                <span className="text-[8px] font-bold leading-none">{b.label}</span>
                             </button>
                         ))}
                     </div>
