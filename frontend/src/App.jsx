@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.15"; // Ajout Fonction Ping (Keep Alive Render)
+const APP_VERSION = "3.16"; // Ajout Données Démo Étendues
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -27,12 +27,17 @@ const DEFAULT_SETTINGS = {
     }
 };
 
-// --- DONNÉES DE DÉMO ---
+// --- DONNÉES DE DÉMO ÉTENDUES ---
 const DEMO_LENSES = [
   { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
   { id: 102, name: "VARILUX XR SERIES", brand: "ESSILOR", commercial_code: "VXR-16", type: "PROGRESSIF", index_mat: "1.60", design: "ULTRA", coating: "CRIZAL ROCK", purchase_price: 140, sellingPrice: 420, margin: 280, commercial_flow: "FAB" },
   { id: 103, name: "ID LIFESTYLE 3", brand: "HOYA", commercial_code: "IDL3-16", type: "PROGRESSIF", index_mat: "1.60", design: "CONFORT", coating: "HI-VISION LONGLIFE", purchase_price: 110, sellingPrice: 330, margin: 220, commercial_flow: "FAB" },
+  { id: 104, name: "BALANSIS", brand: "HOYA", commercial_code: "BAL-15", type: "PROGRESSIF", index_mat: "1.50", design: "STANDARD", coating: "SUPER HI-VISION", purchase_price: 75, sellingPrice: 225, margin: 150, commercial_flow: "FAB" },
+  { id: 105, name: "PRECISION SUPERB", brand: "ZEISS", commercial_code: "ZPS-16", type: "PROGRESSIF", index_mat: "1.60", design: "PREMIUM", coating: "DURAVISION PLATINUM", purchase_price: 125, sellingPrice: 375, margin: 250, commercial_flow: "FAB" },
+  { id: 106, name: "SMARTLIFE", brand: "ZEISS", commercial_code: "ZSL-16", type: "UNIFOCAL", index_mat: "1.60", design: "DIGITAL", coating: "DURAVISION BLUEPROTECT", purchase_price: 60, sellingPrice: 180, margin: 120, commercial_flow: "STOCK" },
+  { id: 107, name: "SEIKO BRILLIANCE", brand: "SEIKO", commercial_code: "SKB-167", type: "PROGRESSIF", index_mat: "1.67", design: "ULTRA", coating: "SRC-ULTRA", purchase_price: 155, sellingPrice: 465, margin: 310, commercial_flow: "FAB" },
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
+  { id: 109, name: "MONO 1.6 STOCK", brand: "CODIR", commercial_code: "M16-ST", type: "UNIFOCAL", index_mat: "1.60", design: "ECO", coating: "HMC", purchase_price: 12, sellingPrice: 65, margin: 53, commercial_flow: "STOCK" },
 ];
 
 // --- OUTILS COULEURS ---
@@ -364,7 +369,7 @@ function App() {
       .catch(err => {
         console.warn("Mode Hors Ligne / Erreur API", err); 
         setIsOnline(false); 
-        setLenses(MOCK_LENSES); 
+        setLenses(DEMO_LENSES); 
         setLoading(false);
       });
   };
@@ -552,7 +557,7 @@ function App() {
               <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL GOOGLE SHEETS</label><div className="flex gap-2"><input type="text" value={sheetsUrl} onChange={(e) => setSheetsUrl(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={triggerSync} disabled={syncLoading} className="bg-blue-600 text-white px-4 rounded text-xs font-bold">SYNCHRO</button></div>{syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}</div>
                <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
                <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
-               <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="grid grid-cols-1 gap-4"><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={userSettings.pricing?.uniStock?.x || 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={userSettings.pricing?.uniStock?.b || 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>{/* ... Autres ... */}</div></div>
+               <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="grid grid-cols-1 gap-4"><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={userSettings.pricing?.uniStock?.x || 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={userSettings.pricing?.uniStock?.b || 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div></div></div>
               <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
            </div>
         </div>
