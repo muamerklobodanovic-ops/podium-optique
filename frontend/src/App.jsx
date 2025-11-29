@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.12"; // Fix LocalStorage Crash (Safe Init)
+const APP_VERSION = "3.13"; // Debug Save Offer (Detailed Errors)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -170,8 +170,10 @@ function App() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
+
   const [stats, setStats] = useState({ total: 0, filtered: 0 });
 
+  // --- ETATS CLIENT & DEVIS ---
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 });
   const [secondPairPrice, setSecondPairPrice] = useState(0);
   
@@ -179,7 +181,6 @@ function App() {
   const [userSettings, setUserSettings] = useState(() => {
     try {
       const saved = localStorage.getItem("optique_user_settings");
-      // On fusionne avec les défauts pour éviter les valeurs manquantes
       return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
     } catch (e) {
       console.error("Erreur lecture settings, reset.", e);
@@ -221,14 +222,11 @@ function App() {
   const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
   const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
-  
-  // 1. RECHARGEMENT
-  useEffect(() => {
-    setFormData(prev => ({ ...prev, coating: '' }));
-    fetchData(); 
-  }, [formData.brand, formData.network, formData.type]); 
+  const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
+  const currentCoatings = codirCoatings;
 
-  // 2. FILTRAGE LOCAL
+  useEffect(() => { setFormData(prev => ({ ...prev, coating: '' })); fetchData(); }, [formData.brand, formData.network, formData.type]); 
+
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
@@ -237,9 +235,7 @@ function App() {
        if (formData.type) { const targetType = cleanText(formData.type); if (targetType.includes("INTERIEUR")) { workingList = workingList.filter(l => cleanText(l.type).includes("INTERIEUR")); } else { workingList = workingList.filter(l => cleanText(l.type).includes(targetType)); } }
 
        if (formData.network === 'HORS_RESEAU') {
-          // Récupération sécurisée des règles de prix
-          const pRules = userSettings.pricing || DEFAULT_PRICING_CONFIG;
-          
+          const pRules = userSettings.pricing || {};
           workingList = workingList.map(lens => {
              let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
              const lensType = cleanText(lens.type); const lensName = cleanText(lens.name); const flow = cleanText(lens.commercial_flow);
@@ -283,12 +279,45 @@ function App() {
   };
 
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
+  
   const saveOffer = () => {
-      if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
+      if (!selectedLens || !client.name) return alert("⚠️ Veuillez saisir le NOM du client et SÉLECTIONNER un verre pour valider le devis.");
       const totalPair = selectedLens.sellingPrice * 2;
       const remainder = (totalPair + secondPairPrice) - client.reimbursement;
-      const payload = { client: client, lens: selectedLens, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
-      axios.post(SAVE_URL, payload).then(res => alert("Sauvegardé !")).catch(err => alert("Erreur"));
+      
+      const payload = { 
+          client: client, 
+          lens: selectedLens, 
+          finance: { 
+              reimbursement: client.reimbursement, 
+              total: totalPair + secondPairPrice, 
+              remainder: remainder 
+          } 
+      };
+
+      // Logique d'envoi avec gestion d'erreur détaillée
+      console.log("Envoi au serveur:", SAVE_URL, payload);
+      
+      axios.post(SAVE_URL, payload)
+        .then(res => {
+            alert("✅ Dossier sauvegardé et chiffré avec succès !");
+            // Reset optionnel ou feedback visuel
+        })
+        .catch(err => {
+            console.error("Erreur Sauvegarde:", err);
+            // Message d'erreur intelligent
+            let msg = "Erreur technique inconnue.";
+            if (err.response) {
+                if (err.response.status === 404) msg = "Serveur introuvable (404). Vérifiez l'URL dans les paramètres.";
+                else if (err.response.status === 500) msg = "Erreur interne du serveur (500). Vérifiez les logs Backend.";
+                else msg = `Erreur serveur (${err.response.status}): ${JSON.stringify(err.response.data)}`;
+            } else if (err.request) {
+                msg = "Aucune réponse du serveur. Vérifiez votre connexion internet ou si le serveur Render est allumé.";
+            } else {
+                msg = err.message;
+            }
+            alert(`❌ Échec de la sauvegarde :\n${msg}`);
+        });
   };
 
   const triggerSync = () => { if (!sheetsUrl) return alert("URL?"); setSyncLoading(true); axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { fetchData(); }).finally(() => setSyncLoading(false)); };
@@ -311,6 +340,7 @@ function App() {
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
 
+  const safePricing = userSettings.pricing || { uniStock: { x: 2.5, b: 20 }, uniFab: { x: 3.0, b: 30 }, prog: { x: 3.2, b: 50 }, degressif: { x: 3.0, b: 40 }, interieur: { x: 3.0, b: 40 }, multifocal: { x: 3.0, b: 40 } };
   const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
   const totalPair = lensPrice * 2;
   const totalRefund = parseFloat(client.reimbursement || 0);
@@ -318,19 +348,6 @@ function App() {
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* BARRE IDENTITÉ MAGASIN (FIXE TOUT EN HAUT) */}
-      <div className="bg-slate-900 text-white px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
-          <div className="flex items-center gap-3">
-              {userSettings.shopLogo ? (
-                  <img src={userSettings.shopLogo} alt="Logo Magasin" className="h-8 w-auto object-contain rounded bg-white p-0.5"/>
-              ) : (
-                  <div className="h-8 w-8 bg-slate-700 rounded flex items-center justify-center"><Store className="w-4 h-4"/></div>
-              )}
-              <span>{userSettings.shopName}</span>
-          </div>
-          <span className="opacity-50">V{APP_VERSION}</span>
-      </div>
-
       {/* HEADER CLIENT & RESEAU */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -428,14 +445,33 @@ function App() {
           </div>
       )}
 
+      {/* MODALE HISTORIQUE */}
+      {showHistory && (
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}>
+              <div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
+                  <div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+                  <div className="grid grid-cols-1 gap-4">
+                      {savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+                          <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+                              <div className="flex items-center gap-4">
+                                  <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+                                  <div><div className="font-bold text-lg">{offer.client.name} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob} • DOSSIER DU {offer.date}</div></div>
+                              </div>
+                              <div className="text-right"><div className="font-bold text-slate-800">{offer.lens.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance.remainder).toFixed(2)} €</div></div>
+                              <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* MODALE SETTINGS */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
            <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
               <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
-              {/* ... (Contenu Settings identique v3.11) ... */}
                <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL GOOGLE SHEETS</label><div className="flex gap-2"><input type="text" value={sheetsUrl} onChange={(e) => setSheetsUrl(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={triggerSync} disabled={syncLoading} className="bg-blue-600 text-white px-4 rounded text-xs font-bold">SYNCHRO</button></div>{syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}</div>
-              {/* Identité / Thème / Prix... */}
                <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
                <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
                <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="grid grid-cols-1 gap-4"><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={userSettings.pricing?.uniStock?.x || 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={userSettings.pricing?.uniStock?.b || 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div></div></div>
