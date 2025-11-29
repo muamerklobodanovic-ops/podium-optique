@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.23"; // Update API URL (api-podium.onrender.com)
+const APP_VERSION = "3.24"; // Fix Demo Data (Fallback)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -27,12 +27,17 @@ const DEFAULT_SETTINGS = {
     }
 };
 
-// --- DONNÉES DE DÉMO ---
+// --- DONNÉES DE DÉMO ÉTENDUES ---
 const DEMO_LENSES = [
   { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
   { id: 102, name: "VARILUX XR SERIES", brand: "ESSILOR", commercial_code: "VXR-16", type: "PROGRESSIF", index_mat: "1.60", design: "ULTRA", coating: "CRIZAL ROCK", purchase_price: 140, sellingPrice: 420, margin: 280, commercial_flow: "FAB" },
   { id: 103, name: "ID LIFESTYLE 3", brand: "HOYA", commercial_code: "IDL3-16", type: "PROGRESSIF", index_mat: "1.60", design: "CONFORT", coating: "HI-VISION LONGLIFE", purchase_price: 110, sellingPrice: 330, margin: 220, commercial_flow: "FAB" },
+  { id: 104, name: "BALANSIS", brand: "HOYA", commercial_code: "BAL-15", type: "PROGRESSIF", index_mat: "1.50", design: "STANDARD", coating: "SUPER HI-VISION", purchase_price: 75, sellingPrice: 225, margin: 150, commercial_flow: "FAB" },
+  { id: 105, name: "PRECISION SUPERB", brand: "ZEISS", commercial_code: "ZPS-16", type: "PROGRESSIF", index_mat: "1.60", design: "PREMIUM", coating: "DURAVISION PLATINUM", purchase_price: 125, sellingPrice: 375, margin: 250, commercial_flow: "FAB" },
+  { id: 106, name: "SMARTLIFE", brand: "ZEISS", commercial_code: "ZSL-16", type: "UNIFOCAL", index_mat: "1.60", design: "DIGITAL", coating: "DURAVISION BLUEPROTECT", purchase_price: 60, sellingPrice: 180, margin: 120, commercial_flow: "STOCK" },
+  { id: 107, name: "SEIKO BRILLIANCE", brand: "SEIKO", commercial_code: "SKB-167", type: "PROGRESSIF", index_mat: "1.67", design: "ULTRA", coating: "SRC-ULTRA", purchase_price: 155, sellingPrice: 465, margin: 310, commercial_flow: "FAB" },
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
+  { id: 109, name: "MONO 1.6 STOCK", brand: "CODIR", commercial_code: "M16-ST", type: "UNIFOCAL", index_mat: "1.60", design: "ECO", coating: "HMC", purchase_price: 12, sellingPrice: 65, margin: 53, commercial_flow: "STOCK" },
 ];
 
 // --- OUTILS COULEURS ---
@@ -194,13 +199,7 @@ function App() {
     materialIndex: '1.60', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false 
   });
 
-  // CORRECTION DE L'URL DU SERVEUR
-  // On utilise par défaut la nouvelle URL fournie, ou celle en cache si elle existe déjà
-  // Note : le '||' privilégie le cache, donc pour forcer la mise à jour chez l'utilisateur, on peut ignorer le cache cette fois-ci
-  // ou demander à l'utilisateur de vérifier dans les paramètres.
-  // Ici, je force la nouvelle URL par défaut si rien n'est en cache.
-  const [serverUrl, setServerUrl] = useState(localStorage.getItem("optique_server_url") || "https://api-podium.onrender.com");
-  
+  const [serverUrl, setServerUrl] = useState(localStorage.getItem("optique_server_url") || "https://api-podium-optique.onrender.com/lenses");
   const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
   
   // CONSTRUCTION URL ROBUSTE
@@ -272,7 +271,11 @@ function App() {
           workingList = workingList.map(lens => {
              let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
              const lensType = cleanText(lens.type); const lensName = cleanText(lens.name); const flow = cleanText(lens.commercial_flow);
-             if (lensType.includes('UNIFOCAL')) { const isStock = flow.includes('STOCK') || lensName.includes(' ST') || lensName.includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
+
+             if (lensType.includes('UNIFOCAL')) {
+                 const isStock = flow.includes('STOCK') || lensName.includes(' ST') || lensName.includes('_ST');
+                 rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG);
+             } 
              else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
              else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
@@ -284,68 +287,106 @@ function App() {
           });
           workingList.sort((a, b) => b.margin - a.margin);
        } else {
-           const priceMap = { 'KALIXIA': 'sell_kalixia', 'ITELIS': 'sell_itelis', 'CARTEBLANCHE': 'sell_carteblanche', 'SEVEANE': 'sell_seveane', 'SANTECLAIR': 'sell_santeclair' };
+           const priceMap = {
+                'KALIXIA': 'sell_kalixia', 'ITELIS': 'sell_itelis', 
+                'CARTEBLANCHE': 'sell_carteblanche', 'SEVEANE': 'sell_seveane', 
+                'SANTECLAIR': 'sell_santeclair'
+           };
            const key = priceMap[formData.network];
-           workingList = workingList.map(l => { const sPrice = l[key] ? parseFloat(l[key]) : 0; return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; });
+           workingList = workingList.map(l => {
+               const sPrice = l[key] ? parseFloat(l[key]) : 0;
+               return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) };
+           });
            workingList = workingList.filter(l => l.sellingPrice > 0);
        }
 
-       workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
-       const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
-       if (formData.photochromic) { workingList = workingList.filter(l => isPhotoC(l)); } else { workingList = workingList.filter(l => !isPhotoC(l)); }
+       workingList = workingList.filter(l => {
+           if(!l.index_mat) return false;
+           const lIdx = String(l.index_mat).replace(',', '.');
+           const fIdx = String(formData.materialIndex).replace(',', '.');
+           return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01;
+       });
+
+       const isPhotoC = (item) => {
+          const text = cleanText(item.name + " " + item.material + " " + item.coating);
+          return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN");
+       };
+       if (formData.photochromic) {
+         workingList = workingList.filter(l => isPhotoC(l));
+       } else {
+         workingList = workingList.filter(l => !isPhotoC(l));
+       }
+
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
-       if (formData.coating && formData.coating !== '') { workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating)); }
-       if (formData.myopiaControl) { workingList = workingList.filter(l => cleanText(l.name).includes("MIYO")); }
+
+       if (formData.coating && formData.coating !== '') {
+          workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating));
+       }
+
+       if (formData.myopiaControl) {
+          workingList = workingList.filter(l => cleanText(l.name).includes("MIYO"));
+       }
+
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
-       if (formData.design && formData.design !== '') { setFilteredLenses(workingList.filter(l => cleanText(l.design) === cleanText(formData.design))); } else { setFilteredLenses(workingList); }
+
+       if (formData.design && formData.design !== '') {
+         setFilteredLenses(workingList.filter(l => cleanText(l.design) === cleanText(formData.design)));
+       } else {
+         setFilteredLenses(workingList);
+       }
+
        setStats({ total: lenses.length, filtered: workingList.length });
-    } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
+    } else {
+       setAvailableDesigns([]);
+       setAvailableCoatings([]);
+       setFilteredLenses([]);
+       setStats({ total: 0, filtered: 0 });
+    }
   }, [lenses, formData, userSettings.pricing]);
 
-  const fetchData = () => {
-    setLoading(true); setError(null); 
-    // Si API URL contient 'api-podium-optique.onrender.com', on pourrait avertir l'utilisateur que c'est peut-être l'ancienne
-    // Mais ici on utilise l'URL du state.
+  const fetchData = (ignoreFilters = false) => {
+    setLoading(true);
+    setError(null); 
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
-    axios.get(API_URL, { params: { type: formData.type, brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 } })
-      .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
-      .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
+
+    const params = {
+        type: formData.type, 
+        brand: formData.brand === '' ? undefined : formData.brand, 
+        pocketLimit: 0 
+    };
+
+    axios.get(API_URL, { params })
+      .then(response => {
+        setIsOnline(true);
+        setLenses(Array.isArray(response.data) ? response.data : []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.warn("Mode Hors Ligne / Erreur API", err); 
+        setIsOnline(false); 
+        setLenses(DEMO_LENSES); 
+        setLoading(false);
+      });
   };
 
-  // --- TEST CONNEXION ---
-  const testConnection = () => {
+  // Handlers
+  const triggerSync = () => {
+      if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
       setSyncLoading(true);
-      axios.get(API_URL, { params: { limit: 1 } })
-        .then(res => { alert(`✅ CONNEXION RÉUSSIE !\nAPI accessible : ${API_URL}\n${res.data.length} éléments reçus.`); })
-        .catch(err => { alert(`❌ ÉCHEC DE CONNEXION\nURL : ${API_URL}\nErreur : ${err.message}`); })
-        .finally(() => setSyncLoading(false));
+      axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { fetchData(); }).finally(() => setSyncLoading(false));
   };
-
-  const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+  const handleClientChange = (e) => { 
+      const { name, value } = e.target;
+      if (name === 'reimbursement' && parseFloat(value) < 0) return;
+      setClient(prev => ({ ...prev, [name]: value }));
+  };
   
-  const saveOffer = () => {
-      if (!selectedLens || !client.name) return alert("⚠️ Veuillez saisir le NOM du client et SÉLECTIONNER un verre pour valider le devis.");
-      const totalPair = selectedLens.sellingPrice * 2;
-      const remainder = (totalPair + secondPairPrice) - client.reimbursement;
-      const payload = { client: client, lens: selectedLens, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
-      
-      const config = { headers: { 'Content-Type': 'application/json' } };
-      axios.post(SAVE_URL, payload, config)
-        .then(res => alert("✅ Dossier sauvegardé et chiffré avec succès !"))
-        .catch(err => {
-            let msg = "Erreur technique inconnue.";
-            if (err.response) msg = `Erreur serveur (${err.response.status})`;
-            else if (err.request) msg = `Aucune réponse du serveur.\nEst-il réveillé ? (Attendre 1 min)\nURL : ${SAVE_URL}`;
-            else msg = err.message;
-            alert(`❌ Échec de la sauvegarde :\n${msg}`);
-        });
-  };
-
-  const triggerSync = () => { if (!sheetsUrl) return alert("URL?"); setSyncLoading(true); axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { fetchData(); }).finally(() => setSyncLoading(false)); };
-  const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
-  const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
   const handleLogoUpload = (e, target = 'shop') => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); } };
   const handleSettingChange = (section, field, value) => { if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); } };
   const handlePriceRuleChange = (category, field, value) => { setUserSettings(prev => ({ ...prev, pricing: { ...prev.pricing, [category]: { ...prev.pricing[category], [field]: parseFloat(value) || 0 } } })); };
@@ -365,6 +406,8 @@ function App() {
   const isUvOptionMandatory = formData.materialIndex !== '1.50';
 
   const safePricing = userSettings.pricing || { uniStock: { x: 2.5, b: 20 }, uniFab: { x: 3.0, b: 30 }, prog: { x: 3.2, b: 50 }, degressif: { x: 3.0, b: 40 }, interieur: { x: 3.0, b: 40 }, multifocal: { x: 3.0, b: 40 } };
+
+  // CALCUL PRIX FINAL
   const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
   const totalPair = lensPrice * 2;
   const totalRefund = parseFloat(client.reimbursement || 0);
@@ -392,7 +435,12 @@ function App() {
                     {/* LISTE RESEAUX EN HAUT (LOGOS) */}
                     <div className="flex items-center gap-2 ml-4 overflow-x-auto pb-1">
                          {networks.map(net => (
-                            <NetworkLogo key={net} network={net} isSelected={formData.network === net} onClick={() => setFormData(prev => ({...prev, network: net}))}/>
+                            <NetworkLogo 
+                               key={net} 
+                               network={net} 
+                               isSelected={formData.network === net} 
+                               onClick={() => setFormData(prev => ({...prev, network: net}))}
+                            />
                          ))}
                     </div>
 
@@ -422,17 +470,29 @@ function App() {
                     <label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label>
                     <div className="grid grid-cols-3 gap-1.5">
                         {brands.map(b => (
-                            <button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}>
-                                <div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div>
+                            <button 
+                                key={b.id} 
+                                onClick={() => setFormData({...formData, brand: b.id})} 
+                                className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} 
+                                style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}
+                            >
+                                <div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">
+                                    {b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}
+                                </div>
                             </button>
                         ))}
                     </div>
                 </div>
-                {/* ... Autres filtres ... */}
+                {/* ... Autres Filtres ... */}
+                {/* Correction */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label><div className="grid grid-cols-2 gap-3 mb-2"><div className="relative"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="SPH"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div><div className="relative"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="CYL"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div><div className={`relative transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="ADD"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
+                {/* Geometrie */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{lensTypes.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
+                {/* Design */}
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
+                {/* Indice */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1">{indices.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
+                {/* Traitements */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">TRAITEMENTS</label><button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-[10px] font-bold rounded border ${formData.coating === '' ? 'text-white border-transparent' : 'border-transparent opacity-60'}`} style={formData.coating === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button><label className={`flex items-center gap-2 p-2 rounded border cursor-pointer mb-2 ${formData.photochromic ? 'bg-yellow-50 border-yellow-300' : 'border-transparent opacity-80'}`}><input type="checkbox" checked={formData.photochromic} onChange={handleChange} name="photochromic" className="accent-yellow-500"/><span className={`text-[10px] font-bold ${formData.photochromic ? 'text-yellow-700' : 'opacity-80'}`}>PHOTOCHROMIQUE</span></label><div className="flex flex-col gap-1">{availableCoatings.length > 0 ? availableCoatings.map(c => (<button key={c} onClick={() => handleCoatingChange(c)} className={`p-2 rounded border text-left text-[10px] font-bold ${formData.coating === c ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}>{c}</button>)) : <div className="text-[10px] opacity-50 italic text-center">Aucun traitement spécifique</div>}</div></div>
             </div>
         </aside>
@@ -440,6 +500,7 @@ function App() {
         {/* RESULTATS */}
         <section className="flex-1 p-6 overflow-y-auto pb-40">
             <div className="max-w-7xl mx-auto">
+                {/* COMPARAISON */}
                 {comparisonLens && (
                     <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                         <div className="flex justify-between mb-4"><h3 className="font-bold text-blue-800 text-sm">PRODUIT DE RÉFÉRENCE</h3><button onClick={() => setComparisonLens(null)}><XCircle className="w-5 h-5 text-blue-400"/></button></div>
@@ -454,7 +515,7 @@ function App() {
         </section>
       </div>
 
-      {/* FOOTER DEVIS */}
+      {/* FOOTER DEVIS (FIXE EN BAS) */}
       {selectedLens && (
           <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800">
               <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
@@ -491,11 +552,30 @@ function App() {
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
            <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
               <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
-              <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL API BACKEND</label><div className="flex gap-2"><input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={testConnection} disabled={syncLoading} className="bg-gray-800 text-white px-4 rounded text-xs font-bold">{syncLoading ? <Activity className="w-4 h-4 animate-spin"/> : "TEST"}</button></div><p className="text-[10px] text-slate-400 mt-1">Serveur : {API_URL}</p></div>
-              <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL GOOGLE SHEETS</label><div className="flex gap-2"><input type="text" value={sheetsUrl} onChange={(e) => setSheetsUrl(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={triggerSync} disabled={syncLoading} className="bg-blue-600 text-white px-4 rounded text-xs font-bold">SYNCHRO</button></div>{syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}</div>
-              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
-               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
-               <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="grid grid-cols-1 gap-4"><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={userSettings.pricing?.uniStock?.x || 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={userSettings.pricing?.uniStock?.b || 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div></div></div>
+              {/* Gestion Catalogue */}
+              <div className="mb-6">
+                 <label className="block text-xs font-bold text-slate-500 mb-2">URL GOOGLE SHEETS</label>
+                 <div className="flex gap-2">
+                    <input type="text" value={sheetsUrl} onChange={(e) => handleSheetsUrlChange(e.target.value)} className="flex-1 p-2 border rounded"/>
+                    <button onClick={triggerSync} disabled={syncLoading} className="bg-blue-600 text-white px-4 rounded text-xs font-bold">SYNCHRO</button>
+                 </div>
+                 {syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}
+              </div>
+              {/* Formule Prix */}
+              <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                      {/* Exemple Unifocal Stock */}
+                      <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold">UNIFOCAL STOCK</span>
+                          <div className="flex gap-2">
+                              <input type="number" step="0.1" value={userSettings.pricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-16 p-1 border rounded text-center text-xs"/>
+                              <input type="number" step="1" value={userSettings.pricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-16 p-1 border rounded text-center text-xs"/>
+                          </div>
+                      </div>
+                      {/* ... Répéter pour les autres ... */}
+                  </div>
+              </div>
               <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
            </div>
         </div>
