@@ -2,18 +2,19 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Info
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, FileText
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "2.08"; // Version Stabilisée (Safe Render)
+const APP_VERSION = "2.10"; // Mise en page Correction (Labels + Dioptries)
 
-// --- OUTILS ---
+// --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
 
+// --- OUTILS TEXTE ---
 const cleanText = (text) => {
   if (text === null || text === undefined) return "";
   return String(text).toUpperCase().trim();
@@ -43,41 +44,9 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   );
 };
 
-// --- DONNÉES DE SECOURS ---
-const MOCK_LENSES = [
-  { 
-    id: 1, 
-    name: "MODE HORS LIGNE", 
-    brand: "CODIR", 
-    commercial_code: "MOCK-01",
-    type: "PROGRESSIF", 
-    index_mat: "1.60", 
-    design: "AUDACE", 
-    coating: "MISTRAL", 
-    purchase_price: 80, 
-    sellingPrice: 240, 
-    margin: 160,
-    commercial_flow: "STOCK"
-  },
-];
-
-// --- COMPOSANT CARTE VERRE (SÉCURISÉ) ---
+// --- COMPOSANT CARTE VERRE ---
 const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReference = false }) => {
   if (!lens) return null;
-
-  // Protection contre les valeurs nulles/undefined
-  const safeFloat = (val) => {
-    const num = parseFloat(val);
-    return isNaN(num) ? 0 : num;
-  };
-
-  const sPrice = safeFloat(lens.sellingPrice);
-  const pPrice = safeFloat(lens.purchase_price);
-  const mVal = safeFloat(lens.margin);
-  
-  const displayMargin = (sPrice > 0) 
-    ? ((mVal / sPrice) * 100).toFixed(0) 
-    : "0";
 
   const podiumStyles = [
     { border: "border-yellow-400 ring-4 ring-yellow-50 shadow-xl shadow-yellow-100", badge: "bg-yellow-400 text-white border-yellow-500", icon: <Trophy className="w-5 h-5 text-white" />, label: "MEILLEUR CHOIX" },
@@ -85,17 +54,23 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onCompare, isReferen
     { border: "border-slate-200 shadow-lg", badge: "bg-slate-100 text-slate-600 border-slate-200", icon: <Star className="w-5 h-5 text-orange-400" />, label: "PREMIUM" }
   ];
 
-  // Sélection du style (avec fallback si l'index dépasse)
-  const styleIndex = index !== undefined && index < 3 ? index : 1;
-  const currentStyle = isReference 
+  const style = isReference 
     ? { border: "border-blue-500 ring-4 ring-blue-50 shadow-xl", badge: "bg-blue-600 text-white", icon: <ArrowRightLeft className="w-5 h-5"/>, label: "RÉFÉRENCE" }
-    : podiumStyles[styleIndex];
+    : (podiumStyles[index !== undefined && index < 3 ? index : 1]);
+
+  const sPrice = parseFloat(lens.sellingPrice || 0);
+  const pPrice = parseFloat(lens.purchase_price || 0);
+  const mVal = parseFloat(lens.margin || 0);
+  
+  const displayMargin = (sPrice > 0) 
+    ? ((mVal / sPrice) * 100).toFixed(0) 
+    : "0";
 
   return (
-    <div className={`group bg-white rounded-3xl border-2 transition-all duration-300 overflow-hidden relative flex flex-col ${currentStyle.border} ${isReference ? 'scale-100' : 'hover:-translate-y-2'}`}>
+    <div className={`group bg-white rounded-3xl border-2 transition-all duration-300 overflow-hidden relative flex flex-col ${style.border} ${isReference ? 'scale-100' : 'hover:-translate-y-2'}`}>
         <div className="absolute top-5 right-5 z-10">
-          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold border shadow-sm ${currentStyle.badge}`}>
-            {currentStyle.icon} {currentStyle.label}
+          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold border shadow-sm ${style.badge}`}>
+            {style.icon} {style.label}
           </span>
         </div>
 
@@ -158,15 +133,15 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showMargins, setShowMargins] = useState(false);
   const [comparisonLens, setComparisonLens] = useState(null);
-  
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
 
-  const defaultPricingConfig = { x: 2.5, b: 20 };
   const [stats, setStats] = useState({ total: 0, filtered: 0 });
+
+  const defaultPricingConfig = { x: 2.5, b: 20 };
   
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
@@ -232,7 +207,6 @@ function App() {
   };
 
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
-
   const brands = [ 
     { id: '', label: 'TOUTES' },
     { id: 'HOYA', label: 'HOYA' }, 
@@ -249,10 +223,8 @@ function App() {
     { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" }
   ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
-  
-  // Données initiales pour le rendu (sera écrasé par le fetch)
   const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
-  const currentCoatings = codirCoatings; 
+  const currentCoatings = codirCoatings; // Fallback Visuel
 
   // 1. RECHARGEMENT
   useEffect(() => {
@@ -301,7 +273,6 @@ function App() {
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || defaultPricingConfig; }
              else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || defaultPricingConfig; }
 
-             // SECURISE : Si prix null, on prend 0
              const pPrice = parseFloat(lens.purchase_price || 0);
              const newSelling = (pPrice * rule.x) + rule.b;
              const newMargin = newSelling - pPrice;
@@ -310,20 +281,16 @@ function App() {
           });
           workingList.sort((a, b) => b.margin - a.margin);
        } else {
-           // Récupération prix réseau
            const priceMap = {
                 'KALIXIA': 'sell_kalixia', 'ITELIS': 'sell_itelis', 
                 'CARTEBLANCHE': 'sell_carteblanche', 'SEVEANE': 'sell_seveane', 
                 'SANTECLAIR': 'sell_santeclair'
            };
            const key = priceMap[formData.network];
-           
            workingList = workingList.map(l => {
                const sPrice = l[key] ? parseFloat(l[key]) : 0;
                return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) };
            });
-
-           // Filtre prix > 0 pour les réseaux
            workingList = workingList.filter(l => l.sellingPrice > 0);
        }
 
@@ -379,16 +346,9 @@ function App() {
        setStats({ total: 0, filtered: 0 });
     }
   }, [
-    lenses, 
-    formData.design, 
-    formData.brand, 
-    formData.network, 
-    formData.photochromic, 
-    formData.coating, 
-    formData.materialIndex, 
-    formData.myopiaControl,
-    formData.type, 
-    userSettings.pricing
+    lenses, formData.design, formData.brand, formData.network, 
+    formData.photochromic, formData.coating, formData.materialIndex, 
+    formData.myopiaControl, formData.type, userSettings.pricing
   ]);
 
   const fetchData = (ignoreFilters = false) => {
@@ -414,7 +374,6 @@ function App() {
       });
   };
 
-  // HANDLERS
   const triggerSync = () => {
       if (!sheetsUrl) return alert("Veuillez entrer une URL Google Sheets");
       setSyncLoading(true);
@@ -465,7 +424,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col text-slate-800 bg-slate-50 relative font-['Arial'] uppercase">
-      {/* Header & Main identiques (Structure ok) */}
+      {/* Header & Main (Structure inchangée) */}
       <header className="bg-white border-b border-slate-200 px-6 py-6 flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-6">
           <div className={`${currentTheme.primary} p-3 rounded-xl shadow-lg ${currentTheme.shadow} transition-colors duration-300`}>
@@ -538,15 +497,31 @@ function App() {
             </div>
             <hr className="border-slate-100" />
             
-            {/* CORRECTION */}
+            {/* CORRECTION - MISE EN PAGE AVEC LABELS & DIOPTRIES */}
             <div className="space-y-4">
                <label className="text-sm font-bold text-slate-500 tracking-wider flex items-center gap-2"><Glasses className="w-5 h-5" /> CORRECTION</label>
                <div className="grid grid-cols-2 gap-4">
-                  <input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} className="w-full p-3 border rounded-xl font-bold text-xl" placeholder="SPH"/>
-                  <input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} className="w-full p-3 border rounded-xl font-bold text-xl" placeholder="CYL"/>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 mb-1 block ml-1">SPHÈRE</label>
+                    <div className="relative">
+                        <input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} className="w-full p-3 border rounded-xl font-bold text-xl pr-8 text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" placeholder="0.00"/>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">D</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 mb-1 block ml-1">CYLINDRE</label>
+                    <div className="relative">
+                        <input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} className="w-full p-3 border rounded-xl font-bold text-xl pr-8 text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" placeholder="0.00"/>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">D</span>
+                    </div>
+                  </div>
                </div>
-               <div className={`transition-opacity ${isAdditionDisabled ? 'opacity-50' : 'opacity-100'}`}>
-                  <input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} disabled={isAdditionDisabled} className="w-full p-3 border rounded-xl font-bold text-xl mt-2" placeholder="ADD"/>
+               <div className={`transition-opacity duration-300 ${isAdditionDisabled ? 'opacity-50' : 'opacity-100'}`}>
+                  <label className="text-[10px] font-bold text-slate-400 mb-1 block ml-1">ADDITION {isAdditionDisabled && "(N/A)"}</label>
+                  <div className="relative">
+                      <input type="number" step="0.25" min="0.00" max="4.00" name="addition" value={formData.addition} onChange={handleChange} disabled={isAdditionDisabled} className="w-full p-3 border rounded-xl font-bold text-xl pr-8 text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" placeholder="0.00"/>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">D</span>
+                  </div>
                </div>
             </div>
             <hr className="border-slate-100" />
@@ -559,6 +534,7 @@ function App() {
                   <button key={type.id} onClick={() => handleTypeChange(type.id)} className={`w-full py-3 px-4 text-xs font-bold rounded-lg transition-all text-left border ${formData.type === type.id ? `bg-white ${currentTheme.text} shadow-sm border-slate-200` : 'border-transparent text-slate-500 hover:bg-slate-100'}`}>{type.label}</button>
                 ))}
               </div>
+              
               {availableDesigns.length > 0 && (
                 <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-2"><BoxSelect className="w-3 h-3"/> DESIGN / GAMME</label>
@@ -587,7 +563,7 @@ function App() {
                 {indices.map(idx => {
                   const isDisabled = formData.myopiaControl && idx !== '1.58';
                   return (
-                    <button key={idx} disabled={isDisabled} onClick={() => setFormData({...formData, materialIndex: idx})} className={`flex-1 py-3 text-xs font-bold rounded-lg ${formData.materialIndex === idx ? `bg-white ${currentTheme.text} shadow-sm ring-1 ring-black/5` : isDisabled ? 'text-slate-300 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-200/50'}`}>{idx}</button>
+                    <button key={idx} disabled={isDisabled} onClick={() => setFormData({...formData, materialIndex: idx})} className={`flex-1 py-3 text-xs font-bold rounded-lg transition-all duration-200 ${formData.materialIndex === idx ? `bg-white ${currentTheme.text} shadow-sm ring-1 ring-black/5` : isDisabled ? 'text-slate-300 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-200/50'}`}>{idx}</button>
                   )
                 })}
               </div>
@@ -619,7 +595,14 @@ function App() {
                 )) : <div className="text-xs text-slate-400 text-center p-4">Aucun traitement disponible</div>}
               </div>
             </div>
-            <div className="pt-4 pb-8"></div>
+            
+            {/* BOUTON DEVIS FIXE EN BAS DE LA SIDEBAR */}
+            <div className="sticky bottom-0 left-0 w-full p-6 bg-white border-t border-slate-100 z-30">
+                <button className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-3 active:scale-95">
+                    <FileText className="w-6 h-6" />
+                    CRÉER UN DEVIS
+                </button>
+            </div>
           </div>
         </aside>
 
@@ -637,7 +620,6 @@ function App() {
 
         <section className="flex-1 p-8 overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto">
-             {/* BARRE DIAGNOSTIC */}
              <div className="mb-4 flex items-center gap-4 text-[10px] font-bold text-slate-300 uppercase tracking-widest">
                 <span>REÇUS: {stats.total}</span>
                 <span>AFFICHÉS: {stats.filtered}</span>
@@ -682,10 +664,12 @@ function App() {
         </section>
 
         {showSettings && (
-           <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
+          <div 
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" 
+            onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}
+          >
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col border-2 border-slate-100">
-               {/* ... Settings Content identique ... */}
-               <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <div className="px-8 py-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-4 text-slate-800">
                   <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm"><Settings className="w-6 h-6 text-slate-600" /></div>
                   <div><h3 className="font-bold text-xl leading-tight">CONFIGURATION</h3><p className="text-xs text-slate-500 font-bold">PERSONNALISATION & LIMITES</p><p className="text-[10px] text-slate-400 mt-1">VERSION {APP_VERSION}</p></div>
@@ -693,33 +677,106 @@ function App() {
                 <button onClick={() => setShowSettings(false)} className="p-3 hover:bg-slate-200 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
               </div>
               <div className="p-8 overflow-y-auto">
-                 {/* ... (Contenu settings inchangé) ... */}
-                 <div className="space-y-10">
-                    <div className="space-y-5">
-                        <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">GESTION CATALOGUE</h4>
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                            <label className="block text-xs font-bold text-slate-600 mb-2">LIEN GOOGLE SHEETS</label>
-                            <div className="flex gap-2">
-                               <input type="text" value={sheetsUrl} onChange={(e) => handleSheetsUrlChange(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"/>
-                              <button onClick={triggerSync} disabled={syncLoading || !sheetsUrl} className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">{syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>} SYNCHRO</button>
+                {/* ... Contenu des Paramètres (identique) ... */}
+                <div className="space-y-10">
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">GESTION CATALOGUE</h4>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <label className="block text-xs font-bold text-slate-600 mb-2">LIEN GOOGLE SHEETS (PUBLIÉ WEB CSV)</label>
+                        <div className="flex gap-2">
+                           <input 
+                            type="text" 
+                            value={sheetsUrl} 
+                            onChange={(e) => handleSheetsUrlChange(e.target.value)} 
+                            placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" 
+                            className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-bold text-slate-800 text-xs focus:ring-2 outline-none"
+                          />
+                          <button onClick={triggerSync} disabled={syncLoading || !sheetsUrl} className="bg-blue-600 text-white px-4 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+                             {syncLoading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>} SYNCHRO
+                          </button>
+                        </div>
+                        {syncStatus && (<div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{syncStatus.msg}</div>)}
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">CONNEXION SERVEUR</h4>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">URL DE L'API (BACKEND)</label>
+                        <div className="relative">
+                          <input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://api-podium-..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
+                          <Server className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4">
+                        <label className="text-xs font-bold text-slate-600">COULEUR PERSONNALISÉE :</label>
+                        <div className="relative">
+                            <input type="color" value={userSettings.customColor} onChange={(e) => {
+                                handleSettingChange('branding', 'customColor', e.target.value);
+                                handleSettingChange('branding', 'themeColor', 'custom');
+                            }} className="h-8 w-8 rounded cursor-pointer border-0 p-0" />
+                        </div>
+                        <span className="text-xs text-slate-400">(Cliquez pour utiliser la pipette)</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">FORMULE PRIX DE VENTE (MARCHÉ LIBRE)</h4>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">DÉGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.degressif.x} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.degressif.b} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">INTÉRIEUR</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.interieur.x} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.interieur.b} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                      <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">MULTIFOCAL</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.multifocal.x} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.multifocal.b} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">IDENTITÉ DU POINT DE VENTE</h4>
+                    <div className="grid grid-cols-1 gap-6">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">NOM DU MAGASIN</label>
+                        <div className="relative">
+                          <input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} placeholder="EX: MON OPTICIEN" className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 outline-none"/>
+                          <Store className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-2">LOGO DU MAGASIN</label>
+                        <div className="flex items-center gap-4">
+                          {userSettings.shopLogo && (
+                            <div className="h-16 w-16 relative bg-white rounded-xl border border-slate-200 p-2 flex-shrink-0 shadow-sm">
+                               <img src={userSettings.shopLogo} alt="Logo" className="h-full w-full object-contain" />
+                               <button onClick={() => setUserSettings(prev => ({...prev, shopLogo: ""}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-sm transition-colors"><X className="w-3 h-3" /></button>
                             </div>
-                            {syncStatus && (<div className={`mt-3 text-xs font-bold p-2 rounded ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{syncStatus.msg}</div>)}
+                          )}
+                          <div className="relative flex-1">
+                            <div className="relative">
+                               <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"/>
+                               <div className="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-200 border-dashed rounded-xl text-slate-500 text-xs font-bold flex items-center hover:bg-slate-100 transition-colors uppercase">{userSettings.shopLogo ? "CHANGER LE FICHIER..." : "CLIQUEZ POUR CHOISIR UN FICHIER..."}</div>
+                               <Upload className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                            </div>
+                          </div>
                         </div>
+                      </div>
                     </div>
-                    <div className="space-y-5">
-                        <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">PRIX MARCHÉ LIBRE</h4>
-                        <div className="space-y-2">
-                           <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL STOCK</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniStock.x} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniStock.b} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                           <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">UNIFOCAL FAB</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.uniFab.x} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.uniFab.b} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                           <div className="grid grid-cols-3 gap-4 items-center"><label className="text-xs font-bold text-slate-600">PROGRESSIF</label><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">COEFF:</span><input type="number" step="0.1" value={safePricing.prog.x} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-slate-400">FIXE €:</span><input type="number" step="1" value={safePricing.prog.b} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-full p-2 border rounded text-center font-bold"/></div></div>
-                           {/* ... autres ... */}
-                        </div>
+                  </div>
+                  <div className="space-y-5">
+                    <h4 className="font-bold text-sm text-slate-400 border-b-2 border-slate-100 pb-2 mb-4">THÈME & COULEURS</h4>
+                    <div className="grid grid-cols-5 gap-3">
+                      {Object.keys(themes).map(colorKey => (
+                        <button key={colorKey} onClick={() => handleSettingChange('branding', 'themeColor', colorKey)} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${userSettings.themeColor === colorKey ? `border-${colorKey}-500 bg-${colorKey}-50` : 'border-transparent hover:bg-slate-50'}`}>
+                          <div className={`w-10 h-10 rounded-full ${themes[colorKey].primary} shadow-sm ring-4 ring-white`}></div>
+                          <span className="text-[10px] font-bold text-slate-500">{themes[colorKey].name}</span>
+                        </button>
+                      ))}
                     </div>
-                 </div>
+                  </div>
+                </div>
               </div>
               <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-4">
-                  <button onClick={() => setShowSettings(false)} className="px-6 py-3 font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors text-sm">FERMER</button>
-                  <button onClick={() => { setShowSettings(false); fetchData(); }} className={`px-8 py-3 ${currentTheme.primary} ${currentTheme.hover} text-white font-bold rounded-xl shadow-lg ${currentTheme.shadow} transition-transform active:scale-95 flex items-center gap-2 text-sm`}><Save className="w-5 h-5" />SAUVEGARDER</button>
+                <button onClick={() => setShowSettings(false)} className="px-6 py-3 font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors text-sm">FERMER</button>
+                <button onClick={() => { setShowSettings(false); fetchData(); }} className={`px-8 py-3 ${currentTheme.primary} ${currentTheme.hover} text-white font-bold rounded-xl shadow-lg ${currentTheme.shadow} transition-transform active:scale-95 flex items-center gap-2 text-sm`}><Save className="w-5 h-5" />SAUVEGARDER</button>
               </div>
             </div>
           </div>
