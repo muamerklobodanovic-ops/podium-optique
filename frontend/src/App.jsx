@@ -6,10 +6,28 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.02"; // Fix Crash 'networks' undefined
+const APP_VERSION = "3.04"; // Fix Crash 'networks' undefined
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
+
+// --- DONNÉES DE SECOURS (RÉTABLIES) ---
+const MOCK_LENSES = [
+  { 
+    id: 1, 
+    name: "MODE HORS LIGNE", 
+    brand: "CODIR", 
+    commercial_code: "MOCK-01",
+    type: "PROGRESSIF", 
+    index_mat: "1.60", 
+    design: "AUDACE", 
+    coating: "MISTRAL", 
+    purchase_price: 80, 
+    sellingPrice: 240, 
+    margin: 160, 
+    commercial_flow: "STOCK"
+  },
+];
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -101,7 +119,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
 
   return (
     <div 
-      onClick={() => onSelect(lens)}
+      onClick={() => onSelect && onSelect(lens)}
       className={`group bg-white rounded-3xl border-2 p-6 flex flex-col relative cursor-pointer transition-all duration-300 ${activeStyle.border} ${!isSelected ? 'hover:-translate-y-2' : ''}`}
     >
         <div className="absolute top-5 right-5 z-10">
@@ -165,6 +183,7 @@ function App() {
   const [showMargins, setShowMargins] = useState(false);
   const [selectedLens, setSelectedLens] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [comparisonLens, setComparisonLens] = useState(null); // Ajout manquant
 
   // Synchro
   const [syncLoading, setSyncLoading] = useState(false);
@@ -241,16 +260,28 @@ function App() {
   };
 
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
-  const brands = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
+  const brands = [ 
+    { id: '', label: 'TOUTES' },
+    { id: 'HOYA', label: 'HOYA' }, 
+    { id: 'ZEISS', label: 'ZEISS' }, 
+    { id: 'SEIKO', label: 'SEIKO' }, 
+    { id: 'CODIR', label: 'CODIR' }, 
+    { id: 'ORUS', label: 'ORUS' } 
+  ];
   
-  // LISTE RESEAUX MANQUANTE AJOUTEE ICI
+  // LISTE RÉSEAUX (DÉFINIE ICI POUR ÉVITER LE CRASH)
   const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
 
-  const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" } ];
+  const lensTypes = [ 
+    { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
+    { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
+    { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, 
+    { id: 'MULTIFOCAL', label: 'MULTIFOCAL' },
+    { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" }
+  ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
-  
   const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
-  const currentCoatings = codirCoatings; 
+  const currentCoatings = codirCoatings; // Fallback
 
   // 1. RECHARGEMENT
   useEffect(() => {
@@ -260,8 +291,10 @@ function App() {
 
   // 2. FILTRAGE LOCAL
   useEffect(() => {
-    if (lenses && lenses.length > 0) {
-       let workingList = lenses.map(l => ({...l}));
+    // Protection anti-crash : si lenses est null, on utilise []
+    const safeLenses = lenses || [];
+    if (safeLenses.length > 0) {
+       let workingList = safeLenses.map(l => ({...l}));
 
        if (formData.brand && formData.brand !== '') {
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand));
@@ -361,7 +394,7 @@ function App() {
   const fetchData = (ignoreFilters = false) => {
     setLoading(true);
     setError(null); 
-    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses([]); setLoading(false); return; }
+    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(MOCK_LENSES); setLoading(false); return; }
 
     const params = {
         type: formData.type, 
@@ -377,7 +410,7 @@ function App() {
       })
       .catch(err => {
         console.error("Erreur connexion:", err);
-        setIsOnline(false); setLenses([]); setLoading(false);
+        setIsOnline(false); setLenses(MOCK_LENSES); setLoading(false);
       });
   };
 
