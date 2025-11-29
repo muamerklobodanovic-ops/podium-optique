@@ -6,12 +6,12 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.05"; // Persistance Identité & Paramètres
+const APP_VERSION = "3.06"; // Handled Network Error & Safe Fallback
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
 
-// --- DONNÉES DE SECOURS (RÉTABLIES) ---
+// --- DONNÉES DE SECOURS ---
 const MOCK_LENSES = [
   { 
     id: 1, 
@@ -26,6 +26,20 @@ const MOCK_LENSES = [
     sellingPrice: 240, 
     margin: 160, 
     commercial_flow: "STOCK"
+  },
+  { 
+    id: 2, 
+    name: "EXEMPLE PROGRESSIF", 
+    brand: "HOYA", 
+    commercial_code: "TEST-02",
+    type: "PROGRESSIF", 
+    index_mat: "1.67", 
+    design: "INFINI", 
+    coating: "QUATTRO UV", 
+    purchase_price: 110, 
+    sellingPrice: 310, 
+    margin: 200, 
+    commercial_flow: "FAB"
   },
 ];
 
@@ -416,8 +430,10 @@ function App() {
         setLoading(false);
       })
       .catch(err => {
-        console.error("Erreur connexion:", err);
-        setIsOnline(false); setLenses(MOCK_LENSES); setLoading(false);
+        console.warn("Mode Hors Ligne / Erreur API", err); // Warn au lieu d'error pour éviter la panique
+        setIsOnline(false); 
+        setLenses(MOCK_LENSES); // Fallback sécurisé
+        setLoading(false);
       });
   };
 
@@ -453,15 +469,6 @@ function App() {
   const isUvOptionVisible = ['CODIR', 'HOYA', 'SEIKO', 'ORUS'].includes(formData.brand);
   const uvOptionLabel = (formData.brand === 'CODIR' || formData.brand === 'ORUS') ? 'OPTION SUV (UV 400)' : 'OPTION IP+ (UV)';
   const isUvOptionMandatory = formData.materialIndex !== '1.50';
-
-  const safePricing = userSettings.pricing || { uniStock: { x: 2.5, b: 20 }, uniFab: { x: 3.0, b: 30 }, prog: { x: 3.2, b: 50 }, degressif: { x: 3.0, b: 40 }, interieur: { x: 3.0, b: 40 }, multifocal: { x: 3.0, b: 40 } };
-
-  // CALCUL PRIX FINAL
-  const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
-  const totalPair = lensPrice * 2;
-  const totalSecondPair = parseFloat(secondPairPrice || 0);
-  const totalRefund = parseFloat(client.reimbursement || 0);
-  const remainder = (totalPair + totalSecondPair) - totalRefund;
 
   return (
     <div className="min-h-screen flex flex-col text-slate-800 bg-slate-50 relative font-['Arial'] uppercase">
@@ -519,10 +526,17 @@ function App() {
                 {/* MARQUE */}
                 <div>
                     <label className="text-[10px] font-bold text-slate-400 mb-2 block">MARQUE</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-2">
                         {brands.map(b => (
-                            <button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`p-2 border rounded-lg text-[10px] font-bold ${formData.brand === b.id ? 'bg-slate-800 text-white' : 'hover:bg-slate-50'}`}>
-                                {b.label}
+                            <button 
+                                key={b.id} 
+                                onClick={() => setFormData({...formData, brand: b.id})} 
+                                className={`w-full p-3 border rounded-lg flex items-center gap-3 transition-all ${formData.brand === b.id ? 'bg-slate-800 text-white border-slate-800' : 'hover:bg-slate-50 border-slate-200'}`}
+                            >
+                                <div className="w-8 h-8 flex items-center justify-center bg-white rounded p-0.5 shadow-sm">
+                                    {b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}
+                                </div>
+                                <span className="text-xs font-bold">{b.label}</span>
                             </button>
                         ))}
                     </div>
