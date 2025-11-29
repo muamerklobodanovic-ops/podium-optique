@@ -9,14 +9,13 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
-import openpyxl  # Indispensable pour lire les fichiers .xlsx
+import openpyxl
 
 # 1. Configuration
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Clé de chiffrement pour les données clients (GDPR)
-# En prod, cette clé doit être fixée dans les variables d'environnement
+# Clé de chiffrement (Générée si absente, à fixer dans les variables d'env Render pour la prod)
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", Fernet.generate_key().decode())
 cipher = Fernet(ENCRYPTION_KEY.encode())
 
@@ -39,26 +38,27 @@ if DATABASE_URL:
         engine = create_engine(DATABASE_URL)
         
         with engine.begin() as conn:
-            # Table Catalogue (Verres)
+            # Table Catalogue (Verres) - Structure A-T Complète
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS lenses (
                     id SERIAL PRIMARY KEY,
-                    brand VARCHAR(50),
-                    commercial_code VARCHAR(50),
-                    name VARCHAR(200),
-                    geometry VARCHAR(100),
-                    design VARCHAR(100),
-                    index_mat VARCHAR(20),
-                    material VARCHAR(100),
-                    coating VARCHAR(100),
-                    commercial_flow VARCHAR(50),
-                    purchase_price DECIMAL(10,2),
-                    selling_price DECIMAL(10,2),
-                    sell_kalixia DECIMAL(10,2),
-                    sell_itelis DECIMAL(10,2),
-                    sell_carteblanche DECIMAL(10,2),
-                    sell_seveane DECIMAL(10,2),
-                    sell_santeclair DECIMAL(10,2)
+                    brand VARCHAR(50),             -- MARQUE
+                    edi_code VARCHAR(50),          -- CODE EDI
+                    commercial_code VARCHAR(50),   -- CODE COMMERCIAL
+                    name VARCHAR(200),             -- MODELE COMMERCIAL
+                    geometry VARCHAR(100),         -- GÉOMETRIE
+                    design VARCHAR(100),           -- DESIGN
+                    index_mat VARCHAR(20),         -- INDICE
+                    material VARCHAR(100),         -- MATIERE
+                    coating VARCHAR(100),          -- TRAITEMENT
+                    commercial_flow VARCHAR(50),   -- FLUX COMMERCIAL
+                    color VARCHAR(100),            -- COULEUR
+                    purchase_price DECIMAL(10,2),  -- PRIX 2*NETS
+                    sell_kalixia DECIMAL(10,2),    -- KALIXIA
+                    sell_itelis DECIMAL(10,2),     -- ITELIS
+                    sell_carteblanche DECIMAL(10,2), -- CARTE BLANCHE
+                    sell_seveane DECIMAL(10,2),    -- SEVEANE
+                    sell_santeclair DECIMAL(10,2)  -- SANTECLAIRE
                 );
             """))
             
@@ -72,7 +72,7 @@ if DATABASE_URL:
                     financials JSONB
                 );
             """))
-            print("✅ Base de données prête.")
+            print("✅ Base de données prête (Structure Complète).")
             
     except Exception as e:
         print(f"❌ ERREUR CRITIQUE BDD: {e}")
@@ -80,11 +80,13 @@ if DATABASE_URL:
 
 # --- OUTILS ---
 def encrypt_dict(data: dict) -> str:
-    return cipher.encrypt(json.dumps(data).encode()).decode()
+    json_str = json.dumps(data)
+    return cipher.encrypt(json_str.encode()).decode()
 
 def decrypt_dict(token: str) -> dict:
     try:
-        return json.loads(cipher.decrypt(token.encode()).decode())
+        json_str = cipher.decrypt(token.encode()).decode()
+        return json.loads(json_str)
     except:
         return {"name": "Donnée", "firstname": "Illisible", "dob": "?"}
 
@@ -99,10 +101,12 @@ def clean_index(value):
     match = re.search(r"\d+\.?\d*", str(value).replace(',', '.'))
     return "{:.2f}".format(float(match.group(0))) if match else "1.50"
 
-# Fonction pour trouver l'index d'une colonne par son nom
-def get_col_idx(headers, candidates):
+def clean_text(value):
+    return str(value).strip() if value else ""
+
+def get_col_index(headers, candidates):
     for i, h in enumerate(headers):
-        if h and any(c.upper() in str(h).upper() for c in candidates):
+        if h and any(c.upper() == str(h).upper().strip() for c in candidates):
             return i
     return -1
 
@@ -116,7 +120,7 @@ class OfferRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "version": "3.27", "message": "API Optique opérationnelle"}
+    return {"status": "online", "version": "3.30", "message": "API Optique opérationnelle"}
 
 # 1. Sauvegarde Dossier
 @app.post("/offers")
@@ -150,125 +154,143 @@ def get_offers():
         print(f"Get Error: {e}")
         return []
 
-# 3. UPLOAD CATALOGUE EXCEL (NOUVEAU)
+# 3. UPLOAD CATALOGUE EXCEL (Mise à jour BDD)
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
     if not engine: raise HTTPException(status_code=500, detail="Pas de connexion BDD")
     
     print(f"🚀 Réception du fichier : {file.filename}")
+    temp_file = f"temp_{file.filename}"
     
     try:
-        # Sauvegarde temporaire du fichier
-        temp_filename = f"temp_{file.filename}"
-        with open(temp_filename, "wb") as buffer:
+        # Sauvegarde temporaire
+        with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # Lecture du fichier Excel
-        wb = openpyxl.load_workbook(temp_filename, data_only=True)
+        # Lecture Excel
+        wb = openpyxl.load_workbook(temp_file, data_only=True)
         lenses_to_insert = []
         
-        # Parcours des onglets (1 onglet = 1 marque)
+        # Parcours des onglets (1 onglet = 1 marque potentielle)
         for sheet_name in wb.sheetnames:
             sheet = wb[sheet_name]
-            current_brand = sheet_name.strip().upper() # Nom de l'onglet = Marque
-            print(f"   🔹 Traitement onglet : {current_brand}")
+            sheet_brand = sheet_name.strip().upper()
+            print(f"   🔹 Traitement onglet : {sheet_brand}")
             
             rows = list(sheet.iter_rows(values_only=True))
             if not rows: continue
             
-            headers = rows[0] # Première ligne = En-têtes
+            headers = rows[0]
             
-            # Repérage des colonnes
-            col_modele = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE']) # D
-            col_code = get_col_idx(headers, ['CODE', 'EDI']) # C
-            col_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE']) # F
-            col_design = get_col_idx(headers, ['DESIGN', 'GAMME']) # G
-            col_indice = get_col_idx(headers, ['INDICE']) # H
-            col_mat = get_col_idx(headers, ['MATIERE']) # I
-            col_coat = get_col_idx(headers, ['TRAITEMENT']) # J
-            col_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL']) # K
-            col_buy = get_col_idx(headers, ['PRIX 2*NETS', '2*NETS', 'ACHAT']) # M
+            # Mapping des colonnes (Strict selon demande)
+            c_marque = get_col_index(headers, ['MARQUE', 'FABRICANT'])
+            c_edi = get_col_index(headers, ['CODE EDI'])
+            c_code = get_col_index(headers, ['CODE COMMERCIAL'])
+            c_name = get_col_index(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE'])
+            c_geo = get_col_index(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE'])
+            c_design = get_col_index(headers, ['DESIGN', 'GAMME', 'FAMILLE'])
+            c_idx = get_col_index(headers, ['INDICE'])
+            c_mat = get_col_index(headers, ['MATIERE'])
+            c_coat = get_col_index(headers, ['TRAITEMENT'])
+            c_flow = get_col_index(headers, ['FLUX COMMERCIAL', 'FLUX'])
+            c_color = get_col_index(headers, ['COULEUR'])
+            c_buy = get_col_index(headers, ['PRIX 2*NETS', '2*NETS', 'ACHAT'])
             
             # Prix Réseaux
-            col_kal = get_col_idx(headers, ['KALIXIA']) # P
-            col_ite = get_col_idx(headers, ['ITELIS']) # Q
-            col_cb = get_col_idx(headers, ['CARTE BLANCHE']) # R
-            col_sev = get_col_idx(headers, ['SEVEANE']) # S
-            col_sant = get_col_idx(headers, ['SANTECLAIRE', 'SANTECLAIR']) # T
+            c_kal = get_col_index(headers, ['KALIXIA'])
+            c_ite = get_col_index(headers, ['ITELIS'])
+            c_cb = get_col_index(headers, ['CARTE BLANCHE'])
+            c_sev = get_col_index(headers, ['SEVEANE'])
+            c_sant = get_col_index(headers, ['SANTECLAIRE', 'SANTECLAIR'])
             
-            if col_modele == -1: continue # Pas de colonne modèle, on saute
+            if c_name == -1: continue # Ignorer si pas de colonne modèle
 
             for row in rows[1:]:
-                if not row[col_modele]: continue # Ligne vide
+                if not row[c_name]: continue # Ignorer lignes sans nom
                 
-                raw_name = str(row[col_modele])
+                # Logique Marque : Colonne A prioritaire, sinon Nom Onglet
+                brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
+                if not brand: brand = sheet_brand
+                
+                raw_name = clean_text(row[c_name])
                 
                 # Logique Type
-                raw_geo = str(row[col_geo]).upper() if col_geo != -1 and row[col_geo] else ""
+                raw_geo = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
                 lens_type = 'UNIFOCAL'
                 if 'PROG' in raw_geo: lens_type = 'PROGRESSIF'
                 elif 'DEGRESSIF' in raw_geo or 'INTERIEUR' in raw_geo: lens_type = 'DEGRESSIF'
                 elif 'MULTIFOCAL' in raw_geo: lens_type = 'MULTIFOCAL'
 
-                # Extraction des valeurs
-                design = str(row[col_design]) if col_design != -1 and row[col_design] else 'STANDARD'
-                idx = clean_index(row[col_indice]) if col_indice != -1 else "1.50"
-                coating = str(row[col_coat]) if col_coat != -1 and row[col_coat] else 'DURCI'
-                mat = str(row[col_mat]) if col_mat != -1 and row[col_mat] else ''
-                code = str(row[col_code]) if col_code != -1 and row[col_code] else ''
-                flow = str(row[col_flow]) if col_flow != -1 and row[col_flow] else ''
+                # Autres champs
+                design = clean_text(row[c_design]) if c_design != -1 else 'STANDARD'
+                idx = clean_index(row[c_idx]) if c_idx != -1 else "1.50"
+                coating = clean_text(row[c_coat]) if c_coat != -1 else 'DURCI'
+                mat = clean_text(row[c_mat]) if c_mat != -1 else ''
+                code = clean_text(row[c_code]) if c_code != -1 else ''
+                edi = clean_text(row[c_edi]) if c_edi != -1 else ''
+                flow = clean_text(row[c_flow]) if c_flow != -1 else 'FAB'
+                color = clean_text(row[c_color]) if c_color != -1 else ''
                 
-                purchase = clean_price(row[col_buy]) if col_buy != -1 else 0
+                purchase = clean_price(row[c_buy]) if c_buy != -1 else 0
                 
-                # Prix par défaut (Kalixia souvent utilisé comme base)
-                default_sell = clean_price(row[col_kal]) if col_kal != -1 else 0
-
                 # Gestion Photochromique dans le nom
-                if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'TGNS', 'SABR', 'SAGR']):
-                    raw_name = f"{raw_name} {mat.upper()}"
+                if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'TGNS', 'SABR', 'SAGR', 'SUN']):
+                    raw_name = f"{raw_name} {mat}"
 
                 if purchase > 0:
                     lenses_to_insert.append({
-                        "brand": current_brand, 
-                        "code": code, 
-                        "name": raw_name,
-                        "geo": lens_type, 
-                        "design": design, 
-                        "idx": idx, 
-                        "mat": mat, 
-                        "coat": coating, 
-                        "flow": flow,
+                        "brand": brand, "edi": edi, "code": code, "name": raw_name,
+                        "geo": lens_type, "design": design, "idx": idx, "mat": mat, 
+                        "coat": coating, "flow": flow, "color": color,
                         "buy": purchase, 
-                        "selling": default_sell,
-                        "p_kalixia": clean_price(row[col_kal]) if col_kal != -1 else 0,
-                        "p_itelis": clean_price(row[col_ite]) if col_ite != -1 else 0,
-                        "p_cb": clean_price(row[col_cb]) if col_cb != -1 else 0,
-                        "p_seveane": clean_price(row[col_sev]) if col_sev != -1 else 0,
-                        "p_santeclair": clean_price(row[col_sant]) if col_sant != -1 else 0
+                        # Prix réseaux (0 par défaut)
+                        "p_kal": clean_price(row[c_kal]) if c_kal != -1 else 0,
+                        "p_ite": clean_price(row[c_ite]) if c_ite != -1 else 0,
+                        "p_cb": clean_price(row[c_cb]) if c_cb != -1 else 0,
+                        "p_sev": clean_price(row[c_sev]) if c_sev != -1 else 0,
+                        "p_sant": clean_price(row[c_sant]) if c_sant != -1 else 0,
                     })
 
-        # Insertion en base (Transaction atomique)
+        # Insertion en BDD
         if lenses_to_insert:
             with engine.begin() as conn:
-                conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY;"))
+                # On vide et recrée la table pour être propre
+                conn.execute(text("DROP TABLE IF EXISTS lenses;"))
+                conn.execute(text("""
+                    CREATE TABLE lenses (
+                        id SERIAL PRIMARY KEY,
+                        brand VARCHAR(50), edi_code VARCHAR(50), commercial_code VARCHAR(50),
+                        name VARCHAR(200), geometry VARCHAR(100), design VARCHAR(100),
+                        index_mat VARCHAR(20), material VARCHAR(100), coating VARCHAR(100),
+                        commercial_flow VARCHAR(50), color VARCHAR(100),
+                        purchase_price DECIMAL(10,2), selling_price DECIMAL(10,2),
+                        sell_kalixia DECIMAL(10,2), sell_itelis DECIMAL(10,2),
+                        sell_carteblanche DECIMAL(10,2), sell_seveane DECIMAL(10,2),
+                        sell_santeclair DECIMAL(10,2)
+                    );
+                """))
+                
                 stmt = text("""
                     INSERT INTO lenses (
-                        brand, commercial_code, name, geometry, design, index_mat, material, coating, commercial_flow,
-                        purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair
+                        brand, edi_code, commercial_code, name, geometry, design, index_mat, material, coating, 
+                        commercial_flow, color, purchase_price, selling_price, 
+                        sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair
                     ) VALUES (
-                        :brand, :code, :name, :geo, :design, :idx, :mat, :coat, :flow,
-                        :buy, :selling, :p_kalixia, :p_itelis, :p_cb, :p_seveane, :p_santeclair
+                        :brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, 
+                        :flow, :color, :buy, 0, 
+                        :p_kal, :p_ite, :p_cb, :p_sev, :p_sant
                     )
                 """)
                 conn.execute(stmt, lenses_to_insert)
             
-            os.remove(temp_filename) # Nettoyage fichier temp
+            os.remove(temp_file)
             return {"status": "success", "count": len(lenses_to_insert), "message": "Catalogue importé avec succès."}
         
-        os.remove(temp_filename)
+        os.remove(temp_file)
         return {"status": "error", "message": "Aucune donnée valide trouvée."}
 
     except Exception as e:
+        if os.path.exists(temp_file): os.remove(temp_file)
         print(f"❌ Erreur Upload : {e}")
         raise HTTPException(status_code=400, detail=f"Erreur traitement fichier : {str(e)}")
 
@@ -277,7 +299,7 @@ async def upload_catalog(file: UploadFile = File(...)):
 def get_lenses(
     type_verre: str = Query(None, alias="type"),
     brand: str = Query(None),
-    pocketLimit: float = Query(0.0) # Gardé pour compatibilité frontend
+    pocketLimit: float = Query(0.0)
 ):
     if not engine: return []
     try:
