@@ -1,21 +1,22 @@
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 from pydantic import BaseModel
 import os
-import csv
-import urllib.request
-import io
-import re
+import shutil
 import json
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
+import openpyxl  # Indispensable pour lire les fichiers .xlsx
 
 # 1. Configuration
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
-# Clé de chiffrement (Générée si absente, à fixer dans les variables d'env Render pour la prod)
+
+# Clé de chiffrement pour les données clients (GDPR)
+# En prod, cette clé doit être fixée dans les variables d'environnement
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", Fernet.generate_key().decode())
 cipher = Fernet(ENCRYPTION_KEY.encode())
 
@@ -37,33 +38,41 @@ if DATABASE_URL:
             DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         engine = create_engine(DATABASE_URL)
         
-        # Initialisation des tables au démarrage
         with engine.begin() as conn:
-            # Table Catalogue
+            # Table Catalogue (Verres)
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS lenses (
                     id SERIAL PRIMARY KEY,
-                    brand VARCHAR(50), name VARCHAR(200), geometry VARCHAR(100), design VARCHAR(100),
-                    index_mat VARCHAR(20), coating VARCHAR(100), material VARCHAR(100),
-                    commercial_code VARCHAR(50), commercial_flow VARCHAR(50),
-                    purchase_price DECIMAL(10,2), selling_price DECIMAL(10,2),
-                    sell_kalixia DECIMAL(10,2), sell_itelis DECIMAL(10,2),
-                    sell_carteblanche DECIMAL(10,2), sell_seveane DECIMAL(10,2),
+                    brand VARCHAR(50),
+                    commercial_code VARCHAR(50),
+                    name VARCHAR(200),
+                    geometry VARCHAR(100),
+                    design VARCHAR(100),
+                    index_mat VARCHAR(20),
+                    material VARCHAR(100),
+                    coating VARCHAR(100),
+                    commercial_flow VARCHAR(50),
+                    purchase_price DECIMAL(10,2),
+                    selling_price DECIMAL(10,2),
+                    sell_kalixia DECIMAL(10,2),
+                    sell_itelis DECIMAL(10,2),
+                    sell_carteblanche DECIMAL(10,2),
+                    sell_seveane DECIMAL(10,2),
                     sell_santeclair DECIMAL(10,2)
                 );
             """))
             
-            # Table Dossiers Clients (Celle qui manquait peut-être)
+            # Table Dossiers Clients (Devis)
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS client_offers (
                     id SERIAL PRIMARY KEY,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    encrypted_identity TEXT, -- Données chiffrées (Nom, Prénom...)
-                    lens_details JSONB,      -- Détails du verre
-                    financials JSONB         -- Détails prix
+                    encrypted_identity TEXT,
+                    lens_details JSONB,
+                    financials JSONB
                 );
             """))
-            print("✅ Tables BDD vérifiées/créées.")
+            print("✅ Base de données prête.")
             
     except Exception as e:
         print(f"❌ ERREUR CRITIQUE BDD: {e}")
@@ -71,22 +80,18 @@ if DATABASE_URL:
 
 # --- OUTILS ---
 def encrypt_dict(data: dict) -> str:
-    """Chiffre un dictionnaire"""
-    json_str = json.dumps(data)
-    return cipher.encrypt(json_str.encode()).decode()
+    return cipher.encrypt(json.dumps(data).encode()).decode()
 
 def decrypt_dict(token: str) -> dict:
-    """Déchiffre un dictionnaire"""
     try:
-        json_str = cipher.decrypt(token.encode()).decode()
-        return json.loads(json_str)
-    except Exception:
+        return json.loads(cipher.decrypt(token.encode()).decode())
+    except:
         return {"name": "Donnée", "firstname": "Illisible", "dob": "?"}
 
 def clean_price(value):
     if not value or value == '' or value == '-': return 0.0
     try:
-        return float(str(value).replace('€', '').replace(',', '.'))
+        return float(str(value).replace('€', '').replace('â‚¬', '').replace('%', '').replace(' ', '').replace(',', '.'))
     except ValueError: return 0.0
 
 def clean_index(value):
@@ -94,35 +99,26 @@ def clean_index(value):
     match = re.search(r"\d+\.?\d*", str(value).replace(',', '.'))
     return "{:.2f}".format(float(match.group(0))) if match else "1.50"
 
-def get_val(row, keys):
-    row_keys = list(row.keys())
-    for k in keys:
-        k_clean = k.upper().strip()
-        for rk in row_keys:
-            if k_clean in rk.upper(): return row[rk]
-    return None
+# Fonction pour trouver l'index d'une colonne par son nom
+def get_col_idx(headers, candidates):
+    for i, h in enumerate(headers):
+        if h and any(c.upper() in str(h).upper() for c in candidates):
+            return i
+    return -1
 
 # --- MODELES ---
-class SyncRequest(BaseModel):
-    url: str
-
 class OfferRequest(BaseModel):
     client: dict
     lens: dict
     finance: dict
 
-# --- ROUTE RACINE (POUR TESTER SI LE SERVEUR EST A JOUR) ---
+# --- ROUTES ---
+
 @app.get("/")
 def read_root():
-    return {
-        "status": "online",
-        "version": "3.22", 
-        "message": "Bienvenue sur l'API Podium Optique",
-        "routes": ["/lenses", "/offers", "/sync"]
-    }
+    return {"status": "online", "version": "3.27", "message": "API Optique opérationnelle"}
 
-# --- ENDPOINTS DOSSIERS CLIENTS (/offers) ---
-
+# 1. Sauvegarde Dossier
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
     if not engine: raise HTTPException(status_code=500, detail="DB Error")
@@ -136,6 +132,7 @@ def save_offer(offer: OfferRequest):
         print(f"Save Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# 2. Lecture Dossiers
 @app.get("/offers")
 def get_offers():
     if not engine: return []
@@ -153,57 +150,157 @@ def get_offers():
         print(f"Get Error: {e}")
         return []
 
-# --- ENDPOINT SYNCHRO ---
-@app.post("/sync")
-def sync_catalog(request: SyncRequest):
-    if not engine: raise HTTPException(status_code=500, detail="Pas de BDD")
+# 3. UPLOAD CATALOGUE EXCEL (NOUVEAU)
+@app.post("/upload-catalog")
+async def upload_catalog(file: UploadFile = File(...)):
+    if not engine: raise HTTPException(status_code=500, detail="Pas de connexion BDD")
+    
+    print(f"🚀 Réception du fichier : {file.filename}")
+    
     try:
-        response = urllib.request.urlopen(request.url)
-        f = io.StringIO(response.read().decode('utf-8'))
-        reader = csv.DictReader(f, dialect=csv.Sniffer().sniff(f.read(1024))); f.seek(0)
-        
-        lenses_to_insert = []
-        for row in reader:
-            brand = get_val(row, ['MARQUE']) or 'GENERIQUE'
-            raw_name = get_val(row, ['MODELE']) or 'Inconnu'
-            if raw_name == 'Inconnu': continue
+        # Sauvegarde temporaire du fichier
+        temp_filename = f"temp_{file.filename}"
+        with open(temp_filename, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
             
-            lenses_to_insert.append({
-                "brand": brand, "code": get_val(row, ['CODE']) or '', "name": raw_name,
-                "geo": str(get_val(row, ['GEOMETRIE']) or '').upper(),
-                "design": get_val(row, ['DESIGN']) or 'STANDARD',
-                "idx": clean_index(get_val(row, ['INDICE'])),
-                "mat": get_val(row, ['MATIERE']) or '', "coat": get_val(row, ['TRAITEMENT']) or 'DURCI',
-                "flow": get_val(row, ['FLUX']) or '',
-                "buy": clean_price(get_val(row, ['2*NETS'])),
-                "selling": clean_price(get_val(row, ['KALIXIA'])),
-                "p_kalixia": clean_price(get_val(row, ['KALIXIA'])),
-                "p_itelis": clean_price(get_val(row, ['ITELIS'])),
-                "p_cb": clean_price(get_val(row, ['CARTE BLANCHE'])),
-                "p_seveane": clean_price(get_val(row, ['SEVEANE'])),
-                "p_santeclair": clean_price(get_val(row, ['SANTECLAIR']))
-            })
+        # Lecture du fichier Excel
+        wb = openpyxl.load_workbook(temp_filename, data_only=True)
+        lenses_to_insert = []
+        
+        # Parcours des onglets (1 onglet = 1 marque)
+        for sheet_name in wb.sheetnames:
+            sheet = wb[sheet_name]
+            current_brand = sheet_name.strip().upper() # Nom de l'onglet = Marque
+            print(f"   🔹 Traitement onglet : {current_brand}")
+            
+            rows = list(sheet.iter_rows(values_only=True))
+            if not rows: continue
+            
+            headers = rows[0] # Première ligne = En-têtes
+            
+            # Repérage des colonnes
+            col_modele = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE']) # D
+            col_code = get_col_idx(headers, ['CODE', 'EDI']) # C
+            col_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE']) # F
+            col_design = get_col_idx(headers, ['DESIGN', 'GAMME']) # G
+            col_indice = get_col_idx(headers, ['INDICE']) # H
+            col_mat = get_col_idx(headers, ['MATIERE']) # I
+            col_coat = get_col_idx(headers, ['TRAITEMENT']) # J
+            col_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL']) # K
+            col_buy = get_col_idx(headers, ['PRIX 2*NETS', '2*NETS', 'ACHAT']) # M
+            
+            # Prix Réseaux
+            col_kal = get_col_idx(headers, ['KALIXIA']) # P
+            col_ite = get_col_idx(headers, ['ITELIS']) # Q
+            col_cb = get_col_idx(headers, ['CARTE BLANCHE']) # R
+            col_sev = get_col_idx(headers, ['SEVEANE']) # S
+            col_sant = get_col_idx(headers, ['SANTECLAIRE', 'SANTECLAIR']) # T
+            
+            if col_modele == -1: continue # Pas de colonne modèle, on saute
 
+            for row in rows[1:]:
+                if not row[col_modele]: continue # Ligne vide
+                
+                raw_name = str(row[col_modele])
+                
+                # Logique Type
+                raw_geo = str(row[col_geo]).upper() if col_geo != -1 and row[col_geo] else ""
+                lens_type = 'UNIFOCAL'
+                if 'PROG' in raw_geo: lens_type = 'PROGRESSIF'
+                elif 'DEGRESSIF' in raw_geo or 'INTERIEUR' in raw_geo: lens_type = 'DEGRESSIF'
+                elif 'MULTIFOCAL' in raw_geo: lens_type = 'MULTIFOCAL'
+
+                # Extraction des valeurs
+                design = str(row[col_design]) if col_design != -1 and row[col_design] else 'STANDARD'
+                idx = clean_index(row[col_indice]) if col_indice != -1 else "1.50"
+                coating = str(row[col_coat]) if col_coat != -1 and row[col_coat] else 'DURCI'
+                mat = str(row[col_mat]) if col_mat != -1 and row[col_mat] else ''
+                code = str(row[col_code]) if col_code != -1 and row[col_code] else ''
+                flow = str(row[col_flow]) if col_flow != -1 and row[col_flow] else ''
+                
+                purchase = clean_price(row[col_buy]) if col_buy != -1 else 0
+                
+                # Prix par défaut (Kalixia souvent utilisé comme base)
+                default_sell = clean_price(row[col_kal]) if col_kal != -1 else 0
+
+                # Gestion Photochromique dans le nom
+                if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'TGNS', 'SABR', 'SAGR']):
+                    raw_name = f"{raw_name} {mat.upper()}"
+
+                if purchase > 0:
+                    lenses_to_insert.append({
+                        "brand": current_brand, 
+                        "code": code, 
+                        "name": raw_name,
+                        "geo": lens_type, 
+                        "design": design, 
+                        "idx": idx, 
+                        "mat": mat, 
+                        "coat": coating, 
+                        "flow": flow,
+                        "buy": purchase, 
+                        "selling": default_sell,
+                        "p_kalixia": clean_price(row[col_kal]) if col_kal != -1 else 0,
+                        "p_itelis": clean_price(row[col_ite]) if col_ite != -1 else 0,
+                        "p_cb": clean_price(row[col_cb]) if col_cb != -1 else 0,
+                        "p_seveane": clean_price(row[col_sev]) if col_sev != -1 else 0,
+                        "p_santeclair": clean_price(row[col_sant]) if col_sant != -1 else 0
+                    })
+
+        # Insertion en base (Transaction atomique)
         if lenses_to_insert:
             with engine.begin() as conn:
                 conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY;"))
-                conn.execute(text("""
-                    INSERT INTO lenses (brand, commercial_code, name, geometry, design, index_mat, material, coating, commercial_flow, purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair)
-                    VALUES (:brand, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :buy, :selling, :p_kalixia, :p_itelis, :p_cb, :p_seveane, :p_santeclair)
-                """), lenses_to_insert)
-            return {"status": "success", "count": len(lenses_to_insert)}
+                stmt = text("""
+                    INSERT INTO lenses (
+                        brand, commercial_code, name, geometry, design, index_mat, material, coating, commercial_flow,
+                        purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair
+                    ) VALUES (
+                        :brand, :code, :name, :geo, :design, :idx, :mat, :coat, :flow,
+                        :buy, :selling, :p_kalixia, :p_itelis, :p_cb, :p_seveane, :p_santeclair
+                    )
+                """)
+                conn.execute(stmt, lenses_to_insert)
             
-    except Exception as e: raise HTTPException(status_code=400, detail=str(e))
+            os.remove(temp_filename) # Nettoyage fichier temp
+            return {"status": "success", "count": len(lenses_to_insert), "message": "Catalogue importé avec succès."}
+        
+        os.remove(temp_filename)
+        return {"status": "error", "message": "Aucune donnée valide trouvée."}
 
+    except Exception as e:
+        print(f"❌ Erreur Upload : {e}")
+        raise HTTPException(status_code=400, detail=f"Erreur traitement fichier : {str(e)}")
+
+# 4. Lecture Catalogue
 @app.get("/lenses")
-def get_lenses(type_verre: str = Query(None, alias="type"), brand: str = Query(None), pocketLimit: float = Query(0.0)):
+def get_lenses(
+    type_verre: str = Query(None, alias="type"),
+    brand: str = Query(None),
+    pocketLimit: float = Query(0.0) # Gardé pour compatibilité frontend
+):
     if not engine: return []
     try:
         with engine.connect() as conn:
             sql = "SELECT * FROM lenses WHERE 1=1"
             params = {}
-            if brand: sql += " AND brand ILIKE :brand"; params["brand"] = brand
-            if type_verre: sql += " AND geometry ILIKE :geo"; params["geo"] = f"%{type_verre}%"
+            
+            if brand and brand != "":
+                sql += " AND brand ILIKE :brand"
+                params["brand"] = brand
+                
+            if type_verre:
+                if "INTERIEUR" in type_verre.upper():
+                    sql += " AND (geometry ILIKE '%INTERIEUR%' OR geometry ILIKE '%DEGRESSIF%')"
+                else:
+                    sql += " AND geometry ILIKE :geo"
+                    params["geo"] = f"%{type_verre}%"
+            
             sql += " ORDER BY purchase_price ASC LIMIT 3000"
-            return [row._mapping for row in conn.execute(text(sql), params).fetchall()]
-    except Exception: return []
+            
+            result = conn.execute(text(sql), params)
+            return [row._mapping for row in result.fetchall()]
+            
+    except Exception as e:
+        print(f"❌ ERREUR SQL : {e}")
+        return []
