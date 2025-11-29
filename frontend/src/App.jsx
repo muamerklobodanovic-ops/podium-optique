@@ -6,7 +6,10 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.01"; // Logos Réseaux + Fix Ecran Blanc
+const APP_VERSION = "3.02"; // Fix Crash 'networks' undefined
+
+// --- CONFIGURATION STATIQUE ---
+const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
 
 // --- OUTILS COULEURS ---
 const hexToRgb = (hex) => {
@@ -44,10 +47,11 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   );
 };
 
-// --- COMPOSANT LOGO RÉSEAU (NOUVEAU) ---
+// --- COMPOSANT LOGO RÉSEAU ---
 const NetworkLogo = ({ network, isSelected, onClick }) => {
   const [hasError, setHasError] = useState(false);
-  // Normalisation du nom de fichier (ex: HORS_RESEAU -> hors_reseau.png)
+  if (!network) return null;
+  
   const fileName = network.toLowerCase().replace(' ', ''); 
   const logoUrl = `/logos/${fileName}.png`;
 
@@ -57,7 +61,6 @@ const NetworkLogo = ({ network, isSelected, onClick }) => {
   return (
     <button onClick={onClick} className={`${baseClass} ${activeClass}`} title={network}>
         {hasError || network === 'HORS_RESEAU' ? (
-            // Fallback texte si pas d'image ou si c'est Hors Réseau (souvent pas de logo)
             <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-700' : 'text-slate-500'}`}>
                 {network === 'HORS_RESEAU' ? 'TARIF LIBRE' : network}
             </span>
@@ -84,12 +87,10 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
     { border: "border-slate-200 shadow-lg", badge: "bg-slate-100 text-slate-600 border-slate-200", icon: <Star className="w-5 h-5 text-orange-400" />, label: "PREMIUM" }
   ];
 
-  // Style si sélectionné
   const activeStyle = isSelected 
     ? { border: "border-blue-600 ring-4 ring-blue-100 shadow-2xl scale-[1.02]", badge: "bg-blue-600 text-white", icon: <ArrowRightLeft className="w-5 h-5"/>, label: "SÉLECTIONNÉ" }
     : (podiumStyles[index !== undefined && index < 3 ? index : 1]);
 
-  // Sécurisation des nombres
   const sPrice = parseFloat(lens.sellingPrice || 0);
   const pPrice = parseFloat(lens.purchase_price || 0);
   const mVal = parseFloat(lens.margin || 0);
@@ -162,10 +163,10 @@ function App() {
   
   const [showSettings, setShowSettings] = useState(false);
   const [showMargins, setShowMargins] = useState(false);
-  const [selectedLens, setSelectedLens] = useState(null); // Verre sélectionné pour le devis
-  
+  const [selectedLens, setSelectedLens] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Synchro
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
@@ -175,8 +176,6 @@ function App() {
   // --- NOUVEAUX ÉTATS CLIENT & DEVIS ---
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 });
   const [secondPairPrice, setSecondPairPrice] = useState(0);
-
-  const defaultPricingConfig = { x: 2.5, b: 20 };
   
   const [userSettings, setUserSettings] = useState({
     shopName: "MON OPTICIEN",
@@ -243,12 +242,14 @@ function App() {
 
   const currentTheme = themes[userSettings.themeColor] || themes.blue;
   const brands = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
+  
+  // LISTE RESEAUX MANQUANTE AJOUTEE ICI
   const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
+
   const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" } ];
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   
-  // Données pour l'affichage fallback
-  const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
+  const codirCoatings = [ { id: 'MISTRAL', label: 'MISTRAL', type: 'CLASSIC', icon: <Sparkles className="w-3 h-3"/> }, { id: 'E_PROTECT', label: 'E-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV', label: 'QUATTRO UV', type: 'CLASSIC', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT', label: 'B-PROTECT', type: 'BLUE', icon: <Monitor className="w-3 h-3"/> }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN', type: 'CLEAN', icon: <Shield className="w-3 h-3"/> }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN', type: 'CLEAN', icon: <Monitor className="w-3 h-3"/> }, ];
   const currentCoatings = codirCoatings; 
 
   // 1. RECHARGEMENT
@@ -262,12 +263,10 @@ function App() {
     if (lenses && lenses.length > 0) {
        let workingList = lenses.map(l => ({...l}));
 
-       // Marque Strict
        if (formData.brand && formData.brand !== '') {
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand));
        }
 
-       // Type
        if (formData.type) {
          const targetType = cleanText(formData.type);
          if (targetType.includes("INTERIEUR")) {
@@ -277,22 +276,21 @@ function App() {
          }
        }
 
-       // Prix
        if (formData.network === 'HORS_RESEAU') {
           const pRules = userSettings.pricing || {};
           workingList = workingList.map(lens => {
-             let rule = pRules.prog || defaultPricingConfig; 
+             let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
              const lensType = cleanText(lens.type);
              const lensName = cleanText(lens.name);
              const flow = cleanText(lens.commercial_flow);
 
              if (lensType.includes('UNIFOCAL')) {
                  const isStock = flow.includes('STOCK') || lensName.includes(' ST') || lensName.includes('_ST');
-                 rule = isStock ? (pRules.uniStock || defaultPricingConfig) : (pRules.uniFab || defaultPricingConfig);
+                 rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG);
              } 
-             else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || defaultPricingConfig; } 
-             else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || defaultPricingConfig; }
-             else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || defaultPricingConfig; }
+             else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
+             else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
+             else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
 
              const pPrice = parseFloat(lens.purchase_price || 0);
              const newSelling = (pPrice * rule.x) + rule.b;
@@ -314,7 +312,6 @@ function App() {
            workingList = workingList.filter(l => l.sellingPrice > 0);
        }
 
-       // Indice Strict
        workingList = workingList.filter(l => {
            if(!l.index_mat) return false;
            const lIdx = String(l.index_mat).replace(',', '.');
@@ -322,7 +319,6 @@ function App() {
            return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01;
        });
 
-       // Photochromique
        const isPhotoC = (item) => {
           const text = cleanText(item.name + " " + item.material + " " + item.coating);
           return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN");
@@ -333,7 +329,6 @@ function App() {
          workingList = workingList.filter(l => !isPhotoC(l));
        }
 
-       // Traitements Dynamiques
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
 
@@ -341,12 +336,10 @@ function App() {
           workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating));
        }
 
-       // Myopie
        if (formData.myopiaControl) {
           workingList = workingList.filter(l => cleanText(l.name).includes("MIYO"));
        }
 
-       // Designs Dynamiques
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
 
@@ -403,7 +396,6 @@ function App() {
     setClient(prev => ({ ...prev, [name]: value }));
   };
   
-  // ... Autres handlers ...
   const handleLogoUpload = (e, target = 'shop') => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); } };
   const handleSettingChange = (section, field, value) => { if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); } };
   const handlePriceRuleChange = (category, field, value) => { setUserSettings(prev => ({ ...prev, pricing: { ...prev.pricing, [category]: { ...prev.pricing[category], [field]: parseFloat(value) || 0 } } })); };
