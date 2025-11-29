@@ -252,7 +252,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                         "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
                         "color": clean_text(row[c_color]) if c_color != -1 else "",
                         "buy": purchase,
-                        "selling": selling,
+                        "selling": selling, # CORRECTION : Ajout de la clé manquante
                         "p_kal": clean_price(row[c_kal]) if c_kal != -1 else 0,
                         "p_ite": clean_price(row[c_ite]) if c_ite != -1 else 0,
                         "p_cb": clean_price(row[c_cb]) if c_cb != -1 else 0,
