@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.07"; // Marques Compactes (Grid 3 cols)
+const APP_VERSION = "3.08"; // Logos Marques Seuls (Grandes Bulles)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -49,7 +49,7 @@ const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
 
   if (hasError || !brand) {
     return (
-      <span className="text-[9px] font-bold text-slate-400 flex items-center justify-center h-full w-full text-center leading-none">
+      <span className="text-xs font-bold text-slate-400 flex items-center justify-center h-full w-full px-1 text-center border border-dashed border-slate-200 rounded bg-slate-50">
         {safeBrand === '' ? 'TOUTES' : safeBrand}
       </span>
     );
@@ -526,12 +526,12 @@ function App() {
                             <button 
                                 key={b.id} 
                                 onClick={() => setFormData({...formData, brand: b.id})} 
-                                className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-14 ${formData.brand === b.id ? 'bg-slate-800 text-white border-slate-800' : 'hover:bg-slate-50 border-slate-200'}`}
+                                className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'bg-slate-800 text-white border-slate-800' : 'hover:bg-slate-50 border-slate-200'}`}
+                                title={b.label}
                             >
-                                <div className="w-8 h-6 flex items-center justify-center mb-0.5">
-                                    {b.id === '' ? <span className={`font-bold text-[10px] ${formData.brand === '' ? 'text-white' : 'text-slate-800'}`}>TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}
+                                <div className="w-full h-full flex items-center justify-center p-2">
+                                    {b.id === '' ? <span className={`font-bold text-xs ${formData.brand === '' ? 'text-white' : 'text-slate-800'}`}>TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}
                                 </div>
-                                <span className="text-[8px] font-bold leading-none">{b.label}</span>
                             </button>
                         ))}
                     </div>
