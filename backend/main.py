@@ -111,6 +111,16 @@ class OfferRequest(BaseModel):
     lens: dict
     finance: dict
 
+# --- ROUTE RACINE (POUR TESTER SI LE SERVEUR EST A JOUR) ---
+@app.get("/")
+def read_root():
+    return {
+        "status": "online",
+        "version": "3.22", 
+        "message": "Bienvenue sur l'API Podium Optique",
+        "routes": ["/lenses", "/offers", "/sync"]
+    }
+
 # --- ENDPOINTS DOSSIERS CLIENTS (/offers) ---
 
 @app.post("/offers")
