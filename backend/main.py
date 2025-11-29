@@ -154,8 +154,6 @@ def sync_catalog(request: SyncRequest):
         
         lenses_to_insert = []
         for row in reader:
-            # ... (Logique de mapping identique v3.21) ...
-            # Simplifiée pour la concision ici, mais identique fonctionnellement
             brand = get_val(row, ['MARQUE']) or 'GENERIQUE'
             raw_name = get_val(row, ['MODELE']) or 'Inconnu'
             if raw_name == 'Inconnu': continue
@@ -188,7 +186,7 @@ def sync_catalog(request: SyncRequest):
     except Exception as e: raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/lenses")
-def get_lenses(type_verre: str = Query(None, alias="type"), brand: str = Query(None)):
+def get_lenses(type_verre: str = Query(None, alias="type"), brand: str = Query(None), pocketLimit: float = Query(0.0)):
     if not engine: return []
     try:
         with engine.connect() as conn:
