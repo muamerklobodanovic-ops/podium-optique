@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.40"; // Fix Settings Crash (Safe Render)
+const APP_VERSION = "3.41"; // Fix Settings Crash (Null Storage)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -37,6 +37,7 @@ const DEMO_LENSES = [
 
 // --- OUTILS ---
 const hexToRgb = (hex) => {
+  if (!hex || typeof hex !== 'string') return "0 0 0";
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
@@ -109,20 +110,24 @@ function App() {
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 }); const [secondPairPrice, setSecondPairPrice] = useState(0);
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
 
-  // INITIALISATION ROBUSTE (FUSION PROFONDE POUR ÉVITER CRASH SETTINGS)
+  // INITIALISATION ROBUSTE (FUSION PROFONDE + CHECK NULL)
   const [userSettings, setUserSettings] = useState(() => {
     try { 
       const saved = localStorage.getItem("optique_user_settings");
       if (saved) {
           const parsed = JSON.parse(saved);
-          return {
-              ...DEFAULT_SETTINGS,
-              ...parsed,
-              pricing: { ...DEFAULT_SETTINGS.pricing, ...(parsed.pricing || {}) }
-          };
+          // Protection contre "null" ou types non-objets stockés par erreur
+          if (parsed && typeof parsed === 'object') {
+              return {
+                  ...DEFAULT_SETTINGS,
+                  ...parsed,
+                  pricing: { ...DEFAULT_SETTINGS.pricing, ...(parsed.pricing || {}) }
+              };
+          }
       }
       return DEFAULT_SETTINGS;
     } catch (e) { 
+      console.error("Settings Init Error", e);
       return DEFAULT_SETTINGS; 
     }
   });
@@ -151,14 +156,6 @@ function App() {
   const currentCoatings = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
 
   useEffect(() => { setFormData(prev => ({ ...prev, coating: '' })); fetchData(); }, [formData.brand, formData.network, formData.type]); 
-
-  const getFilteredBrandsList = () => {
-      const net = formData.network;
-      if (net === 'HORS_RESEAU') return brands;
-      if (net === 'SANTECLAIR') return brands.filter(b => b.id === '' || b.id === 'SEIKO' || b.id === 'ZEISS');
-      return brands.filter(b => b.id !== 'ORUS' && b.id !== 'ZEISS');
-  };
-  const activeBrands = getFilteredBrandsList();
 
   useEffect(() => {
     const safeLenses = lenses || [];
@@ -276,7 +273,7 @@ function App() {
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* HEADER ... Identique */}
+      {/* HEADER ... (Identique) */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 w-full lg:w-auto">
@@ -297,6 +294,7 @@ function App() {
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-20 transition-all duration-300 w-80 ${isSidebarOpen ? '' : 'hidden'}`}>
             <div className="p-6 space-y-6 pb-32">
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
+                {/* ... Autres filtres ... */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label><div className="grid grid-cols-2 gap-3 mb-2"><div className="relative"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="SPH"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div><div className="relative"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="CYL"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div><div className={`relative transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="ADD"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{lensTypes.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
@@ -308,7 +306,12 @@ function App() {
         {/* RESULTATS */}
         <section className="flex-1 p-6 overflow-y-auto pb-40">
             <div className="max-w-7xl mx-auto">
-                {comparisonLens && (<div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-xl"><div className="flex justify-between mb-4"><h3 className="font-bold text-blue-800 text-sm">PRODUIT DE RÉFÉRENCE</h3><button onClick={() => setComparisonLens(null)}><XCircle className="w-5 h-5 text-blue-400"/></button></div><div className="w-full max-w-sm"><LensCard lens={comparisonLens} index={0} currentTheme={currentTheme} showMargins={showMargins} isReference={true} /></div></div>)}
+                {comparisonLens && (
+                    <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                        <div className="flex justify-between mb-4"><h3 className="font-bold text-blue-800 text-sm">PRODUIT DE RÉFÉRENCE</h3><button onClick={() => setComparisonLens(null)}><XCircle className="w-5 h-5 text-blue-400"/></button></div>
+                        <div className="w-full max-w-sm"><LensCard lens={comparisonLens} index={0} currentTheme={currentTheme} showMargins={showMargins} isReference={true} /></div>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredLenses.map((lens, index) => (<LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} onSelect={setSelectedLens} isSelected={selectedLens && selectedLens.id === lens.id} />))}
                 </div>
@@ -317,7 +320,7 @@ function App() {
         </section>
       </div>
 
-      {/* FOOTER DEVIS ... */}
+      {/* FOOTER DEVIS */}
       {selectedLens && (
           <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800">
               <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
@@ -327,9 +330,6 @@ function App() {
               </div>
           </div>
       )}
-      
-      {/* MODALE HISTORIQUE ... (Identique) */}
-      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob} • DOSSIER DU {offer.date}</div></div></div><div className="text-right"><div className="font-bold text-slate-800">{offer.lens.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance.remainder).toFixed(2)} €</div></div><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div></div>))}</div></div></div>)}
 
       {/* MODALE SETTINGS */}
       {showSettings && (
@@ -367,6 +367,9 @@ function App() {
            </div>
         </div>
       )}
+      
+      {/* MODALE HISTORIQUE (Identique) */}
+      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob} • DOSSIER DU {offer.date}</div></div></div><div className="text-right"><div className="font-bold text-slate-800">{offer.lens.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance.remainder).toFixed(2)} €</div></div><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div></div>))}</div></div></div>)}
     </div>
   );
 }
