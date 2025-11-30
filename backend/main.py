@@ -79,10 +79,7 @@ def clean_text(value): return str(value).strip() if value else ""
 
 def get_col_idx(headers, candidates):
     for i, h in enumerate(headers):
-        if h:
-            h_str = str(h).upper().strip()
-            if any(c.upper() in h_str for c in candidates): 
-                return i
+        if h and any(c.upper() in str(h).upper().strip() for c in candidates): return i
     return -1
 
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
