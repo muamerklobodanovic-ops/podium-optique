@@ -93,7 +93,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.59", "msg": "Backend Import V4 (English Headers Support)"}
+def read_root(): return {"status": "online", "version": "3.60", "msg": "Backend Low Memory V3"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -133,7 +133,7 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE (SMART HEADER SCAN + ENGLISH SUPPORT) ---
+# --- UPLOAD SUPER LIGHT (STREAMING) ---
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload...", flush=True)
@@ -146,11 +146,12 @@ async def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel (Mode Standard - Safe)...", flush=True)
-        wb = openpyxl.load_workbook(temp_file, data_only=True)
+        print("📖 Lecture Excel (Streaming Mode)...", flush=True)
+        # read_only=True est OBLIGATOIRE pour Render Free Tier
+        wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
-            print("♻️  Recréation de la table 'lenses'...", flush=True)
+            print("♻️  Vidage table 'lenses'...", flush=True)
             conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
             conn.execute(text("""
                 CREATE TABLE lenses (
@@ -173,24 +174,26 @@ async def upload_catalog(file: UploadFile = File(...)):
                 sheet_brand = sheet_name.strip().upper()
                 print(f"   🔹 Traitement {sheet_brand}...", flush=True)
 
-                rows = list(sheet.iter_rows(values_only=True))
-                if not rows: 
-                    print("      ⚠️ Feuille vide.", flush=True)
-                    continue
-
+                # Utilisation de l'itérateur pour ne pas charger toute la feuille
+                row_iterator = sheet.iter_rows(values_only=True)
+                
                 header_idx = -1
                 headers = []
                 
-                # Scan pour trouver l'en-tête (Français ou Anglais)
-                for i, row in enumerate(rows[:30]):
+                # Scan des 30 premières lignes pour trouver l'en-tête
+                current_idx = 0
+                for row in row_iterator:
+                    current_idx += 1
+                    if current_idx > 30: break
+                    
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
-                        header_idx = i
-                        print(f"      ✅ En-têtes trouvés ligne {i+1}", flush=True)
+                        header_idx = current_idx
+                        print(f"      ✅ En-têtes trouvés ligne {current_idx}", flush=True)
                         break
                 
-                if header_idx == -1:
+                if not headers:
                     print(f"      ❌ En-tête introuvable.", flush=True)
                     continue
 
@@ -206,11 +209,8 @@ async def upload_catalog(file: UploadFile = File(...)):
                 c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
                 c_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL_FLOW'])
                 c_color = get_col_idx(headers, ['COULEUR', 'COLOR'])
-                
-                # Prix Achat
                 c_buy = get_col_idx(headers, ['PRIX 2*NETS', 'PRIX', 'ACHAT', 'PURCHASE_PRICE'])
                 
-                # Prix Réseaux
                 c_kal = get_col_idx(headers, ['KALIXIA', 'SELL_KALIXIA'])
                 c_ite = get_col_idx(headers, ['ITELIS', 'SELL_ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE', 'SELL_CARTEBLANCHE'])
@@ -220,24 +220,21 @@ async def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 100 
+                BATCH_SIZE = 50 # Taille réduite pour éviter OOM Kill
 
-                # Parcours des données
-                for row in rows[header_idx+1:]:
+                # L'itérateur 'row_iterator' continue là où on s'est arrêté (après l'en-tête)
+                for row in row_iterator:
                     if not row[c_nom]: continue
                     
-                    # Si prix achat non trouvé, on le met à 0 mais on l'importe quand même si demandé
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
+                    # On accepte même si prix = 0 pour voir les verres
                     
-                    # Si le prix est 0, on l'importe quand même pour éviter les pertes de catalogue
-                    # if buy <= 0: continue 
-
                     brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
                     
                     name = clean_text(row[c_nom])
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
-                    if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA']): name += f" {mat}"
+                    if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
                     
                     geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
                     ltype = 'UNIFOCAL'
@@ -258,7 +255,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                         "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
                         "color": clean_text(row[c_color]) if c_color != -1 else "",
                         "buy": buy,
-                        "selling": clean_price(row[c_kal]) if c_kal != -1 else 0, # Prix par défaut = Kalixia
+                        "selling": clean_price(row[c_kal]) if c_kal != -1 else 0, 
                         "kal": clean_price(row[c_kal]) if c_kal != -1 else 0,
                         "ite": clean_price(row[c_ite]) if c_ite != -1 else 0,
                         "cb": clean_price(row[c_cb]) if c_cb != -1 else 0,
@@ -275,7 +272,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                             """), batch)
                         total_inserted += len(batch)
                         batch = []
-                        gc.collect()
+                        gc.collect() # Important pour libérer la RAM
                 
                 if batch:
                     with conn.begin():
@@ -284,7 +281,9 @@ async def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-        
+                    batch = []
+                    gc.collect()
+
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
         gc.collect()
