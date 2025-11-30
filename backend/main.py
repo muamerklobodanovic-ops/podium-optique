@@ -41,7 +41,6 @@ if DATABASE_URL:
         DATABASE_URL += f"{separator}sslmode=require"
 
     try:
-        # pool_pre_ping=True garde la connexion vivante
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         with engine.begin() as conn:
             conn.execute(text("""
@@ -67,7 +66,10 @@ def decrypt_dict(token):
 
 def clean_price(value):
     if not value or value == '' or value == '-': return 0.0
-    try: return float(str(value).replace('€', '').replace('â‚¬', '').replace('%', '').replace(' ', '').replace(',', '.'))
+    try:
+        # Nettoyage robuste: espaces, symboles, et espaces insécables (\xa0)
+        clean_str = str(value).replace('€', '').replace('â‚¬', '').replace('%', '').replace(' ', '').replace('\xa0', '').replace(',', '.')
+        return float(clean_str)
     except: return 0.0
 
 def clean_index(value):
@@ -79,14 +81,17 @@ def clean_text(value): return str(value).strip() if value else ""
 
 def get_col_idx(headers, candidates):
     for i, h in enumerate(headers):
-        if h and any(c.upper() in str(h).upper().strip() for c in candidates): return i
+        if h:
+            h_str = str(h).upper().strip()
+            if any(c.upper() in h_str for c in candidates): 
+                return i
     return -1
 
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.56", "msg": "Backend OK"}
+def read_root(): return {"status": "online", "version": "3.57", "msg": "Backend Fix Lecture V2"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -126,20 +131,22 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ---
+# --- UPLOAD ROBUSTE (SAFE MODE) ---
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
+    print(f"📥 Réception fichier : {file.filename}", flush=True)
     
     try:
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel...", flush=True)
-        wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
+        print("📖 Lecture Excel (Mode Standard - Safe)...", flush=True)
+        # Retrait du read_only=True qui posait problème avec certains fichiers
+        wb = openpyxl.load_workbook(temp_file, data_only=True)
         
         with engine.begin() as conn:
             print("♻️  Recréation de la table 'lenses'...", flush=True)
@@ -165,22 +172,29 @@ async def upload_catalog(file: UploadFile = File(...)):
                 sheet_brand = sheet_name.strip().upper()
                 print(f"   🔹 Traitement {sheet_brand}...", flush=True)
 
-                row_iterator = sheet.iter_rows(values_only=True)
+                # Lecture classique par liste (plus sûr que iter_rows en read_only si le fichier est mal formaté)
+                rows = list(sheet.iter_rows(values_only=True))
+                if not rows: 
+                    print("      ⚠️ Feuille vide.", flush=True)
+                    continue
+
                 header_idx = -1
                 headers = []
                 
-                current_row_idx = 0
-                for row in row_iterator:
-                    current_row_idx += 1
-                    if current_row_idx > 30: break
+                # Scan pour trouver l'en-tête
+                for i, row in enumerate(rows[:30]):
                     row_str = [str(c).upper() for c in row if c]
-                    if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME"]):
+                    if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX"]):
                         headers = row
-                        header_idx = current_row_idx
+                        header_idx = i
+                        print(f"      ✅ En-têtes trouvés ligne {i+1}", flush=True)
                         break
                 
-                if not headers: continue
+                if header_idx == -1:
+                    print(f"      ❌ En-tête introuvable.", flush=True)
+                    continue
 
+                # Mapping
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
@@ -198,18 +212,22 @@ async def upload_catalog(file: UploadFile = File(...)):
                 c_ite = get_col_idx(headers, ['ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE'])
                 c_sev = get_col_idx(headers, ['SEVEANE'])
-                c_sant = get_col_idx(headers, ['SANTECLAIRE'])
+                c_sant = get_col_idx(headers, ['SANTECLAIRE', 'SANTECLAIR'])
 
                 if c_nom == -1: continue
 
                 batch = []
                 BATCH_SIZE = 100 
 
-                for row in row_iterator:
+                # Parcours des données
+                for row in rows[header_idx+1:]:
                     if not row[c_nom]: continue
                     
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
-                    if buy <= 0: continue
+                    # On accepte les prix 0 si c'est un verre de catalogue (parfois prix manquant)
+                    # Mais on filtre si tout est vide
+                    if buy <= 0 and c_buy != -1: 
+                         pass # On garde quand même au cas où
 
                     brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
