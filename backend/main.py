@@ -41,7 +41,6 @@ if DATABASE_URL:
         DATABASE_URL += f"{separator}sslmode=require"
 
     try:
-        # pool_pre_ping=True garde la connexion vivante
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         with engine.begin() as conn:
             conn.execute(text("""
@@ -79,18 +78,14 @@ def clean_text(value): return str(value).strip() if value else ""
 
 def get_col_idx(headers, candidates):
     for i, h in enumerate(headers):
-        if h:
-            h_str = str(h).upper().strip()
-            # On vérifie si l'un des candidats est dans l'en-tête (ex: "PRIX" dans "PRIX NET")
-            if any(c.upper() in h_str for c in candidates): 
-                return i
+        if h and any(c.upper() in str(h).upper().strip() for c in candidates): return i
     return -1
 
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.54", "msg": "Import Strict Modele"}
+def read_root(): return {"status": "online", "version": "3.55", "msg": "Mapping Type Actif"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -112,28 +107,61 @@ def get_offers():
     except: return []
 
 @app.get("/lenses")
-def get_lenses(type: str = Query(None), brand: str = Query(None)):
+def get_lenses(
+    type: str = Query(None), 
+    brand: str = Query(None),
+    pocketLimit: float = Query(0.0) # Ajouté pour compatibilité frontend
+):
     if not engine: return []
     try:
         with engine.connect() as conn:
             sql = "SELECT * FROM lenses WHERE 1=1"
             params = {}
-            if brand: sql += " AND brand ILIKE :brand"; params["brand"] = brand
+            if brand: 
+                sql += " AND brand ILIKE :brand"
+                params["brand"] = brand
             if type: 
-                if "INTERIEUR" in type.upper(): sql += " AND (geometry ILIKE '%INTERIEUR%' OR geometry ILIKE '%DEGRESSIF%')"
-                else: sql += " AND geometry ILIKE :geo"; params["geo"] = f"%{type}%"
+                if "INTERIEUR" in type.upper(): 
+                    sql += " AND (geometry ILIKE '%INTERIEUR%' OR geometry ILIKE '%DEGRESSIF%')"
+                else: 
+                    sql += " AND geometry ILIKE :geo"
+                    params["geo"] = f"%{type}%"
+            
             sql += " ORDER BY purchase_price ASC LIMIT 3000"
             
             rows = conn.execute(text(sql), params).fetchall()
-            return [row._mapping for row in rows]
+            
+            # --- MAPPING VITAL POUR LE FRONTEND ---
+            # On transforme les noms de colonnes BDD (geometry) vers les noms attendus par React (type)
+            return [{
+                "id": r.id,
+                "brand": r.brand,
+                "name": r.name,
+                "commercial_code": r.commercial_code,
+                "type": r.geometry,        # <--- C'EST ICI LA CLÉ : on mappe geometry vers type
+                "geometry": r.geometry,    # On garde l'original au cas où
+                "design": r.design,
+                "index_mat": r.index_mat,
+                "material": r.material,
+                "coating": r.coating,
+                "commercial_flow": r.commercial_flow,
+                "color": r.color,
+                "purchase_price": float(r.purchase_price or 0),
+                "sellingPrice": float(r.selling_price or 0),
+                "sell_kalixia": float(r.sell_kalixia or 0),
+                "sell_itelis": float(r.sell_itelis or 0),
+                "sell_carteblanche": float(r.sell_carteblanche or 0),
+                "sell_seveane": float(r.sell_seveane or 0),
+                "sell_santeclair": float(r.sell_santeclair or 0),
+            } for r in rows]
+
     except Exception as e:
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE (SMART HEADER SCAN) ---
+# --- UPLOAD ---
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
-    print("🚀 Début requête upload...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
@@ -143,7 +171,7 @@ async def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel (Low Memory)...", flush=True)
+        print("📖 Lecture Excel...", flush=True)
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
@@ -174,48 +202,37 @@ async def upload_catalog(file: UploadFile = File(...)):
                 header_idx = -1
                 headers = []
                 
-                # CRITÈRE STRICT : La ligne DOIT contenir "MODELE" ou "MODÈLE" pour être un header valide
-                keywords_strict = ["MODELE", "MODÈLE", "LIBELLE", "LIBELLÉ", "NAME"]
-                
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
-                    if current_row_idx > 30: break # On scanne un peu plus loin (30 lignes)
-                    
+                    if current_row_idx > 30: break
                     row_str = [str(c).upper() for c in row if c]
-                    # Vérification stricte
-                    if any(k in s for s in row_str for k in keywords_strict):
+                    if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "LIBELLÉ", "NAME"]):
                         headers = row
-                        print(f"      ✅ En-têtes trouvés (Ligne {current_row_idx}): {headers}", flush=True)
+                        header_idx = current_row_idx
                         break
                 
-                if not headers: 
-                    print("      ❌ Pas d'en-tête 'MODELE' trouvé, feuille ignorée.", flush=True)
-                    continue
+                if not headers: continue
 
-                # Mapping avec tolérance (Accents et Anglais)
-                c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'MODÈLE', 'LIBELLE', 'LIBELLÉ', 'NAME'])
-                c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
-                c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
-                c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
-                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
-                c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
-                c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
-                c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
-                c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
-                c_flow = get_col_idx(headers, ['FLUX', 'FLOW'])
-                c_color = get_col_idx(headers, ['COULEUR', 'COLOR'])
-                c_buy = get_col_idx(headers, ['PRIX 2*NETS', '2*NETS', 'ACHAT', 'PURCHASE'])
-                
+                c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE'])
+                c_marque = get_col_idx(headers, ['MARQUE'])
+                c_edi = get_col_idx(headers, ['CODE EDI'])
+                c_code = get_col_idx(headers, ['CODE COMMERCIAL'])
+                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE'])
+                c_design = get_col_idx(headers, ['DESIGN'])
+                c_idx = get_col_idx(headers, ['INDICE'])
+                c_mat = get_col_idx(headers, ['MATIERE'])
+                c_coat = get_col_idx(headers, ['TRAITEMENT'])
+                c_flow = get_col_idx(headers, ['FLUX'])
+                c_color = get_col_idx(headers, ['COULEUR'])
+                c_buy = get_col_idx(headers, ['PRIX 2*NETS'])
                 c_kal = get_col_idx(headers, ['KALIXIA'])
                 c_ite = get_col_idx(headers, ['ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE'])
                 c_sev = get_col_idx(headers, ['SEVEANE'])
-                c_sant = get_col_idx(headers, ['SANTECLAIRE', 'SANTECLAIR'])
+                c_sant = get_col_idx(headers, ['SANTECLAIRE'])
 
-                if c_nom == -1: 
-                    print("      ⚠️ Colonne Modèle perdue malgré détection, bizarre.", flush=True)
-                    continue
+                if c_nom == -1: continue
 
                 batch = []
                 BATCH_SIZE = 100 
@@ -278,9 +295,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-                    batch = []
-                    gc.collect()
-
+        
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
         gc.collect()
