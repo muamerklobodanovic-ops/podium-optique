@@ -44,14 +44,12 @@ if DATABASE_URL:
         # pool_pre_ping=True garde la connexion vivante
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         with engine.begin() as conn:
-            # On crée les tables si elles n'existent pas, mais on ne force pas la suppression ici pour ne pas perdre les dossiers
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS client_offers (
                     id SERIAL PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     encrypted_identity TEXT, lens_details JSONB, financials JSONB
                 );
             """))
-            # Pour lenses, on s'assure juste qu'elle existe pour le démarrage, le refresh se fera à l'upload
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS lenses (
                     id SERIAL PRIMARY KEY, brand TEXT, name TEXT, purchase_price DECIMAL(10,2)
@@ -81,14 +79,18 @@ def clean_text(value): return str(value).strip() if value else ""
 
 def get_col_idx(headers, candidates):
     for i, h in enumerate(headers):
-        if h and any(c.upper() in str(h).upper().strip() for c in candidates): return i
+        if h:
+            h_str = str(h).upper().strip()
+            # On vérifie si l'un des candidats est dans l'en-tête (ex: "PRIX" dans "PRIX NET")
+            if any(c.upper() in h_str for c in candidates): 
+                return i
     return -1
 
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.53", "msg": "Import Intelligent Actif"}
+def read_root(): return {"status": "online", "version": "3.54", "msg": "Import Strict Modele"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -114,8 +116,6 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
     if not engine: return []
     try:
         with engine.connect() as conn:
-            # Si la table n'a pas les bonnes colonnes (suite à un crash précédent), ça peut échouer ici
-            # On fait un SELECT simple
             sql = "SELECT * FROM lenses WHERE 1=1"
             params = {}
             if brand: sql += " AND brand ILIKE :brand"; params["brand"] = brand
@@ -136,7 +136,6 @@ async def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
-    # Fichier temporaire
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
     print(f"📥 Réception fichier : {file.filename}", flush=True)
     
@@ -145,11 +144,8 @@ async def upload_catalog(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
         
         print("📖 Lecture Excel (Low Memory)...", flush=True)
-        # On utilise read_only=False pour pouvoir itérer plusieurs fois si besoin (pour le scan header)
-        # Sur des fichiers < 10Mo ça passe en mémoire sur Render
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
-        # 1. On prépare la connexion et on vide la table
         with engine.begin() as conn:
             print("♻️  Recréation de la table 'lenses'...", flush=True)
             conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
@@ -168,68 +164,67 @@ async def upload_catalog(file: UploadFile = File(...)):
         
         total_inserted = 0
         
-        # 2. Lecture et Insertion
         with engine.connect() as conn:
             for sheet_name in wb.sheetnames:
                 sheet = wb[sheet_name]
                 sheet_brand = sheet_name.strip().upper()
                 print(f"   🔹 Traitement {sheet_brand}...", flush=True)
 
-                # -- SCAN INTELLIGENT DES EN-TÊTES (MAX 20 LIGNES) --
                 row_iterator = sheet.iter_rows(values_only=True)
                 header_idx = -1
                 headers = []
                 
-                # On cherche la ligne qui contient "MODELE" ou "MARQUE" ou "PRIX"
-                # On consomme l'itérateur jusqu'à trouver
+                # CRITÈRE STRICT : La ligne DOIT contenir "MODELE" ou "MODÈLE" pour être un header valide
+                keywords_strict = ["MODELE", "MODÈLE", "LIBELLE", "LIBELLÉ", "NAME"]
+                
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
-                    if current_row_idx > 20: break # Trop loin
+                    if current_row_idx > 30: break # On scanne un peu plus loin (30 lignes)
                     
                     row_str = [str(c).upper() for c in row if c]
-                    if any(k in s for s in row_str for k in ["MODELE", "MARQUE", "BRAND", "NAME", "PRIX"]):
+                    # Vérification stricte
+                    if any(k in s for s in row_str for k in keywords_strict):
                         headers = row
-                        print(f"      ✅ En-têtes trouvés", flush=True)
-                        header_idx = current_row_idx
+                        print(f"      ✅ En-têtes trouvés (Ligne {current_row_idx}): {headers}", flush=True)
                         break
                 
                 if not headers: 
-                    print("      ❌ Pas d'en-tête trouvé, feuille ignorée.", flush=True)
+                    print("      ❌ Pas d'en-tête 'MODELE' trouvé, feuille ignorée.", flush=True)
                     continue
 
-                # Mapping
-                c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE'])
-                c_marque = get_col_idx(headers, ['MARQUE'])
-                c_edi = get_col_idx(headers, ['CODE EDI'])
-                c_code = get_col_idx(headers, ['CODE COMMERCIAL'])
-                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE'])
-                c_design = get_col_idx(headers, ['DESIGN'])
-                c_idx = get_col_idx(headers, ['INDICE'])
-                c_mat = get_col_idx(headers, ['MATIERE'])
-                c_coat = get_col_idx(headers, ['TRAITEMENT'])
-                c_flow = get_col_idx(headers, ['FLUX'])
-                c_color = get_col_idx(headers, ['COULEUR'])
-                c_buy = get_col_idx(headers, ['PRIX 2*NETS'])
+                # Mapping avec tolérance (Accents et Anglais)
+                c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'MODÈLE', 'LIBELLE', 'LIBELLÉ', 'NAME'])
+                c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
+                c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
+                c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
+                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
+                c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
+                c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
+                c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
+                c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
+                c_flow = get_col_idx(headers, ['FLUX', 'FLOW'])
+                c_color = get_col_idx(headers, ['COULEUR', 'COLOR'])
+                c_buy = get_col_idx(headers, ['PRIX 2*NETS', '2*NETS', 'ACHAT', 'PURCHASE'])
+                
                 c_kal = get_col_idx(headers, ['KALIXIA'])
                 c_ite = get_col_idx(headers, ['ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE'])
                 c_sev = get_col_idx(headers, ['SEVEANE'])
-                c_sant = get_col_idx(headers, ['SANTECLAIRE'])
+                c_sant = get_col_idx(headers, ['SANTECLAIRE', 'SANTECLAIR'])
 
                 if c_nom == -1: 
-                    print("      ❌ Colonne Modèle manquante.", flush=True)
+                    print("      ⚠️ Colonne Modèle perdue malgré détection, bizarre.", flush=True)
                     continue
 
                 batch = []
-                BATCH_SIZE = 100 # Batch réduit pour éviter OOM
+                BATCH_SIZE = 100 
 
-                # On continue l'itération là où on s'était arrêté
                 for row in row_iterator:
                     if not row[c_nom]: continue
                     
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
-                    if buy <= 0: continue # On ignore si pas de prix achat
+                    if buy <= 0: continue
 
                     brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
@@ -274,7 +269,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                             """), batch)
                         total_inserted += len(batch)
                         batch = []
-                        gc.collect() # Force nettoyage RAM
+                        gc.collect()
                 
                 if batch:
                     with conn.begin():
@@ -291,10 +286,9 @@ async def upload_catalog(file: UploadFile = File(...)):
         gc.collect()
         
         print(f"✅ TERMINE : {total_inserted} verres insérés.", flush=True)
-        return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
+        return {"status": "success", "count": total_inserted}
 
     except Exception as e:
-        error_msg = traceback.format_exc()
-        print(f"❌ CRASH UPLOAD :\n{error_msg}", flush=True)
+        print(f"❌ ERREUR UPLOAD: {traceback.format_exc()}", flush=True)
         if os.path.exists(temp_file): os.remove(temp_file)
-        raise HTTPException(status_code=500, detail=f"Erreur interne serveur : {str(e)}")
+        raise HTTPException(500, f"Erreur traitement: {str(e)}")
