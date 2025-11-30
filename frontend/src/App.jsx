@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.47"; // Top 3 Meilleures Marges
+const APP_VERSION = "3.48"; // Filtre Marque "TOUTES" Restrictif
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -98,7 +98,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
           {showMargins ? (<><div className="grid grid-cols-2 gap-4 mb-4"><div className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"><span className="block text-[10px] text-slate-400 font-bold mb-1">ACHAT HT</span><span className="block text-slate-400 line-through font-bold text-lg">{pPrice.toFixed(2)} €</span></div><div className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"><span className="block text-[10px] text-slate-400 font-bold mb-1">VENTE TTC</span><span className="block text-slate-800 font-bold text-2xl">{sPrice.toFixed(2)} €</span></div></div><div className="pt-2"><div className="flex justify-between items-end mb-2"><span className="text-xs font-bold text-green-700 tracking-wide">MARGE NETTE</span><span className="text-xs font-bold text-green-700 bg-green-100 px-3 py-1 rounded-lg">{displayMargin}%</span></div><div className="bg-green-50 p-4 rounded-2xl border border-green-100 flex items-center justify-between"><div className="text-4xl font-bold text-green-700 tracking-tight">+{mVal.toFixed(2)} €</div><Trophy className="w-8 h-8 text-green-200" /></div></div></>) : (<div className="flex flex-col h-full justify-center"><div className="bg-green-50 p-6 rounded-2xl border border-green-100 text-center mb-4 flex-1 flex flex-col justify-center items-center"><span className="block text-xs font-bold text-green-600 mb-2 uppercase tracking-wider">PRIX CONSEILLÉ (UNITAIRE)</span><span className="text-5xl font-bold text-green-600 tracking-tighter">{sPrice.toFixed(2)} €</span></div><div className="flex justify-between items-center px-2"><span className="text-[10px] font-mono text-slate-300 tracking-widest">REF-{lens.commercial_code || "---"}</span>{lens.commercial_flow && <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${cleanText(lens.commercial_flow).includes('STOCK') ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>{lens.commercial_flow}</span>}</div></div>)}
         </div>
 
-        {/* BOUTON COMPARER (Seulement si pas référence) */}
+        {/* BOUTON COMPARER */}
         {!isReference && onCompare && (
              <div className="mt-4 pt-4 border-t border-slate-100">
                 <button onClick={(e) => { e.stopPropagation(); onCompare(lens); }} className="w-full py-2 bg-slate-50 hover:bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"><ArrowRightLeft className="w-3 h-3"/> COMPARER</button>
@@ -118,7 +118,7 @@ function App() {
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
 
   const [userSettings, setUserSettings] = useState(() => {
-    try { const saved = localStorage.getItem("optique_user_settings"); if (saved) { const parsed = JSON.parse(saved); return { ...DEFAULT_SETTINGS, ...parsed, pricing: { ...DEFAULT_SETTINGS.pricing, ...(parsed.pricing || {}) } }; } return DEFAULT_SETTINGS; } catch (e) { return DEFAULT_SETTINGS; }
+    try { const saved = localStorage.getItem("optique_user_settings"); return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS; } catch (e) { return DEFAULT_SETTINGS; }
   });
   useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
 
@@ -145,7 +145,7 @@ function App() {
 
   useEffect(() => { setFormData(prev => ({ ...prev, coating: '' })); fetchData(); }, [formData.brand, formData.network, formData.type]); 
 
-  // FILTRAGE MARQUES
+  // FILTRAGE MARQUES (Logique avec restrictions "TOUTES")
   const getFilteredBrandsList = () => {
       const net = formData.network;
       if (net === 'HORS_RESEAU') return brands; 
@@ -158,7 +158,26 @@ function App() {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
        let workingList = safeLenses.map(l => ({...l}));
-       if (formData.brand && formData.brand !== '') { workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); }
+       
+       // --- 1. FILTRE MARQUE ---
+       if (formData.brand && formData.brand !== '') { 
+           workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
+       } else {
+           // Cas "TOUTES" : On applique les restrictions du réseau ici aussi
+           if (formData.network === 'SANTECLAIR') {
+               workingList = workingList.filter(l => {
+                   const b = cleanText(l.brand);
+                   return b === 'SEIKO' || b === 'ZEISS';
+               });
+           } else if (formData.network !== 'HORS_RESEAU') {
+               // Autres réseaux : Pas d'Orus, Pas de Zeiss
+               workingList = workingList.filter(l => {
+                   const b = cleanText(l.brand);
+                   return b !== 'ORUS' && b !== 'ZEISS';
+               });
+           }
+       }
+
        if (formData.type) { const targetType = cleanText(formData.type); if (targetType.includes("INTERIEUR")) { workingList = workingList.filter(l => cleanText(l.type).includes("INTERIEUR")); } else { workingList = workingList.filter(l => cleanText(l.type).includes(targetType)); } }
 
        if (formData.network === 'HORS_RESEAU') {
@@ -181,7 +200,7 @@ function App() {
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { const sPrice = l[key] ? parseFloat(l[key]) : 0; return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; });
            workingList = workingList.filter(l => l.sellingPrice > 0);
-           // AJOUT: Tri par marge décroissante aussi pour les réseaux
+           // AJOUT: Tri par marge pour les réseaux aussi
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
@@ -288,7 +307,7 @@ function App() {
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* HEADER ... */}
+      {/* HEADER ... (Identique) */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 w-full lg:w-auto">
@@ -318,7 +337,7 @@ function App() {
             </div>
         </aside>
 
-        {/* RESULTATS (Modifié pour ne montrer que les 3 premiers) */}
+        {/* RESULTATS */}
         <section className="flex-1 p-6 overflow-y-auto pb-40">
             <div className="max-w-7xl mx-auto">
                 {comparisonLens && (
