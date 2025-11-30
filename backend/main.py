@@ -133,24 +133,25 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
 # --- UPLOAD ROBUSTE (SMART HEADER SCAN) ---
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
+    print("🚀 Début requête upload...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
     # Fichier temporaire
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
-    print(f"📥 Réception fichier : {file.filename}")
+    print(f"📥 Réception fichier : {file.filename}", flush=True)
     
     try:
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel...")
+        print("📖 Lecture Excel (Low Memory)...", flush=True)
         # On utilise read_only=False pour pouvoir itérer plusieurs fois si besoin (pour le scan header)
         # Sur des fichiers < 10Mo ça passe en mémoire sur Render
-        wb = openpyxl.load_workbook(temp_file, data_only=True)
+        wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         # 1. On prépare la connexion et on vide la table
         with engine.begin() as conn:
-            print("♻️  Recréation de la table 'lenses'...")
+            print("♻️  Recréation de la table 'lenses'...", flush=True)
             conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
             conn.execute(text("""
                 CREATE TABLE lenses (
@@ -172,26 +173,29 @@ async def upload_catalog(file: UploadFile = File(...)):
             for sheet_name in wb.sheetnames:
                 sheet = wb[sheet_name]
                 sheet_brand = sheet_name.strip().upper()
-                print(f"   🔹 Traitement {sheet_brand}...")
+                print(f"   🔹 Traitement {sheet_brand}...", flush=True)
 
                 # -- SCAN INTELLIGENT DES EN-TÊTES (MAX 20 LIGNES) --
-                rows = list(sheet.iter_rows(max_row=20000, values_only=True)) # On charge la feuille (si < 20k lignes)
-                if not rows: continue
-
+                row_iterator = sheet.iter_rows(values_only=True)
                 header_idx = -1
                 headers = []
                 
                 # On cherche la ligne qui contient "MODELE" ou "MARQUE" ou "PRIX"
-                for i, row in enumerate(rows[:20]):
+                # On consomme l'itérateur jusqu'à trouver
+                current_row_idx = 0
+                for row in row_iterator:
+                    current_row_idx += 1
+                    if current_row_idx > 20: break # Trop loin
+                    
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "MARQUE", "BRAND", "NAME", "PRIX"]):
-                        header_idx = i
                         headers = row
-                        print(f"      ✅ En-têtes trouvés ligne {i+1}")
+                        print(f"      ✅ En-têtes trouvés", flush=True)
+                        header_idx = current_row_idx
                         break
                 
-                if header_idx == -1: 
-                    print("      ❌ Pas d'en-tête trouvé, feuille ignorée.")
+                if not headers: 
+                    print("      ❌ Pas d'en-tête trouvé, feuille ignorée.", flush=True)
                     continue
 
                 # Mapping
@@ -214,14 +218,14 @@ async def upload_catalog(file: UploadFile = File(...)):
                 c_sant = get_col_idx(headers, ['SANTECLAIRE'])
 
                 if c_nom == -1: 
-                    print("      ❌ Colonne Modèle manquante.")
+                    print("      ❌ Colonne Modèle manquante.", flush=True)
                     continue
 
                 batch = []
-                BATCH_SIZE = 500 
+                BATCH_SIZE = 100 # Batch réduit pour éviter OOM
 
-                # On itère à partir de la ligne APRÈS les en-têtes
-                for row in rows[header_idx+1:]:
+                # On continue l'itération là où on s'était arrêté
+                for row in row_iterator:
                     if not row[c_nom]: continue
                     
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
@@ -270,7 +274,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                             """), batch)
                         total_inserted += len(batch)
                         batch = []
-                        gc.collect()
+                        gc.collect() # Force nettoyage RAM
                 
                 if batch:
                     with conn.begin():
@@ -279,14 +283,18 @@ async def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-        
+                    batch = []
+                    gc.collect()
+
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
+        gc.collect()
         
-        print(f"✅ TERMINE : {total_inserted} verres insérés.")
+        print(f"✅ TERMINE : {total_inserted} verres insérés.", flush=True)
         return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
 
     except Exception as e:
-        print(f"❌ ERREUR UPLOAD: {traceback.format_exc()}")
+        error_msg = traceback.format_exc()
+        print(f"❌ CRASH UPLOAD :\n{error_msg}", flush=True)
         if os.path.exists(temp_file): os.remove(temp_file)
-        raise HTTPException(500, f"Erreur traitement: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur interne serveur : {str(e)}")
