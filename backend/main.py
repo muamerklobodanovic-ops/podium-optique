@@ -41,6 +41,7 @@ if DATABASE_URL:
         DATABASE_URL += f"{separator}sslmode=require"
 
     try:
+        # pool_pre_ping=True garde la connexion vivante
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         with engine.begin() as conn:
             conn.execute(text("""
@@ -67,10 +68,9 @@ def decrypt_dict(token):
 def clean_price(value):
     if not value or value == '' or value == '-': return 0.0
     try:
-        # Suppression de tous les caractères non numériques sauf . et ,
-        s = str(value).replace('€', '').replace(' ', '').replace('\xa0', '').strip()
-        s = s.replace(',', '.')
-        return float(s)
+        # Nettoyage robuste: espaces, symboles, et espaces insécables (\xa0)
+        clean_str = str(value).replace('€', '').replace('â‚¬', '').replace('%', '').replace(' ', '').replace('\xa0', '').replace(',', '.')
+        return float(clean_str)
     except: return 0.0
 
 def clean_index(value):
@@ -84,20 +84,16 @@ def get_col_idx(headers, candidates):
     for i, h in enumerate(headers):
         if h:
             h_str = str(h).upper().strip()
-            # Nettoyage des accents pour la comparaison
-            h_clean = h_str.replace('É', 'E').replace('È', 'E').replace('Ê', 'E')
-            
-            for c in candidates:
-                c_clean = c.upper().replace('É', 'E').replace('È', 'E')
-                if c_clean in h_clean: 
-                    return i
+            # On vérifie si l'un des candidats est dans l'en-tête (ex: "PRIX" dans "PRIX NET")
+            if any(c.upper() in h_str for c in candidates): 
+                return i
     return -1
 
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.58", "msg": "Backend Import Intelligent V3"}
+def read_root(): return {"status": "online", "version": "3.59", "msg": "Backend Import V4 (English Headers Support)"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -130,13 +126,14 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
                 if "INTERIEUR" in type.upper(): sql += " AND (geometry ILIKE '%INTERIEUR%' OR geometry ILIKE '%DEGRESSIF%')"
                 else: sql += " AND geometry ILIKE :geo"; params["geo"] = f"%{type}%"
             sql += " ORDER BY purchase_price ASC LIMIT 3000"
+            
             rows = conn.execute(text(sql), params).fetchall()
             return [row._mapping for row in rows]
     except Exception as e:
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD AVANCÉ ---
+# --- UPLOAD ROBUSTE (SMART HEADER SCAN + ENGLISH SUPPORT) ---
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload...", flush=True)
@@ -149,8 +146,8 @@ async def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel...", flush=True)
-        wb = openpyxl.load_workbook(temp_file, data_only=True) 
+        print("📖 Lecture Excel (Mode Standard - Safe)...", flush=True)
+        wb = openpyxl.load_workbook(temp_file, data_only=True)
         
         with engine.begin() as conn:
             print("♻️  Recréation de la table 'lenses'...", flush=True)
@@ -184,101 +181,89 @@ async def upload_catalog(file: UploadFile = File(...)):
                 header_idx = -1
                 headers = []
                 
-                # Scan large pour trouver l'en-tête
+                # Scan pour trouver l'en-tête (Français ou Anglais)
                 for i, row in enumerate(rows[:30]):
                     row_str = [str(c).upper() for c in row if c]
-                    # On cherche large : MODELE, LIBELLE, ou même juste PRIX et MARQUE
-                    if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX 2*NETS", "ACHAT"]):
+                    if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
                         header_idx = i
-                        print(f"      ✅ En-têtes trouvés ligne {i+1}: {[str(h).strip() for h in row if h][:5]}...", flush=True)
+                        print(f"      ✅ En-têtes trouvés ligne {i+1}", flush=True)
                         break
                 
-                # --- MAPPING ---
-                c_nom = -1
-                
-                if header_idx != -1:
-                    # Mapping par Nom
-                    c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
-                    c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
-                    c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
-                    c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
-                    c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE'])
-                    c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
-                    c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
-                    c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE'])
-                    c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
-                    c_flow = get_col_idx(headers, ['FLUX'])
-                    c_color = get_col_idx(headers, ['COULEUR'])
-                    c_buy = get_col_idx(headers, ['PRIX 2*NETS', 'PRIX', 'ACHAT'])
-                    
-                    c_kal = get_col_idx(headers, ['KALIXIA'])
-                    c_ite = get_col_idx(headers, ['ITELIS'])
-                    c_cb = get_col_idx(headers, ['CARTE BLANCHE'])
-                    c_sev = get_col_idx(headers, ['SEVEANE'])
-                    c_sant = get_col_idx(headers, ['SANTECLAIRE'])
-                else:
-                    # Mapping par POSITION (Plan B) si en-tête introuvable
-                    print("      ⚠️ En-tête introuvable, tentative par position standard...", flush=True)
-                    header_idx = 0 # On suppose que les données commencent ligne 2
-                    c_marque = 0   # A
-                    c_edi = 1      # B
-                    c_code = 2     # C
-                    c_nom = 3      # D (Modèle)
-                    c_geo = 5      # F
-                    c_design = 6   # G
-                    c_idx = 7      # H
-                    c_mat = 8      # I
-                    c_coat = 9     # J
-                    c_flow = 10    # K
-                    c_color = 11   # L
-                    c_buy = 12     # M (Prix Achat)
-                    
-                    c_kal = 15; c_ite = 16; c_cb = 17; c_sev = 18; c_sant = 19
-
-                if c_nom == -1:
-                    print("      ❌ Impossible de localiser la colonne 'MODÈLE'. Passage.", flush=True)
+                if header_idx == -1:
+                    print(f"      ❌ En-tête introuvable.", flush=True)
                     continue
+
+                # Mapping Polyglotte (FR + EN)
+                c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
+                c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
+                c_edi = get_col_idx(headers, ['CODE EDI', 'EDI', 'EDI_CODE'])
+                c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
+                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
+                c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
+                c_idx = get_col_idx(headers, ['INDICE', 'INDEX', 'INDEX_MAT'])
+                c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
+                c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
+                c_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL_FLOW'])
+                c_color = get_col_idx(headers, ['COULEUR', 'COLOR'])
+                
+                # Prix Achat
+                c_buy = get_col_idx(headers, ['PRIX 2*NETS', 'PRIX', 'ACHAT', 'PURCHASE_PRICE'])
+                
+                # Prix Réseaux
+                c_kal = get_col_idx(headers, ['KALIXIA', 'SELL_KALIXIA'])
+                c_ite = get_col_idx(headers, ['ITELIS', 'SELL_ITELIS'])
+                c_cb = get_col_idx(headers, ['CARTE BLANCHE', 'SELL_CARTEBLANCHE'])
+                c_sev = get_col_idx(headers, ['SEVEANE', 'SELL_SEVEANE'])
+                c_sant = get_col_idx(headers, ['SANTECLAIRE', 'SANTECLAIR', 'SELL_SANTECLAIR'])
+
+                if c_nom == -1: continue
 
                 batch = []
                 BATCH_SIZE = 100 
 
+                # Parcours des données
                 for row in rows[header_idx+1:]:
-                    # Sécurité index
-                    if len(row) <= c_nom or not row[c_nom]: continue
+                    if not row[c_nom]: continue
                     
-                    # Sécurité prix achat
-                    buy = 0
-                    if c_buy != -1 and len(row) > c_buy:
-                        buy = clean_price(row[c_buy])
-                    if buy <= 0: continue # On ignore les verres sans prix
+                    # Si prix achat non trouvé, on le met à 0 mais on l'importe quand même si demandé
+                    buy = clean_price(row[c_buy]) if c_buy != -1 else 0
+                    
+                    # Si le prix est 0, on l'importe quand même pour éviter les pertes de catalogue
+                    # if buy <= 0: continue 
 
-                    brand = clean_text(row[c_marque]) if c_marque != -1 and len(row) > c_marque else sheet_brand
+                    brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
                     
                     name = clean_text(row[c_nom])
-                    mat = clean_text(row[c_mat]) if c_mat != -1 and len(row) > c_mat else ""
+                    mat = clean_text(row[c_mat]) if c_mat != -1 else ""
+                    if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA']): name += f" {mat}"
                     
-                    # Ajout matière au nom si photochromique pour différencier
-                    if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
-                    
-                    geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 and len(row) > c_geo else ""
+                    geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
                     ltype = 'UNIFOCAL'
                     if 'PROG' in geo_raw: ltype = 'PROGRESSIF'
                     elif 'DEGRESSIF' in geo_raw: ltype = 'DEGRESSIF'
                     elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
 
-                    # Helper extraction sécurisée
-                    def get_val(idx): return clean_text(row[idx]) if idx != -1 and len(row) > idx else ""
-                    def get_prc(idx): return clean_price(row[idx]) if idx != -1 and len(row) > idx else 0
-
                     lens = {
                         "brand": brand[:100], 
-                        "edi": get_val(c_edi), "code": get_val(c_code), "name": name,
-                        "geo": ltype, "design": get_val(c_design), "idx": clean_index(row[c_idx]) if c_idx != -1 and len(row) > c_idx else "1.50",
-                        "mat": mat, "coat": get_val(c_coat), "flow": get_val(c_flow), "color": get_val(c_color),
-                        "buy": buy, "selling": get_prc(c_kal), # Prix par défaut
-                        "kal": get_prc(c_kal), "ite": get_prc(c_ite), "cb": get_prc(c_cb), "sev": get_prc(c_sev), "sant": get_prc(c_sant),
+                        "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
+                        "code": clean_text(row[c_code]) if c_code != -1 else "",
+                        "name": name,
+                        "geo": ltype,
+                        "design": clean_text(row[c_design]) if c_design != -1 else "STANDARD",
+                        "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
+                        "mat": mat,
+                        "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
+                        "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
+                        "color": clean_text(row[c_color]) if c_color != -1 else "",
+                        "buy": buy,
+                        "selling": clean_price(row[c_kal]) if c_kal != -1 else 0, # Prix par défaut = Kalixia
+                        "kal": clean_price(row[c_kal]) if c_kal != -1 else 0,
+                        "ite": clean_price(row[c_ite]) if c_ite != -1 else 0,
+                        "cb": clean_price(row[c_cb]) if c_cb != -1 else 0,
+                        "sev": clean_price(row[c_sev]) if c_sev != -1 else 0,
+                        "sant": clean_price(row[c_sant]) if c_sant != -1 else 0,
                     }
                     batch.append(lens)
 
@@ -299,14 +284,13 @@ async def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-                    batch = []
         
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
         gc.collect()
         
         print(f"✅ TERMINE : {total_inserted} verres insérés.", flush=True)
-        return {"status": "success", "count": total_inserted}
+        return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
 
     except Exception as e:
         print(f"❌ ERREUR UPLOAD: {traceback.format_exc()}", flush=True)
