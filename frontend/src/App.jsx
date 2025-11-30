@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.46"; // Ajout Fonction Comparateur
+const APP_VERSION = "3.47"; // Top 3 Meilleures Marges
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -79,20 +79,8 @@ const NetworkLogo = ({ network, isSelected, onClick }) => {
 const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected, onCompare, isReference = false }) => {
   if (!lens) return null;
 
-  const podiumStyles = [
-      { border: "border-yellow-400 ring-4 ring-yellow-50 shadow-xl shadow-yellow-100", badge: "bg-yellow-400 text-white border-yellow-500", icon: <Trophy className="w-5 h-5 text-white" />, label: "MEILLEUR CHOIX" }, 
-      { border: `border-slate-200 shadow-lg ${currentTheme.shadow || ''}`, badge: `${currentTheme.light || 'bg-gray-100'} ${currentTheme.textDark || 'text-gray-800'} ${currentTheme.border || 'border-gray-200'}`, icon: <Shield className={`w-5 h-5 ${currentTheme.text || 'text-gray-600'}`} />, label: "OFFRE OPTIMISÉE" }, 
-      { border: "border-slate-200 shadow-lg", badge: "bg-slate-100 text-slate-600 border-slate-200", icon: <Star className="w-5 h-5 text-orange-400" />, label: "PREMIUM" }
-  ];
-  
-  // Gestion du style (Référence > Sélectionné > Podium)
-  let activeStyle = podiumStyles[index !== undefined && index < 3 ? index : 1];
-  if (isReference) {
-      activeStyle = { border: "border-blue-500 ring-4 ring-blue-50 shadow-xl", badge: "bg-blue-600 text-white", icon: <ArrowRightLeft className="w-5 h-5"/>, label: "RÉFÉRENCE" };
-  } else if (isSelected) {
-      activeStyle = { border: "border-blue-600 ring-4 ring-blue-100 shadow-2xl scale-[1.02]", badge: "bg-blue-600 text-white", icon: <CheckCircle className="w-5 h-5"/>, label: "SÉLECTIONNÉ" };
-  }
-
+  const podiumStyles = [{ border: "border-yellow-400 ring-4 ring-yellow-50 shadow-xl shadow-yellow-100", badge: "bg-yellow-400 text-white border-yellow-500", icon: <Trophy className="w-5 h-5 text-white" />, label: "MEILLEUR CHOIX" }, { border: `border-slate-200 shadow-lg ${currentTheme.shadow || ''}`, badge: `${currentTheme.light || 'bg-gray-100'} ${currentTheme.textDark || 'text-gray-800'} ${currentTheme.border || 'border-gray-200'}`, icon: <Shield className={`w-5 h-5 ${currentTheme.text || 'text-gray-600'}`} />, label: "OFFRE OPTIMISÉE" }, { border: "border-slate-200 shadow-lg", badge: "bg-slate-100 text-slate-600 border-slate-200", icon: <Star className="w-5 h-5 text-orange-400" />, label: "PREMIUM" }];
+  const activeStyle = isSelected ? { border: "border-blue-600 ring-4 ring-blue-100 shadow-2xl scale-[1.02]", badge: "bg-blue-600 text-white", icon: <ArrowRightLeft className="w-5 h-5"/>, label: "SÉLECTIONNÉ" } : (podiumStyles[index !== undefined && index < 3 ? index : 1]);
   const sPrice = safeNum(lens.sellingPrice);
   const pPrice = safeNum(lens.purchase_price);
   const mVal = safeNum(lens.margin);
@@ -136,7 +124,7 @@ function App() {
 
   const [formData, setFormData] = useState({ network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '1.60', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false });
 
-  const [serverUrl, setServerUrl] = useState(localStorage.getItem("optique_server_url") || "https://api-podium.onrender.com");
+  const [serverUrl, setServerUrl] = useState(localStorage.getItem("optique_server_url") || "https://api-podium-optique.onrender.com");
   const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
   const cleanBaseUrl = (url) => url.replace(/\/lenses\/?$/, '').replace(/\/sync\/?$/, '').replace(/\/offers\/?$/, '').replace(/\/upload-catalog\/?$/, '').replace(/\/$/, '');
   const baseBackendUrl = cleanBaseUrl(isLocal ? "http://127.0.0.1:8000" : serverUrl);
@@ -157,6 +145,7 @@ function App() {
 
   useEffect(() => { setFormData(prev => ({ ...prev, coating: '' })); fetchData(); }, [formData.brand, formData.network, formData.type]); 
 
+  // FILTRAGE MARQUES
   const getFilteredBrandsList = () => {
       const net = formData.network;
       if (net === 'HORS_RESEAU') return brands; 
@@ -192,6 +181,8 @@ function App() {
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { const sPrice = l[key] ? parseFloat(l[key]) : 0; return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; });
            workingList = workingList.filter(l => l.sellingPrice > 0);
+           // AJOUT: Tri par marge décroissante aussi pour les réseaux
+           workingList.sort((a, b) => b.margin - a.margin);
        }
 
        workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
@@ -276,34 +267,28 @@ function App() {
   const remainder = (totalPair + secondPairPrice) - totalRefund;
 
   // --- TEST CONNEXION ---
-  const testConnection = () => {
-      setSyncLoading(true);
-      axios.get(API_URL, { params: { limit: 1 } })
-        .then(res => { alert(`✅ CONNEXION RÉUSSIE !\nAPI: ${API_URL}\n${res.data.length} verres chargés.`); })
-        .catch(err => { alert(`❌ ÉCHEC DE CONNEXION\nURL: ${API_URL}\nErreur: ${err.message}`); })
-        .finally(() => setSyncLoading(false));
-  };
-
-  // --- VERIFICATION BDD ---
   const checkDatabase = () => {
       setSyncLoading(true);
       axios.get(API_URL) 
         .then(res => { 
             const data = Array.isArray(res.data) ? res.data : [];
-            if (data.length === 0) {
-                alert("⚠️ La base de données est VIDE (0 verres).\n👉 Veuillez importer votre fichier Excel.");
-            } else {
-                const first = data[0];
-                alert(`✅ CONNEXION OK : ${data.length} verres trouvés.\n\n🔍 Premier verre :\n• Marque : ${first.brand}\n• Modèle : ${first.name}\n• Type : ${first.type}\n• Prix Achat : ${first.purchase_price} €`);
-            }
+            if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); }
         })
-        .catch(err => { alert(`❌ ERREUR TECHNIQUE\nImpossible de lire la base.\nURL : ${API_URL}\nErreur : ${err.message}`); })
+        .catch(err => { alert(`❌ ERREUR: ${err.message}`); })
+        .finally(() => setSyncLoading(false));
+  };
+
+  const testConnection = () => {
+      setSyncLoading(true);
+      axios.get(API_URL, { params: { limit: 1 } })
+        .then(res => { alert(`✅ CONNEXION RÉUSSIE !`); })
+        .catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); })
         .finally(() => setSyncLoading(false));
   };
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* HEADER ... (Identique) */}
+      {/* HEADER ... */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 w-full lg:w-auto">
@@ -320,7 +305,7 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative z-0">
-        {/* SIDEBAR ... (Identique) */}
+        {/* SIDEBAR FILTRES */}
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-20 transition-all duration-300 w-80 ${isSidebarOpen ? '' : 'hidden'}`}>
             <div className="p-6 space-y-6 pb-32">
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
@@ -333,7 +318,7 @@ function App() {
             </div>
         </aside>
 
-        {/* RESULTATS */}
+        {/* RESULTATS (Modifié pour ne montrer que les 3 premiers) */}
         <section className="flex-1 p-6 overflow-y-auto pb-40">
             <div className="max-w-7xl mx-auto">
                 {comparisonLens && (
@@ -343,7 +328,8 @@ function App() {
                     </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredLenses.map((lens, index) => (<LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} onSelect={setSelectedLens} isSelected={selectedLens && selectedLens.id === lens.id} />))}
+                    {/* RESTRICTION AUX 3 PREMIERS RÉSULTATS */}
+                    {filteredLenses.slice(0, 3).map((lens, index) => (<LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} onSelect={setSelectedLens} isSelected={selectedLens && selectedLens.id === lens.id} />))}
                 </div>
                 {filteredLenses.length === 0 && !loading && <div className="text-center py-20 opacity-50 text-sm font-bold">AUCUN VERRE TROUVÉ</div>}
             </div>
@@ -361,7 +347,7 @@ function App() {
           </div>
       )}
 
-      {/* MODALE SETTINGS (Safe Render) */}
+      {/* MODALE SETTINGS */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
            <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
@@ -371,11 +357,11 @@ function App() {
               {/* CHECK BDD */}
               <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center"><div><label className="block text-xs font-bold text-slate-600">ÉTAT BASE DE DONNÉES</label><p className="text-[10px] text-slate-400 mt-1">Vérifier le contenu importé</p></div><button onClick={checkDatabase} disabled={syncLoading} className="bg-gray-800 text-white px-4 py-2 rounded text-xs font-bold flex items-center gap-2">{syncLoading ? <Activity className="w-3 h-3 animate-spin"/> : <Server className="w-3 h-3"/>} VÉRIFIER</button></div>
               {/* URL API */}
-              <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL DE L'API (BACKEND)</label><div className="flex gap-2"><input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={testConnection} disabled={syncLoading} className="bg-gray-800 text-white px-4 rounded text-xs font-bold">{syncLoading ? <Activity className="w-4 h-4 animate-spin"/> : "TEST CONNEXION"}</button></div><p className="text-[10px] text-slate-400 mt-1">Si le test échoue, vérifiez que le serveur Render est actif.</p></div>
+              <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL DE L'API (BACKEND)</label><div className="flex gap-2"><input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={testConnection} disabled={syncLoading} className="bg-gray-800 text-white px-4 rounded text-xs font-bold">{syncLoading ? <Activity className="w-4 h-4 animate-spin"/> : "TEST"}</button></div><p className="text-[10px] text-slate-400 mt-1">Si le test échoue, vérifiez que le serveur Render est actif.</p></div>
               <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL GOOGLE SHEETS (LEGACY)</label><div className="flex gap-2"><input type="text" value={sheetsUrl} onChange={(e) => setSheetsUrl(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={triggerSync} disabled={syncLoading} className="bg-blue-600 text-white px-4 rounded text-xs font-bold">SYNCHRO</button></div>{syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}</div>
               
               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
-              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
+               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
                
                {/* PRIX MARCHÉ LIBRE */}
                <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4>
