@@ -88,7 +88,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.52"}
+def read_root(): return {"status": "online", "version": "3.53", "msg": "Import Intelligent Actif"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -130,7 +130,7 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE (RECRÉATION TABLE) ---
+# --- UPLOAD ROBUSTE (SMART HEADER SCAN) ---
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
@@ -144,13 +144,14 @@ async def upload_catalog(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
         
         print("📖 Lecture Excel...")
-        wb = openpyxl.load_workbook(temp_file, read_only=True, data_only=True)
+        # On utilise read_only=False pour pouvoir itérer plusieurs fois si besoin (pour le scan header)
+        # Sur des fichiers < 10Mo ça passe en mémoire sur Render
+        wb = openpyxl.load_workbook(temp_file, data_only=True)
         
-        # 1. On prépare la connexion et on vide la table AVANT de lire (pour être sûr de la structure)
+        # 1. On prépare la connexion et on vide la table
         with engine.begin() as conn:
             print("♻️  Recréation de la table 'lenses'...")
             conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
-            # Utilisation de TEXT partout pour éviter les limites de taille
             conn.execute(text("""
                 CREATE TABLE lenses (
                     id SERIAL PRIMARY KEY,
@@ -166,20 +167,35 @@ async def upload_catalog(file: UploadFile = File(...)):
         
         total_inserted = 0
         
-        # 2. Lecture et Insertion par petits paquets
+        # 2. Lecture et Insertion
         with engine.connect() as conn:
             for sheet_name in wb.sheetnames:
                 sheet = wb[sheet_name]
                 sheet_brand = sheet_name.strip().upper()
+                print(f"   🔹 Traitement {sheet_brand}...")
+
+                # -- SCAN INTELLIGENT DES EN-TÊTES (MAX 20 LIGNES) --
+                rows = list(sheet.iter_rows(max_row=20000, values_only=True)) # On charge la feuille (si < 20k lignes)
+                if not rows: continue
+
+                header_idx = -1
+                headers = []
                 
-                row_iterator = sheet.iter_rows(values_only=True)
-                try: headers = next(row_iterator)
-                except: continue
+                # On cherche la ligne qui contient "MODELE" ou "MARQUE" ou "PRIX"
+                for i, row in enumerate(rows[:20]):
+                    row_str = [str(c).upper() for c in row if c]
+                    if any(k in s for s in row_str for k in ["MODELE", "MARQUE", "BRAND", "NAME", "PRIX"]):
+                        header_idx = i
+                        headers = row
+                        print(f"      ✅ En-têtes trouvés ligne {i+1}")
+                        break
+                
+                if header_idx == -1: 
+                    print("      ❌ Pas d'en-tête trouvé, feuille ignorée.")
+                    continue
 
                 # Mapping
-                c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE'])
-                if c_nom == -1: continue
-                
+                c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE'])
                 c_marque = get_col_idx(headers, ['MARQUE'])
                 c_edi = get_col_idx(headers, ['CODE EDI'])
                 c_code = get_col_idx(headers, ['CODE COMMERCIAL'])
@@ -197,18 +213,22 @@ async def upload_catalog(file: UploadFile = File(...)):
                 c_sev = get_col_idx(headers, ['SEVEANE'])
                 c_sant = get_col_idx(headers, ['SANTECLAIRE'])
 
-                batch = []
-                # Petit batch pour économiser la RAM du serveur gratuit
-                BATCH_SIZE = 200 
+                if c_nom == -1: 
+                    print("      ❌ Colonne Modèle manquante.")
+                    continue
 
-                for row in row_iterator:
+                batch = []
+                BATCH_SIZE = 500 
+
+                # On itère à partir de la ligne APRÈS les en-têtes
+                for row in rows[header_idx+1:]:
                     if not row[c_nom]: continue
                     
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
-                    if buy <= 0: continue
+                    if buy <= 0: continue # On ignore si pas de prix achat
 
                     brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
-                    if not brand: brand = sheet_brand
+                    if not brand or brand == "None": brand = sheet_brand
                     
                     name = clean_text(row[c_nom])
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
@@ -221,7 +241,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                     elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
 
                     lens = {
-                        "brand": brand, 
+                        "brand": brand[:100], 
                         "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
                         "code": clean_text(row[c_code]) if c_code != -1 else "",
                         "name": name,
@@ -250,8 +270,8 @@ async def upload_catalog(file: UploadFile = File(...)):
                             """), batch)
                         total_inserted += len(batch)
                         batch = []
+                        gc.collect()
                 
-                # Dernier lot
                 if batch:
                     with conn.begin():
                         conn.execute(text("""
@@ -262,10 +282,9 @@ async def upload_catalog(file: UploadFile = File(...)):
         
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
-        gc.collect()
         
         print(f"✅ TERMINE : {total_inserted} verres insérés.")
-        return {"status": "success", "count": total_inserted}
+        return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
 
     except Exception as e:
         print(f"❌ ERREUR UPLOAD: {traceback.format_exc()}")
