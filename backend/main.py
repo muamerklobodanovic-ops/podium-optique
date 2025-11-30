@@ -7,6 +7,7 @@ import shutil
 import json
 import re
 import gc # Garbage Collector pour libérer la mémoire
+import traceback # Pour voir les erreurs complètes
 from datetime import datetime
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
@@ -29,13 +30,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 3. Connexion BDD
+# 3. Connexion BDD Robuste
 engine = None
 if DATABASE_URL:
     try:
+        # Correction pour SQLAlchemy
         if DATABASE_URL.startswith("postgres://"):
             DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-        engine = create_engine(DATABASE_URL)
+        
+        # Force le mode SSL pour Supabase si pas présent
+        if "sslmode" not in DATABASE_URL:
+            separator = "&" if "?" in DATABASE_URL else "?"
+            DATABASE_URL += f"{separator}sslmode=require"
+
+        # pool_pre_ping=True est CRUCIAL pour éviter les coupures de connexion sur Render
+        engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         
         with engine.begin() as conn:
             # Table Catalogue (Verres)
@@ -58,9 +67,10 @@ if DATABASE_URL:
                     encrypted_identity TEXT, lens_details JSONB, financials JSONB
                 );
             """))
-            print("✅ Base de données prête.")
+            print("✅ Base de données prête (Connexion vérifiée).")
     except Exception as e:
-        print(f"❌ ERREUR BDD: {e}")
+        print(f"❌ ERREUR BDD AU DEMARRAGE: {e}")
+        # On n'arrête pas le serveur, mais engine reste None
         engine = None
 
 # --- OUTILS ---
@@ -90,17 +100,21 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.50", "message": "API Optimisée Mémoire"}
+def read_root(): 
+    db_status = "Connecté" if engine else "Déconnecté"
+    return {"status": "online", "version": "3.51", "database": db_status}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
-    if not engine: raise HTTPException(500, "DB Error")
+    if not engine: raise HTTPException(500, "Erreur de connexion BDD (Engine is None)")
     try:
         with engine.begin() as conn:
             conn.execute(text("INSERT INTO client_offers (encrypted_identity, lens_details, financials) VALUES (:ident, :lens, :fin)"), 
                 {"ident": encrypt_dict(offer.client), "lens": json.dumps(offer.lens), "fin": json.dumps(offer.finance)})
         return {"status": "success"}
-    except Exception as e: raise HTTPException(500, str(e))
+    except Exception as e: 
+        print(f"❌ Erreur Save Offer: {e}")
+        raise HTTPException(500, str(e))
 
 @app.get("/offers")
 def get_offers():
@@ -109,7 +123,9 @@ def get_offers():
         with engine.connect() as conn:
             res = conn.execute(text("SELECT * FROM client_offers ORDER BY created_at DESC LIMIT 50"))
             return [{"id":r.id, "date":r.created_at.strftime("%d/%m/%Y %H:%M"), "client":decrypt_dict(r.encrypted_identity), "lens":r.lens_details, "finance":r.financials} for r in res.fetchall()]
-    except: return []
+    except Exception as e:
+        print(f"❌ Erreur Get Offers: {e}")
+        return []
 
 @app.get("/lenses")
 def get_lenses(type: str = Query(None), brand: str = Query(None)):
@@ -125,12 +141,14 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
             sql += " ORDER BY purchase_price ASC LIMIT 3000"
             rows = conn.execute(text(sql), params).fetchall()
             return [row._mapping for row in rows]
-    except: return []
+    except Exception as e:
+        print(f"❌ Erreur Get Lenses: {e}")
+        return []
 
 # --- UPLOAD OPTIMISÉ (BATCH INSERT) ---
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
-    if not engine: raise HTTPException(500, "Pas de BDD")
+    if not engine: raise HTTPException(500, "Pas de connexion BDD active")
     
     # Utilisation de /tmp pour éviter les problèmes de droits en écriture sur Render
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
@@ -270,6 +288,9 @@ async def upload_catalog(file: UploadFile = File(...)):
         return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
 
     except Exception as e:
-        print(f"❌ Erreur Upload : {e}")
+        # Capture de l'erreur complète pour les logs Render
+        error_msg = traceback.format_exc()
+        print(f"❌ CRASH UPLOAD :\n{error_msg}")
+        
         if os.path.exists(temp_file): os.remove(temp_file)
-        raise HTTPException(status_code=500, detail=f"Erreur traitement : {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur interne serveur : {str(e)}")
