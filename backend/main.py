@@ -41,6 +41,7 @@ if DATABASE_URL:
         DATABASE_URL += f"{separator}sslmode=require"
 
     try:
+        # pool_pre_ping=True garde la connexion vivante
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         with engine.begin() as conn:
             conn.execute(text("""
@@ -88,7 +89,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.55", "msg": "Backend Fix Lecture"}
+def read_root(): return {"status": "online", "version": "3.56", "msg": "Backend OK"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -128,7 +129,7 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE (FULL LOADING) ---
+# --- UPLOAD ---
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload...", flush=True)
@@ -140,12 +141,11 @@ async def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel (Mode Complet)...", flush=True)
-        # On retire read_only=True pour éviter les bugs de dimensions, mais on surveille la RAM
-        wb = openpyxl.load_workbook(temp_file, data_only=True) 
+        print("📖 Lecture Excel...", flush=True)
+        wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
-            print("♻️  Vidage table...", flush=True)
+            print("♻️  Recréation de la table 'lenses'...", flush=True)
             conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
             conn.execute(text("""
                 CREATE TABLE lenses (
@@ -168,28 +168,22 @@ async def upload_catalog(file: UploadFile = File(...)):
                 sheet_brand = sheet_name.strip().upper()
                 print(f"   🔹 Traitement {sheet_brand}...", flush=True)
 
-                rows = list(sheet.iter_rows(values_only=True))
-                if not rows: 
-                    print("      ⚠️ Feuille vide.", flush=True)
-                    continue
-
+                row_iterator = sheet.iter_rows(values_only=True)
                 header_idx = -1
                 headers = []
                 
-                # Recherche En-tête (20 premières lignes)
-                for i, row in enumerate(rows[:20]):
+                current_row_idx = 0
+                for row in row_iterator:
+                    current_row_idx += 1
+                    if current_row_idx > 30: break
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME"]):
                         headers = row
-                        header_idx = i
-                        print(f"      ✅ En-têtes ligne {i+1}", flush=True)
+                        header_idx = current_row_idx
                         break
                 
-                if header_idx == -1:
-                    print(f"      ❌ En-tête introuvable (Testé: MODELE, LIBELLE...)", flush=True)
-                    continue
+                if not headers: continue
 
-                # Mapping
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
@@ -212,9 +206,9 @@ async def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 50 # Batch très réduit pour compenser la mémoire utilisée par wb
+                BATCH_SIZE = 100 
 
-                for row in rows[header_idx+1:]:
+                for row in row_iterator:
                     if not row[c_nom]: continue
                     
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
