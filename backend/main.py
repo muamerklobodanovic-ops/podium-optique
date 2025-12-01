@@ -99,7 +99,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 # --- ROUTES ---
 
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.75", "msg": "Backend Ultra-Light"}
+def read_root(): return {"status": "online", "version": "3.76", "msg": "Backend Classification & Limit Fix"}
 
 @app.head("/")
 def read_root_head(): return read_root()
@@ -127,7 +127,7 @@ def get_offers():
 def get_lenses(
     type: str = Query(None), 
     brand: str = Query(None),
-    limit: int = Query(100) # LIMITE RÉDUITE A 100 (Vital pour Render Free)
+    limit: int = Query(800) # Augmentation de la limite par défaut (100 -> 800)
 ):
     # Nettoyage mémoire AVANT la requête pour faire de la place
     gc.collect()
@@ -158,8 +158,8 @@ def get_lenses(
                     sql += " AND geometry ILIKE :geo"
                     params["geo"] = f"%{type}%"
             
-            # Limite de sécurité absolue
-            safe_limit = min(limit, 300)
+            # Limite de sécurité (Plafond à 1000 pour éviter le crash)
+            safe_limit = min(limit, 1000)
             sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
             
             rows = conn.execute(text(sql), params).fetchall()
@@ -293,11 +293,17 @@ def upload_catalog(file: UploadFile = File(...)):
                     code = clean_text(row[c_code]) if c_code != -1 else ""
 
                     ltype = 'UNIFOCAL'
-                    if 'PROG' in geo_raw: ltype = 'PROGRESSIF'
-                    elif 'DEGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: ltype = 'INTERIEUR'
-                    elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
+                    # CORRECTION : Ordre des vérifications inversé
+                    # On vérifie d'abord si c'est un "INTERIEUR" ou "DEGRESSIF"
+                    # Car "PROGRESSIF D'INTERIEUR" contient le mot "PROG"
+                    if 'INTERIEUR' in geo_raw or 'DEGRESSIF' in geo_raw: 
+                        ltype = 'INTERIEUR'
+                    elif 'PROG' in geo_raw: 
+                        ltype = 'PROGRESSIF'
+                    elif 'MULTIFOCAL' in geo_raw: 
+                        ltype = 'MULTIFOCAL'
                     
-                    # Fix Proxeo/MyProxi
+                    # Fix Proxeo/MyProxi (Prioritaire sur tout le reste)
                     full_search = (name + " " + design_val + " " + code).upper().replace(" ", "")
                     if 'PROXEO' in full_search: ltype = 'INTERIEUR'
                     if 'MYPROXI' in full_search: ltype = 'INTERIEUR'
@@ -306,10 +312,15 @@ def upload_catalog(file: UploadFile = File(...)):
                          buy = clean_price(row[c_kal]) if c_kal != -1 else 0
 
                     lens = {
-                        "brand": brand[:100], "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
-                        "code": code, "name": name, "geo": ltype, "design": design_val,
+                        "brand": brand[:100], 
+                        "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
+                        "code": code,
+                        "name": name,
+                        "geo": ltype,
+                        "design": design_val,
                         "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
-                        "mat": mat, "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
+                        "mat": mat,
+                        "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
                         "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
                         "color": clean_text(row[c_color]) if c_color != -1 else "",
                         "buy": buy,
