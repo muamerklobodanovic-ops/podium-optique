@@ -87,17 +87,11 @@ def get_col_idx(headers, candidates):
                 return i
     return -1
 
-# Helper pour extraire une valeur sans crash si la colonne n'existe pas
-def get_cell_val(row, idx):
-    if idx != -1 and len(row) > idx:
-        return row[idx]
-    return None
-
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.67", "msg": "Backend Anti-Freeze"}
+def read_root(): return {"status": "online", "version": "3.70", "msg": "Backend Stable V4"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -122,7 +116,7 @@ def get_offers():
 def get_lenses(
     type: str = Query(None), 
     brand: str = Query(None),
-    pocketLimit: float = Query(0.0)
+    limit: int = Query(300) # Limite réduite par défaut pour éviter OOM
 ):
     if not engine: return []
     try:
@@ -139,11 +133,13 @@ def get_lenses(
                     sql += " AND geometry ILIKE :geo"
                     params["geo"] = f"%{type}%"
             
-            sql += " ORDER BY purchase_price ASC LIMIT 3000"
+            # Limite stricte pour protéger la RAM
+            safe_limit = min(limit, 1000)
+            sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
             
             rows = conn.execute(text(sql), params).fetchall()
             
-            return [{
+            result = [{
                 "id": r.id,
                 "brand": r.brand,
                 "name": r.name,
@@ -164,12 +160,18 @@ def get_lenses(
                 "sell_seveane": float(r.sell_seveane or 0),
                 "sell_santeclair": float(r.sell_santeclair or 0),
             } for r in rows]
+            
+            # Nettoyage immédiat de la mémoire
+            del rows
+            gc.collect()
+            
+            return result
 
     except Exception as e:
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE (NON-BLOQUANT + CPU YIELD) ---
+# --- UPLOAD ROBUSTE (NON-BLOQUANT & LOW MEMORY) ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload (Threaded)...", flush=True)
@@ -182,7 +184,7 @@ def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel (Streaming Read-Only)...", flush=True)
+        print("📖 Lecture Excel (Mode Streaming Read-Only)...", flush=True)
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
@@ -213,7 +215,6 @@ def upload_catalog(file: UploadFile = File(...)):
                 header_idx = -1
                 headers = []
                 
-                # Recherche En-tête (30 premières lignes)
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
@@ -222,12 +223,10 @@ def upload_catalog(file: UploadFile = File(...)):
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
                         header_idx = current_row_idx
-                        print(f"      ✅ En-têtes trouvés ligne {current_row_idx}", flush=True)
                         break
                 
                 if not headers: continue
 
-                # Mapping Colonnes
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
@@ -241,7 +240,6 @@ def upload_catalog(file: UploadFile = File(...)):
                 c_color = get_col_idx(headers, ['COULEUR', 'COLOR'])
                 c_buy = get_col_idx(headers, ['PRIX 2*NETS', 'PRIX', 'ACHAT', 'PURCHASE_PRICE'])
                 
-                # Prix Réseaux
                 c_kal = get_col_idx(headers, ['KALIXIA', 'SELL_KALIXIA'])
                 c_ite = get_col_idx(headers, ['ITELIS', 'SELL_ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE', 'SELL_CARTEBLANCHE'])
@@ -251,62 +249,55 @@ def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 100 
+                BATCH_SIZE = 50 # Batch très réduit pour éviter OOM
 
-                # Parcours des données
                 for row in row_iterator:
-                    # Sécurité lecture cellule
-                    row_nom = get_cell_val(row, c_nom)
-                    if not row_nom: continue
+                    if not row[c_nom]: continue
                     
-                    buy = clean_price(get_cell_val(row, c_buy))
+                    buy = clean_price(row[c_buy]) if c_buy != -1 else 0
                     
-                    brand = clean_text(get_cell_val(row, c_marque))
+                    brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
                     
-                    name = clean_text(row_nom)
-                    mat = clean_text(get_cell_val(row, c_mat))
+                    name = clean_text(row[c_nom])
+                    mat = clean_text(row[c_mat]) if c_mat != -1 else ""
                     if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
                     
-                    geo_raw = clean_text(get_cell_val(row, c_geo)).upper()
-                    design_val = clean_text(get_cell_val(row, c_design))
-                    code = clean_text(get_cell_val(row, c_code))
+                    geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
+                    design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
+                    code = clean_text(row[c_code]) if c_code != -1 else ""
 
                     ltype = 'UNIFOCAL'
                     if 'PROG' in geo_raw: ltype = 'PROGRESSIF'
                     elif 'DEGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: ltype = 'INTERIEUR'
                     elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
                     
-                    # CORRECTION CLASSIFICATION SPECIFIQUE
                     full_search = (name + " " + design_val + " " + code).upper()
-                    
-                    if 'PROXEO' in full_search:
-                        ltype = 'INTERIEUR'
-                    if 'MYPROXI' in full_search or 'MY PROXI' in full_search:
-                        ltype = 'INTERIEUR'
+                    if 'PROXEO' in full_search: ltype = 'INTERIEUR'
+                    if 'MYPROXI' in full_search or 'MY PROXI' in full_search: ltype = 'INTERIEUR'
 
                     if buy <= 0:
-                         buy = clean_price(get_cell_val(row, c_kal))
+                         buy = clean_price(row[c_kal]) if c_kal != -1 else 0
 
                     lens = {
                         "brand": brand[:100], 
-                        "edi": clean_text(get_cell_val(row, c_edi)),
+                        "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
                         "code": code,
                         "name": name,
                         "geo": ltype,
                         "design": design_val,
-                        "idx": clean_index(get_cell_val(row, c_idx)),
+                        "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
                         "mat": mat,
-                        "coat": clean_text(get_cell_val(row, c_coat)),
-                        "flow": clean_text(get_cell_val(row, c_flow)),
-                        "color": clean_text(get_cell_val(row, c_color)),
+                        "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
+                        "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
+                        "color": clean_text(row[c_color]) if c_color != -1 else "",
                         "buy": buy,
-                        "selling": clean_price(get_cell_val(row, c_kal)),
-                        "kal": clean_price(get_cell_val(row, c_kal)),
-                        "ite": clean_price(get_cell_val(row, c_ite)),
-                        "cb": clean_price(get_cell_val(row, c_cb)),
-                        "sev": clean_price(get_cell_val(row, c_sev)),
-                        "sant": clean_price(get_cell_val(row, c_sant)),
+                        "selling": clean_price(row[c_kal]) if c_kal != -1 else 0,
+                        "kal": clean_price(row[c_kal]) if c_kal != -1 else 0,
+                        "ite": clean_price(row[c_ite]) if c_ite != -1 else 0,
+                        "cb": clean_price(row[c_cb]) if c_cb != -1 else 0,
+                        "sev": clean_price(row[c_sev]) if c_sev != -1 else 0,
+                        "sant": clean_price(row[c_sant]) if c_sant != -1 else 0,
                     }
                     batch.append(lens)
 
@@ -319,7 +310,6 @@ def upload_catalog(file: UploadFile = File(...)):
                         total_inserted += len(batch)
                         batch = []
                         gc.collect()
-                        # ASTUCE ANTI-TIMEOUT : On fait une micro-pause pour rendre la main au système
                         time.sleep(0.01) 
                 
                 if batch:
