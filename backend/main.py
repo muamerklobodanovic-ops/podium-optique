@@ -90,8 +90,16 @@ def get_col_idx(headers, candidates):
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
+
+# Route racine standard
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.70", "msg": "Backend Stable V4"}
+def read_root(): 
+    return {"status": "online", "version": "3.71", "msg": "Backend Stable & Healthy"}
+
+# FIX CRITIQUE : Support du Health Check de Render (HEAD request)
+@app.head("/")
+def read_root_head():
+    return read_root()
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -252,7 +260,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 100 
+                BATCH_SIZE = 50 # Batch très réduit pour éviter OOM
 
                 for row in row_iterator:
                     if not row[c_nom]: continue
