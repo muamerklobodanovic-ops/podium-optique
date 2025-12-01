@@ -91,7 +91,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.65", "msg": "Fix Classification Proxeo/MyProxi"}
+def read_root(): return {"status": "online", "version": "3.66", "msg": "Fix Classification Interieur"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -252,6 +252,8 @@ def upload_catalog(file: UploadFile = File(...)):
                     if not brand or brand == "None": brand = sheet_brand
                     
                     name = clean_text(row[c_nom])
+                    
+                    # Extraction précoce du code pour la logique de classification
                     code = clean_text(row[c_code]) if c_code != -1 else ""
                     
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
@@ -265,11 +267,13 @@ def upload_catalog(file: UploadFile = File(...)):
                     elif 'DEGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: ltype = 'INTERIEUR'
                     elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
                     
-                    # CORRECTION : Force Proxeo/MyProxi en INTERIEUR
-                    # On vérifie le Nom, le Design ET le Code Commercial
+                    # CORRECTION CLASSIFICATION AVANCÉE
+                    # On concatène tout pour chercher les mots clés
                     full_search = (name + " " + design_val + " " + code).upper()
                     
-                    if 'PROXEO' in full_search or 'MYPROXI' in full_search or 'MY PROXI' in full_search:
+                    if 'PROXEO' in full_search:
+                        ltype = 'INTERIEUR'
+                    if 'MYPROXI' in full_search or 'MY PROXI' in full_search:
                         ltype = 'INTERIEUR'
 
                     if buy <= 0:
