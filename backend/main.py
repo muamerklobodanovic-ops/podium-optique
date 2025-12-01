@@ -90,8 +90,16 @@ def get_col_idx(headers, candidates):
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
+
+# 1. Route Racine + Support HEAD (Pour Render Health Check)
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.70", "msg": "Backend Stable V4"}
+def read_root(): 
+    return {"status": "online", "version": "3.68", "msg": "Backend Ready"}
+
+@app.head("/")
+def read_root_head():
+    # Cette fonction permet à Render de vérifier que le site est en vie sans erreur 405
+    return read_root()
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -116,7 +124,7 @@ def get_offers():
 def get_lenses(
     type: str = Query(None), 
     brand: str = Query(None),
-    limit: int = Query(300) # Limite réduite par défaut pour éviter OOM
+    pocketLimit: float = Query(0.0)
 ):
     if not engine: return []
     try:
@@ -133,13 +141,11 @@ def get_lenses(
                     sql += " AND geometry ILIKE :geo"
                     params["geo"] = f"%{type}%"
             
-            # Limite stricte pour protéger la RAM
-            safe_limit = min(limit, 1000)
-            sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
+            sql += " ORDER BY purchase_price ASC LIMIT 3000"
             
             rows = conn.execute(text(sql), params).fetchall()
             
-            result = [{
+            return [{
                 "id": r.id,
                 "brand": r.brand,
                 "name": r.name,
@@ -160,18 +166,12 @@ def get_lenses(
                 "sell_seveane": float(r.sell_seveane or 0),
                 "sell_santeclair": float(r.sell_santeclair or 0),
             } for r in rows]
-            
-            # Nettoyage immédiat de la mémoire
-            del rows
-            gc.collect()
-            
-            return result
 
     except Exception as e:
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE (NON-BLOQUANT & LOW MEMORY) ---
+# --- UPLOAD ROBUSTE ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload (Threaded)...", flush=True)
@@ -184,7 +184,7 @@ def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel (Mode Streaming Read-Only)...", flush=True)
+        print("📖 Lecture Excel...", flush=True)
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
@@ -215,6 +215,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 header_idx = -1
                 headers = []
                 
+                # Scan en-tête
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
@@ -227,6 +228,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 
                 if not headers: continue
 
+                # Mapping
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
@@ -249,7 +251,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 50 # Batch très réduit pour éviter OOM
+                BATCH_SIZE = 100 
 
                 for row in row_iterator:
                     if not row[c_nom]: continue
@@ -319,8 +321,6 @@ def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-                    batch = []
-                    gc.collect()
         
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
