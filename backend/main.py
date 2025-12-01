@@ -50,6 +50,7 @@ if DATABASE_URL:
                     encrypted_identity TEXT, lens_details JSONB, financials JSONB
                 );
             """))
+            # La table lenses sera créée/écrasée par l'upload, on s'assure juste qu'elle existe
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS lenses (
                     id SERIAL PRIMARY KEY, brand TEXT, name TEXT, purchase_price DECIMAL(10,2)
@@ -68,7 +69,6 @@ def decrypt_dict(token):
 def clean_price(value):
     if not value or value == '' or value == '-': return 0.0
     try:
-        # Nettoyage robuste: espaces, symboles, et espaces insécables (\xa0)
         clean_str = str(value).replace('€', '').replace('â‚¬', '').replace('%', '').replace(' ', '').replace('\xa0', '').replace(',', '.')
         return float(clean_str)
     except: return 0.0
@@ -82,18 +82,14 @@ def clean_text(value): return str(value).strip() if value else ""
 
 def get_col_idx(headers, candidates):
     for i, h in enumerate(headers):
-        if h:
-            h_str = str(h).upper().strip()
-            # On vérifie si l'un des candidats est dans l'en-tête (ex: "PRIX" dans "PRIX NET")
-            if any(c.upper() in h_str for c in candidates): 
-                return i
+        if h and any(c.upper() in str(h).upper().strip() for c in candidates): return i
     return -1
 
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.60", "msg": "Backend Low Memory V3"}
+def read_root(): return {"status": "online", "version": "3.61", "msg": "Mapping Geometry -> Type"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -119,21 +115,59 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
     if not engine: return []
     try:
         with engine.connect() as conn:
+            # On sélectionne tout
             sql = "SELECT * FROM lenses WHERE 1=1"
             params = {}
-            if brand: sql += " AND brand ILIKE :brand"; params["brand"] = brand
+            
+            if brand: 
+                sql += " AND brand ILIKE :brand"
+                params["brand"] = brand
+            
             if type: 
-                if "INTERIEUR" in type.upper(): sql += " AND (geometry ILIKE '%INTERIEUR%' OR geometry ILIKE '%DEGRESSIF%')"
-                else: sql += " AND geometry ILIKE :geo"; params["geo"] = f"%{type}%"
+                if "INTERIEUR" in type.upper(): 
+                    sql += " AND (geometry ILIKE '%INTERIEUR%' OR geometry ILIKE '%DEGRESSIF%')"
+                else: 
+                    sql += " AND geometry ILIKE :geo"
+                    params["geo"] = f"%{type}%"
+            
             sql += " ORDER BY purchase_price ASC LIMIT 3000"
             
             rows = conn.execute(text(sql), params).fetchall()
-            return [row._mapping for row in rows]
+            
+            # MAPPING MANUEL POUR LE FRONTEND
+            # Le frontend attend 'type', la BDD a 'geometry'. On fait le lien ici.
+            results = []
+            for row in rows:
+                r = row._mapping
+                results.append({
+                    "id": r.id,
+                    "brand": r.brand,
+                    "edi_code": r.edi_code,
+                    "commercial_code": r.commercial_code,
+                    "name": r.name,
+                    "type": r.geometry,      # <--- CRUCIAL : On envoie 'geometry' sous le nom 'type'
+                    "geometry": r.geometry,  # On garde aussi l'original
+                    "design": r.design,
+                    "index_mat": r.index_mat,
+                    "material": r.material,
+                    "coating": r.coating,
+                    "commercial_flow": r.commercial_flow,
+                    "color": r.color,
+                    "purchase_price": float(r.purchase_price or 0),
+                    "sellingPrice": float(r.selling_price or 0),
+                    "sell_kalixia": float(r.sell_kalixia or 0),
+                    "sell_itelis": float(r.sell_itelis or 0),
+                    "sell_carteblanche": float(r.sell_carteblanche or 0),
+                    "sell_seveane": float(r.sell_seveane or 0),
+                    "sell_santeclair": float(r.sell_santeclair or 0)
+                })
+            return results
+
     except Exception as e:
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD SUPER LIGHT (STREAMING) ---
+# --- UPLOAD ROBUSTE ---
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload...", flush=True)
@@ -146,12 +180,11 @@ async def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel (Streaming Mode)...", flush=True)
-        # read_only=True est OBLIGATOIRE pour Render Free Tier
-        wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
+        print("📖 Lecture Excel...", flush=True)
+        wb = openpyxl.load_workbook(temp_file, data_only=True)
         
         with engine.begin() as conn:
-            print("♻️  Vidage table 'lenses'...", flush=True)
+            print("♻️  Recréation de la table 'lenses'...", flush=True)
             conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
             conn.execute(text("""
                 CREATE TABLE lenses (
@@ -174,37 +207,30 @@ async def upload_catalog(file: UploadFile = File(...)):
                 sheet_brand = sheet_name.strip().upper()
                 print(f"   🔹 Traitement {sheet_brand}...", flush=True)
 
-                # Utilisation de l'itérateur pour ne pas charger toute la feuille
-                row_iterator = sheet.iter_rows(values_only=True)
-                
+                rows = list(sheet.iter_rows(values_only=True))
+                if not rows: continue
+
                 header_idx = -1
                 headers = []
                 
-                # Scan des 30 premières lignes pour trouver l'en-tête
-                current_idx = 0
-                for row in row_iterator:
-                    current_idx += 1
-                    if current_idx > 30: break
-                    
+                # Recherche En-tête (20 premières lignes)
+                for i, row in enumerate(rows[:20]):
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
-                        header_idx = current_idx
-                        print(f"      ✅ En-têtes trouvés ligne {current_idx}", flush=True)
+                        header_idx = i
                         break
                 
-                if not headers:
-                    print(f"      ❌ En-tête introuvable.", flush=True)
-                    continue
+                if header_idx == -1: continue
 
-                # Mapping Polyglotte (FR + EN)
+                # Mapping EXACT
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
-                c_edi = get_col_idx(headers, ['CODE EDI', 'EDI', 'EDI_CODE'])
+                c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
                 c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
                 c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
                 c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
-                c_idx = get_col_idx(headers, ['INDICE', 'INDEX', 'INDEX_MAT'])
+                c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
                 c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
                 c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
                 c_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL_FLOW'])
@@ -220,21 +246,20 @@ async def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 50 # Taille réduite pour éviter OOM Kill
+                BATCH_SIZE = 100 
 
-                # L'itérateur 'row_iterator' continue là où on s'est arrêté (après l'en-tête)
-                for row in row_iterator:
+                for row in rows[header_idx+1:]:
                     if not row[c_nom]: continue
                     
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
-                    # On accepte même si prix = 0 pour voir les verres
+                    # On laisse passer les prix nuls pour le moment pour debug
                     
                     brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
                     
                     name = clean_text(row[c_nom])
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
-                    if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
+                    if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA']): name += f" {mat}"
                     
                     geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
                     ltype = 'UNIFOCAL'
@@ -255,7 +280,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                         "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
                         "color": clean_text(row[c_color]) if c_color != -1 else "",
                         "buy": buy,
-                        "selling": clean_price(row[c_kal]) if c_kal != -1 else 0, 
+                        "selling": clean_price(row[c_kal]) if c_kal != -1 else 0,
                         "kal": clean_price(row[c_kal]) if c_kal != -1 else 0,
                         "ite": clean_price(row[c_ite]) if c_ite != -1 else 0,
                         "cb": clean_price(row[c_cb]) if c_cb != -1 else 0,
@@ -272,7 +297,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                             """), batch)
                         total_inserted += len(batch)
                         batch = []
-                        gc.collect() # Important pour libérer la RAM
+                        gc.collect()
                 
                 if batch:
                     with conn.begin():
@@ -281,17 +306,14 @@ async def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-                    batch = []
-                    gc.collect()
-
+        
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
         gc.collect()
         
         print(f"✅ TERMINE : {total_inserted} verres insérés.", flush=True)
-        return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
+        return {"status": "success", "count": total_inserted}
 
     except Exception as e:
-        print(f"❌ ERREUR UPLOAD: {traceback.format_exc()}", flush=True)
         if os.path.exists(temp_file): os.remove(temp_file)
         raise HTTPException(500, f"Erreur traitement: {str(e)}")
