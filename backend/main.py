@@ -87,11 +87,17 @@ def get_col_idx(headers, candidates):
                 return i
     return -1
 
+# Helper pour extraire une valeur sans crash si la colonne n'existe pas
+def get_cell_val(row, idx):
+    if idx != -1 and len(row) > idx:
+        return row[idx]
+    return None
+
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.66", "msg": "Fix Classification Interieur"}
+def read_root(): return {"status": "online", "version": "3.67", "msg": "Backend Anti-Freeze"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -163,7 +169,7 @@ def get_lenses(
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE (NON-BLOQUANT & LOW MEMORY) ---
+# --- UPLOAD ROBUSTE (NON-BLOQUANT + CPU YIELD) ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload (Threaded)...", flush=True)
@@ -176,7 +182,7 @@ def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel (Mode Streaming Read-Only)...", flush=True)
+        print("📖 Lecture Excel (Streaming Read-Only)...", flush=True)
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
@@ -207,6 +213,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 header_idx = -1
                 headers = []
                 
+                # Recherche En-tête (30 premières lignes)
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
@@ -215,23 +222,26 @@ def upload_catalog(file: UploadFile = File(...)):
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
                         header_idx = current_row_idx
+                        print(f"      ✅ En-têtes trouvés ligne {current_row_idx}", flush=True)
                         break
                 
                 if not headers: continue
 
+                # Mapping Colonnes
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
                 c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
                 c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
                 c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
-                c_idx = get_col_idx(headers, ['INDICE', 'INDEX', 'INDEX_MAT'])
+                c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
                 c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
                 c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
                 c_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL_FLOW'])
                 c_color = get_col_idx(headers, ['COULEUR', 'COLOR'])
                 c_buy = get_col_idx(headers, ['PRIX 2*NETS', 'PRIX', 'ACHAT', 'PURCHASE_PRICE'])
                 
+                # Prix Réseaux
                 c_kal = get_col_idx(headers, ['KALIXIA', 'SELL_KALIXIA'])
                 c_ite = get_col_idx(headers, ['ITELIS', 'SELL_ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE', 'SELL_CARTEBLANCHE'])
@@ -243,32 +253,31 @@ def upload_catalog(file: UploadFile = File(...)):
                 batch = []
                 BATCH_SIZE = 100 
 
+                # Parcours des données
                 for row in row_iterator:
-                    if not row[c_nom]: continue
+                    # Sécurité lecture cellule
+                    row_nom = get_cell_val(row, c_nom)
+                    if not row_nom: continue
                     
-                    buy = clean_price(row[c_buy]) if c_buy != -1 else 0
+                    buy = clean_price(get_cell_val(row, c_buy))
                     
-                    brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
+                    brand = clean_text(get_cell_val(row, c_marque))
                     if not brand or brand == "None": brand = sheet_brand
                     
-                    name = clean_text(row[c_nom])
-                    
-                    # Extraction précoce du code pour la logique de classification
-                    code = clean_text(row[c_code]) if c_code != -1 else ""
-                    
-                    mat = clean_text(row[c_mat]) if c_mat != -1 else ""
+                    name = clean_text(row_nom)
+                    mat = clean_text(get_cell_val(row, c_mat))
                     if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
                     
-                    geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
-                    design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
+                    geo_raw = clean_text(get_cell_val(row, c_geo)).upper()
+                    design_val = clean_text(get_cell_val(row, c_design))
+                    code = clean_text(get_cell_val(row, c_code))
 
                     ltype = 'UNIFOCAL'
                     if 'PROG' in geo_raw: ltype = 'PROGRESSIF'
                     elif 'DEGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: ltype = 'INTERIEUR'
                     elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
                     
-                    # CORRECTION CLASSIFICATION AVANCÉE
-                    # On concatène tout pour chercher les mots clés
+                    # CORRECTION CLASSIFICATION SPECIFIQUE
                     full_search = (name + " " + design_val + " " + code).upper()
                     
                     if 'PROXEO' in full_search:
@@ -277,27 +286,27 @@ def upload_catalog(file: UploadFile = File(...)):
                         ltype = 'INTERIEUR'
 
                     if buy <= 0:
-                         buy = clean_price(row[c_kal]) if c_kal != -1 else 0
+                         buy = clean_price(get_cell_val(row, c_kal))
 
                     lens = {
                         "brand": brand[:100], 
-                        "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
+                        "edi": clean_text(get_cell_val(row, c_edi)),
                         "code": code,
                         "name": name,
                         "geo": ltype,
                         "design": design_val,
-                        "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
+                        "idx": clean_index(get_cell_val(row, c_idx)),
                         "mat": mat,
-                        "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
-                        "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
-                        "color": clean_text(row[c_color]) if c_color != -1 else "",
+                        "coat": clean_text(get_cell_val(row, c_coat)),
+                        "flow": clean_text(get_cell_val(row, c_flow)),
+                        "color": clean_text(get_cell_val(row, c_color)),
                         "buy": buy,
-                        "selling": clean_price(row[c_kal]) if c_kal != -1 else 0,
-                        "kal": clean_price(row[c_kal]) if c_kal != -1 else 0,
-                        "ite": clean_price(row[c_ite]) if c_ite != -1 else 0,
-                        "cb": clean_price(row[c_cb]) if c_cb != -1 else 0,
-                        "sev": clean_price(row[c_sev]) if c_sev != -1 else 0,
-                        "sant": clean_price(row[c_sant]) if c_sant != -1 else 0,
+                        "selling": clean_price(get_cell_val(row, c_kal)),
+                        "kal": clean_price(get_cell_val(row, c_kal)),
+                        "ite": clean_price(get_cell_val(row, c_ite)),
+                        "cb": clean_price(get_cell_val(row, c_cb)),
+                        "sev": clean_price(get_cell_val(row, c_sev)),
+                        "sant": clean_price(get_cell_val(row, c_sant)),
                     }
                     batch.append(lens)
 
@@ -310,6 +319,8 @@ def upload_catalog(file: UploadFile = File(...)):
                         total_inserted += len(batch)
                         batch = []
                         gc.collect()
+                        # ASTUCE ANTI-TIMEOUT : On fait une micro-pause pour rendre la main au système
+                        time.sleep(0.01) 
                 
                 if batch:
                     with conn.begin():
@@ -318,6 +329,8 @@ def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
+                    batch = []
+                    gc.collect()
         
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
