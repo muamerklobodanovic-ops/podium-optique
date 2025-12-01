@@ -50,7 +50,6 @@ if DATABASE_URL:
                     encrypted_identity TEXT, lens_details JSONB, financials JSONB
                 );
             """))
-            # La table lenses sera créée/écrasée par l'upload, on s'assure juste qu'elle existe
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS lenses (
                     id SERIAL PRIMARY KEY, brand TEXT, name TEXT, purchase_price DECIMAL(10,2)
@@ -89,7 +88,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.62", "msg": "Fix Classification Proxeo/MyProxi"}
+def read_root(): return {"status": "online", "version": "3.63", "msg": "Backend Non-Bloquant"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -161,10 +160,11 @@ def get_lenses(
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE ---
+# --- UPLOAD ROBUSTE (NON-BLOQUANT & LOW MEMORY) ---
+# Utilisation de 'def' au lieu de 'async def' pour exécuter dans un threadpool et ne pas bloquer le serveur
 @app.post("/upload-catalog")
-async def upload_catalog(file: UploadFile = File(...)):
-    print("🚀 Début requête upload...", flush=True)
+def upload_catalog(file: UploadFile = File(...)):
+    print("🚀 Début requête upload (Threaded)...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
@@ -174,8 +174,9 @@ async def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel...", flush=True)
-        wb = openpyxl.load_workbook(temp_file, data_only=True)
+        print("📖 Lecture Excel (Mode Streaming Read-Only)...", flush=True)
+        # read_only=True est CRUCIAL pour les gros fichiers sur serveur limité en RAM
+        wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
             print("♻️  Recréation de la table 'lenses'...", flush=True)
@@ -201,20 +202,24 @@ async def upload_catalog(file: UploadFile = File(...)):
                 sheet_brand = sheet_name.strip().upper()
                 print(f"   🔹 Traitement {sheet_brand}...", flush=True)
 
-                rows = list(sheet.iter_rows(values_only=True))
-                if not rows: continue
-
+                row_iterator = sheet.iter_rows(values_only=True)
                 header_idx = -1
                 headers = []
                 
-                for i, row in enumerate(rows[:20]):
+                # Recherche En-tête (30 premières lignes)
+                current_row_idx = 0
+                for row in row_iterator:
+                    current_row_idx += 1
+                    if current_row_idx > 30: break
                     row_str = [str(c).upper() for c in row if c]
+                    # Critères larges pour trouver l'en-tête
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
-                        header_idx = i
+                        header_idx = current_row_idx
+                        print(f"      ✅ En-têtes trouvés ligne {current_row_idx}", flush=True)
                         break
                 
-                if header_idx == -1: continue
+                if not headers: continue
 
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
@@ -238,9 +243,9 @@ async def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 100 
+                BATCH_SIZE = 100 # Petit batch pour économie mémoire
 
-                for row in rows[header_idx+1:]:
+                for row in row_iterator:
                     if not row[c_nom]: continue
                     
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
@@ -250,32 +255,28 @@ async def upload_catalog(file: UploadFile = File(...)):
                     
                     name = clean_text(row[c_nom])
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
-                    if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA']): name += f" {mat}"
+                    if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
                     
-                    # CLASSIFICATION INTELLIGENTE
                     geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
                     design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
-                    
-                    # Logique par défaut
+
                     ltype = 'UNIFOCAL'
                     if 'PROG' in geo_raw: ltype = 'PROGRESSIF'
                     elif 'DEGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: ltype = 'INTERIEUR'
                     elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
                     
-                    # CORRECTION SPECIFIQUE POUR PROXEO ET MYPROXI
+                    # Correction Classification Spécifique
                     name_up = name.upper()
                     design_up = design_val.upper()
-                    if 'PROXEO' in name_up or 'PROXEO' in design_up:
-                        ltype = 'INTERIEUR'
-                    if 'MYPROXI' in name_up or 'MYPROXI' in design_up:
-                        ltype = 'INTERIEUR'
+                    if 'PROXEO' in name_up or 'PROXEO' in design_up: ltype = 'INTERIEUR'
+                    if 'MYPROXI' in name_up or 'MYPROXI' in design_up: ltype = 'INTERIEUR'
 
                     lens = {
                         "brand": brand[:100], 
                         "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
                         "code": clean_text(row[c_code]) if c_code != -1 else "",
                         "name": name,
-                        "geo": ltype, # Type corrigé
+                        "geo": ltype,
                         "design": design_val,
                         "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
                         "mat": mat,
@@ -309,6 +310,7 @@ async def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
+                    batch = []
         
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
