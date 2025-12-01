@@ -81,14 +81,17 @@ def clean_text(value): return str(value).strip() if value else ""
 
 def get_col_idx(headers, candidates):
     for i, h in enumerate(headers):
-        if h and any(c.upper() in str(h).upper().strip() for c in candidates): return i
+        if h:
+            h_str = str(h).upper().strip()
+            if any(c.upper() in h_str for c in candidates): 
+                return i
     return -1
 
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.63", "msg": "Backend Non-Bloquant"}
+def read_root(): return {"status": "online", "version": "3.64", "msg": "Backend Import Polyglotte"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -161,7 +164,6 @@ def get_lenses(
         return []
 
 # --- UPLOAD ROBUSTE (NON-BLOQUANT & LOW MEMORY) ---
-# Utilisation de 'def' au lieu de 'async def' pour exécuter dans un threadpool et ne pas bloquer le serveur
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload (Threaded)...", flush=True)
@@ -175,7 +177,6 @@ def upload_catalog(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
         
         print("📖 Lecture Excel (Mode Streaming Read-Only)...", flush=True)
-        # read_only=True est CRUCIAL pour les gros fichiers sur serveur limité en RAM
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
@@ -206,13 +207,11 @@ def upload_catalog(file: UploadFile = File(...)):
                 header_idx = -1
                 headers = []
                 
-                # Recherche En-tête (30 premières lignes)
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
                     if current_row_idx > 30: break
                     row_str = [str(c).upper() for c in row if c]
-                    # Critères larges pour trouver l'en-tête
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
                         header_idx = current_row_idx
@@ -221,19 +220,21 @@ def upload_catalog(file: UploadFile = File(...)):
                 
                 if not headers: continue
 
+                # MAPPING POLYGLOTTE (FRANÇAIS + ANGLAIS TECHNIQUE)
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
-                c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
+                c_edi = get_col_idx(headers, ['CODE EDI', 'EDI', 'EDI_CODE'])
                 c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
                 c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
                 c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
-                c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
+                c_idx = get_col_idx(headers, ['INDICE', 'INDEX', 'INDEX_MAT'])
                 c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
                 c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
                 c_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL_FLOW'])
                 c_color = get_col_idx(headers, ['COULEUR', 'COLOR'])
                 c_buy = get_col_idx(headers, ['PRIX 2*NETS', 'PRIX', 'ACHAT', 'PURCHASE_PRICE'])
                 
+                # Prix Réseaux
                 c_kal = get_col_idx(headers, ['KALIXIA', 'SELL_KALIXIA'])
                 c_ite = get_col_idx(headers, ['ITELIS', 'SELL_ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE', 'SELL_CARTEBLANCHE'])
@@ -243,7 +244,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 100 # Petit batch pour économie mémoire
+                BATCH_SIZE = 100 
 
                 for row in row_iterator:
                     if not row[c_nom]: continue
@@ -271,6 +272,11 @@ def upload_catalog(file: UploadFile = File(...)):
                     if 'PROXEO' in name_up or 'PROXEO' in design_up: ltype = 'INTERIEUR'
                     if 'MYPROXI' in name_up or 'MYPROXI' in design_up: ltype = 'INTERIEUR'
 
+                    # Si pas de prix achat, on prend le 1er prix de vente trouvé (ex: Kalixia) pour ne pas jeter la ligne
+                    if buy <= 0:
+                         buy = clean_price(row[c_kal]) if c_kal != -1 else 0
+
+                    # On insère même si prix = 0 pour voir le catalogue
                     lens = {
                         "brand": brand[:100], 
                         "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
@@ -310,7 +316,6 @@ def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-                    batch = []
         
         wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
