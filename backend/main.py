@@ -111,7 +111,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 # --- ROUTES ---
 
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.73", "msg": "Backend Fix Accents & Espaces"}
+def read_root(): return {"status": "online", "version": "3.74", "msg": "Backend Limit RAM Fix"}
 
 @app.head("/")
 def read_root_head():
@@ -140,7 +140,7 @@ def get_offers():
 def get_lenses(
     type: str = Query(None), 
     brand: str = Query(None),
-    limit: int = Query(2000)
+    limit: int = Query(300) # RÉDUCTION IMPORTANTE (2000 -> 300) pour éviter le crash RAM
 ):
     if not engine: return []
     try:
@@ -172,12 +172,13 @@ def get_lenses(
                     sql += " AND geometry ILIKE :geo"
                     params["geo"] = f"%{type}%"
             
-            safe_limit = min(limit, 3000) 
+            # Limite stricte pour protéger la RAM
+            safe_limit = min(limit, 500) # Plafond absolu à 500
             sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
             
             rows = conn.execute(text(sql), params).fetchall()
             
-            return [{
+            result = [{
                 "id": r.id,
                 "brand": r.brand,
                 "name": r.name,
@@ -198,6 +199,12 @@ def get_lenses(
                 "sell_seveane": float(r.sell_seveane or 0),
                 "sell_santeclair": float(r.sell_santeclair or 0),
             } for r in rows]
+            
+            # Nettoyage explicite
+            del rows
+            gc.collect()
+            
+            return result
 
     except Exception as e:
         print(f"❌ Erreur Lecture Verres: {e}")
@@ -265,9 +272,9 @@ def upload_catalog(file: UploadFile = File(...)):
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
                 c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
-                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE'])
+                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
                 c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
-                c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
+                c_idx = get_col_idx(headers, ['INDICE', 'INDEX', 'INDEX_MAT'])
                 c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
                 c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
                 c_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL_FLOW'])
