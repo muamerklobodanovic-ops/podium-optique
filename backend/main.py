@@ -90,16 +90,8 @@ def get_col_idx(headers, candidates):
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
-
-# 1. Route Racine + Support HEAD (Pour Render Health Check)
 @app.get("/")
-def read_root(): 
-    return {"status": "online", "version": "3.68", "msg": "Backend Ready"}
-
-@app.head("/")
-def read_root_head():
-    # Cette fonction permet à Render de vérifier que le site est en vie sans erreur 405
-    return read_root()
+def read_root(): return {"status": "online", "version": "3.70", "msg": "Backend Stable V4"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -124,7 +116,7 @@ def get_offers():
 def get_lenses(
     type: str = Query(None), 
     brand: str = Query(None),
-    pocketLimit: float = Query(0.0)
+    limit: int = Query(300) # Limite réduite par défaut pour éviter OOM
 ):
     if not engine: return []
     try:
@@ -141,11 +133,13 @@ def get_lenses(
                     sql += " AND geometry ILIKE :geo"
                     params["geo"] = f"%{type}%"
             
-            sql += " ORDER BY purchase_price ASC LIMIT 3000"
+            # Limite stricte pour protéger la RAM
+            safe_limit = min(limit, 1000)
+            sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
             
             rows = conn.execute(text(sql), params).fetchall()
             
-            return [{
+            result = [{
                 "id": r.id,
                 "brand": r.brand,
                 "name": r.name,
@@ -166,12 +160,18 @@ def get_lenses(
                 "sell_seveane": float(r.sell_seveane or 0),
                 "sell_santeclair": float(r.sell_santeclair or 0),
             } for r in rows]
+            
+            # Nettoyage immédiat de la mémoire
+            del rows
+            gc.collect()
+            
+            return result
 
     except Exception as e:
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE ---
+# --- UPLOAD ROBUSTE (NON-BLOQUANT & LOW MEMORY) ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload (Threaded)...", flush=True)
@@ -184,7 +184,7 @@ def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel...", flush=True)
+        print("📖 Lecture Excel (Mode Streaming Read-Only)...", flush=True)
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
@@ -215,7 +215,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 header_idx = -1
                 headers = []
                 
-                # Scan en-tête
+                # Recherche En-tête (30 premières lignes)
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
@@ -224,6 +224,7 @@ def upload_catalog(file: UploadFile = File(...)):
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
                         header_idx = current_row_idx
+                        print(f"      ✅ En-têtes trouvés ligne {current_row_idx}", flush=True)
                         break
                 
                 if not headers: continue
