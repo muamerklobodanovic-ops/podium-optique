@@ -79,31 +79,19 @@ def clean_index(value):
 
 def clean_text(value): return str(value).strip() if value else ""
 
-# NOUVEAU : FONCTION DE NORMALISATION PUISSANTE
 def normalize_string(text):
     if not text: return ""
-    # 1. Majuscules
     text = str(text).upper().strip()
-    # 2. Suppression des accents courants
-    replacements = {
-        'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
-        'À': 'A', 'Â': 'A', 'Ä': 'A',
-        'Î': 'I', 'Ï': 'I',
-        'Ô': 'O', 'Ö': 'O',
-        'Ù': 'U', 'Û': 'U', 'Ü': 'U',
-        'Ç': 'C', "’": "'", "‘": "'"
-    }
-    for acc, char in replacements.items():
-        text = text.replace(acc, char)
+    replacements = {'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E', 'À': 'A', 'Â': 'A', 'Î': 'I', 'Ï': 'I', 'Ô': 'O', 'Ù': 'U', 'Ç': 'C'}
+    for acc, char in replacements.items(): text = text.replace(acc, char)
     return text
 
 def get_col_idx(headers, candidates):
     for i, h in enumerate(headers):
         if h:
-            h_str = normalize_string(h) # On normalise aussi les en-têtes pour la recherche
+            h_str = normalize_string(h)
             for c in candidates:
-                if normalize_string(c) in h_str: 
-                    return i
+                if normalize_string(c) in h_str: return i
     return -1
 
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
@@ -111,11 +99,10 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 # --- ROUTES ---
 
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.74", "msg": "Backend Limit RAM Fix"}
+def read_root(): return {"status": "online", "version": "3.75", "msg": "Backend Ultra-Light"}
 
 @app.head("/")
-def read_root_head():
-    return read_root()
+def read_root_head(): return read_root()
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -140,12 +127,17 @@ def get_offers():
 def get_lenses(
     type: str = Query(None), 
     brand: str = Query(None),
-    limit: int = Query(300) # RÉDUCTION IMPORTANTE (2000 -> 300) pour éviter le crash RAM
+    limit: int = Query(100) # LIMITE RÉDUITE A 100 (Vital pour Render Free)
 ):
+    # Nettoyage mémoire AVANT la requête pour faire de la place
+    gc.collect()
+    
     if not engine: return []
     try:
         with engine.connect() as conn:
-            sql = "SELECT * FROM lenses WHERE 1=1"
+            # SELECT OPTIMISÉ : On ne prend que les colonnes utiles
+            cols = "id, brand, name, commercial_code, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair"
+            sql = f"SELECT {cols} FROM lenses WHERE 1=1"
             params = {}
             
             if brand: 
@@ -153,37 +145,32 @@ def get_lenses(
                 params["brand"] = brand
             
             if type: 
-                # Mapping Frontend -> Backend (Le frontend demande 'INTERIEUR', la BDD a 'INTERIEUR')
-                # On normalise aussi la requête au cas où
                 type_norm = normalize_string(type)
-                
                 if "INTERIEUR" in type_norm or "DEGRESSIF" in type_norm: 
-                    # On cherche tout ce qui ressemble à Interieur ou Degressif
                     sql += " AND (geometry = 'INTERIEUR' OR geometry = 'DEGRESSIF')"
                 elif "PROGRESSIF" in type_norm:
-                    # On exclut explicitement INTERIEUR pour ne pas avoir de doublons si "Progressif d'intérieur"
                     sql += " AND geometry = 'PROGRESSIF'"
                 elif "UNIFOCAL" in type_norm:
                     sql += " AND geometry = 'UNIFOCAL'"
                 elif "MULTIFOCAL" in type_norm:
                     sql += " AND geometry = 'MULTIFOCAL'"
                 else:
-                    # Fallback générique
                     sql += " AND geometry ILIKE :geo"
                     params["geo"] = f"%{type}%"
             
-            # Limite stricte pour protéger la RAM
-            safe_limit = min(limit, 500) # Plafond absolu à 500
+            # Limite de sécurité absolue
+            safe_limit = min(limit, 300)
             sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
             
             rows = conn.execute(text(sql), params).fetchall()
             
+            # Construction manuelle du résultat pour être sûr des clés
             result = [{
                 "id": r.id,
                 "brand": r.brand,
                 "name": r.name,
                 "commercial_code": r.commercial_code,
-                "type": r.geometry,
+                "type": r.geometry, # Mapping vital
                 "geometry": r.geometry,
                 "design": r.design,
                 "index_mat": r.index_mat,
@@ -200,34 +187,33 @@ def get_lenses(
                 "sell_santeclair": float(r.sell_santeclair or 0),
             } for r in rows]
             
-            # Nettoyage explicite
+            # Nettoyage mémoire APRES la requête
             del rows
             gc.collect()
             
             return result
 
     except Exception as e:
-        print(f"❌ Erreur Lecture Verres: {e}")
+        print(f"❌ Erreur Lecture: {e}")
         return []
 
-# --- UPLOAD ROBUSTE (NORMALISATION) ---
+# --- UPLOAD ROBUSTE ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
-    print("🚀 Début requête upload (Threaded)...", flush=True)
+    print("🚀 Upload start...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
-    print(f"📥 Réception fichier : {file.filename}", flush=True)
     
+    wb = None
     try:
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel...", flush=True)
+        # Mode read_only=True est OBLIGATOIRE
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
-            print("♻️  Recréation de la table 'lenses'...", flush=True)
             conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
             conn.execute(text("""
                 CREATE TABLE lenses (
@@ -248,7 +234,7 @@ def upload_catalog(file: UploadFile = File(...)):
             for sheet_name in wb.sheetnames:
                 sheet = wb[sheet_name]
                 sheet_brand = sheet_name.strip().upper()
-                print(f"   🔹 Traitement {sheet_brand}...", flush=True)
+                print(f"   🔹 {sheet_brand}...", flush=True)
 
                 row_iterator = sheet.iter_rows(values_only=True)
                 header_idx = -1
@@ -262,12 +248,10 @@ def upload_catalog(file: UploadFile = File(...)):
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
                         header_idx = current_row_idx
-                        print(f"      ✅ En-têtes trouvés ligne {current_row_idx}", flush=True)
                         break
                 
                 if not headers: continue
 
-                # Mapping
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
@@ -301,56 +285,31 @@ def upload_catalog(file: UploadFile = File(...)):
                     if not brand or brand == "None": brand = sheet_brand
                     
                     name = clean_text(row[c_nom])
-                    # Utilisation de la fonction de normalisation (SANS ACCENTS)
-                    name_norm = normalize_string(name)
-                    
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
                     if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
                     
-                    # Normalisation de la Géométrie
-                    geo_raw = clean_text(row[c_geo]) if c_geo != -1 else ""
-                    geo_norm = normalize_string(geo_raw) # ex: "DÉGRESSIF" -> "DEGRESSIF"
-
+                    geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
                     design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
-                    design_norm = normalize_string(design_val)
-                    
                     code = clean_text(row[c_code]) if c_code != -1 else ""
-                    code_norm = normalize_string(code)
 
-                    # --- LOGIQUE DE CLASSIFICATION ROBUSTE ---
-                    ltype = 'UNIFOCAL' # Par défaut
+                    ltype = 'UNIFOCAL'
+                    if 'PROG' in geo_raw: ltype = 'PROGRESSIF'
+                    elif 'DEGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: ltype = 'INTERIEUR'
+                    elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
                     
-                    # 1. Check explicite sur la colonne géométrie (prioritaire si "INTÉRIEUR" ou "DÉGRESSIF")
-                    if 'INTERIEUR' in geo_norm or 'DEGRESSIF' in geo_norm:
-                        ltype = 'INTERIEUR'
-                    elif 'PROG' in geo_norm:
-                        ltype = 'PROGRESSIF'
-                    elif 'MULTIFOCAL' in geo_norm:
-                        ltype = 'MULTIFOCAL'
-                    
-                    # 2. Correction Spécifique (Proxeo / MyProxi)
-                    # On cherche "PROXEO" ou "MYPROXI" partout (Nom, Design, Code)
-                    # On retire les espaces pour matcher "MY PROXI" avec "MYPROXI"
-                    full_search = (name_norm + design_norm + code_norm).replace(' ', '')
-                    
-                    if 'PROXEO' in full_search:
-                        ltype = 'INTERIEUR' # Force INTERIEUR pour Proxeo
-                    elif 'MYPROXI' in full_search:
-                        ltype = 'INTERIEUR' # Force INTERIEUR pour MyProxi
+                    # Fix Proxeo/MyProxi
+                    full_search = (name + " " + design_val + " " + code).upper().replace(" ", "")
+                    if 'PROXEO' in full_search: ltype = 'INTERIEUR'
+                    if 'MYPROXI' in full_search: ltype = 'INTERIEUR'
 
                     if buy <= 0:
                          buy = clean_price(row[c_kal]) if c_kal != -1 else 0
 
                     lens = {
-                        "brand": brand[:100], 
-                        "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
-                        "code": code,
-                        "name": name,
-                        "geo": ltype, # Type final normalisé
-                        "design": design_val,
+                        "brand": brand[:100], "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
+                        "code": code, "name": name, "geo": ltype, "design": design_val,
                         "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
-                        "mat": mat,
-                        "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
+                        "mat": mat, "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
                         "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
                         "color": clean_text(row[c_color]) if c_color != -1 else "",
                         "buy": buy,
@@ -372,7 +331,7 @@ def upload_catalog(file: UploadFile = File(...)):
                         total_inserted += len(batch)
                         batch = []
                         gc.collect()
-                        time.sleep(0.01) 
+                        time.sleep(0.01)
                 
                 if batch:
                     with conn.begin():
@@ -381,15 +340,14 @@ def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-        
-        wb.close()
-        if os.path.exists(temp_file): os.remove(temp_file)
-        gc.collect()
-        
-        print(f"✅ TERMINE : {total_inserted} verres insérés.", flush=True)
-        return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
+                    gc.collect()
+
+        return {"status": "success", "count": total_inserted}
 
     except Exception as e:
-        print(f"❌ ERREUR UPLOAD: {traceback.format_exc()}", flush=True)
+        print(f"❌ ERREUR: {traceback.format_exc()}", flush=True)
+        raise HTTPException(500, f"Erreur: {str(e)}")
+    finally:
+        if wb: wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
-        raise HTTPException(500, f"Erreur traitement: {str(e)}")
+        gc.collect()
