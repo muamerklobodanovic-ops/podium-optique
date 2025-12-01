@@ -91,7 +91,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.64", "msg": "Backend Import Polyglotte"}
+def read_root(): return {"status": "online", "version": "3.65", "msg": "Fix Classification Proxeo/MyProxi"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -215,15 +215,13 @@ def upload_catalog(file: UploadFile = File(...)):
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
                         header_idx = current_row_idx
-                        print(f"      ✅ En-têtes trouvés ligne {current_row_idx}", flush=True)
                         break
                 
                 if not headers: continue
 
-                # MAPPING POLYGLOTTE (FRANÇAIS + ANGLAIS TECHNIQUE)
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
-                c_edi = get_col_idx(headers, ['CODE EDI', 'EDI', 'EDI_CODE'])
+                c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
                 c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
                 c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
                 c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
@@ -234,7 +232,6 @@ def upload_catalog(file: UploadFile = File(...)):
                 c_color = get_col_idx(headers, ['COULEUR', 'COLOR'])
                 c_buy = get_col_idx(headers, ['PRIX 2*NETS', 'PRIX', 'ACHAT', 'PURCHASE_PRICE'])
                 
-                # Prix Réseaux
                 c_kal = get_col_idx(headers, ['KALIXIA', 'SELL_KALIXIA'])
                 c_ite = get_col_idx(headers, ['ITELIS', 'SELL_ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE', 'SELL_CARTEBLANCHE'])
@@ -255,6 +252,8 @@ def upload_catalog(file: UploadFile = File(...)):
                     if not brand or brand == "None": brand = sheet_brand
                     
                     name = clean_text(row[c_nom])
+                    code = clean_text(row[c_code]) if c_code != -1 else ""
+                    
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
                     if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
                     
@@ -266,21 +265,20 @@ def upload_catalog(file: UploadFile = File(...)):
                     elif 'DEGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: ltype = 'INTERIEUR'
                     elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
                     
-                    # Correction Classification Spécifique
-                    name_up = name.upper()
-                    design_up = design_val.upper()
-                    if 'PROXEO' in name_up or 'PROXEO' in design_up: ltype = 'INTERIEUR'
-                    if 'MYPROXI' in name_up or 'MYPROXI' in design_up: ltype = 'INTERIEUR'
+                    # CORRECTION : Force Proxeo/MyProxi en INTERIEUR
+                    # On vérifie le Nom, le Design ET le Code Commercial
+                    full_search = (name + " " + design_val + " " + code).upper()
+                    
+                    if 'PROXEO' in full_search or 'MYPROXI' in full_search or 'MY PROXI' in full_search:
+                        ltype = 'INTERIEUR'
 
-                    # Si pas de prix achat, on prend le 1er prix de vente trouvé (ex: Kalixia) pour ne pas jeter la ligne
                     if buy <= 0:
                          buy = clean_price(row[c_kal]) if c_kal != -1 else 0
 
-                    # On insère même si prix = 0 pour voir le catalogue
                     lens = {
                         "brand": brand[:100], 
                         "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
-                        "code": clean_text(row[c_code]) if c_code != -1 else "",
+                        "code": code,
                         "name": name,
                         "geo": ltype,
                         "design": design_val,
