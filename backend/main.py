@@ -89,7 +89,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.61", "msg": "Mapping Geometry -> Type"}
+def read_root(): return {"status": "online", "version": "3.62", "msg": "Fix Classification Proxeo/MyProxi"}
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -111,18 +111,19 @@ def get_offers():
     except: return []
 
 @app.get("/lenses")
-def get_lenses(type: str = Query(None), brand: str = Query(None)):
+def get_lenses(
+    type: str = Query(None), 
+    brand: str = Query(None),
+    pocketLimit: float = Query(0.0)
+):
     if not engine: return []
     try:
         with engine.connect() as conn:
-            # On sélectionne tout
             sql = "SELECT * FROM lenses WHERE 1=1"
             params = {}
-            
             if brand: 
                 sql += " AND brand ILIKE :brand"
                 params["brand"] = brand
-            
             if type: 
                 if "INTERIEUR" in type.upper(): 
                     sql += " AND (geometry ILIKE '%INTERIEUR%' OR geometry ILIKE '%DEGRESSIF%')"
@@ -134,34 +135,27 @@ def get_lenses(type: str = Query(None), brand: str = Query(None)):
             
             rows = conn.execute(text(sql), params).fetchall()
             
-            # MAPPING MANUEL POUR LE FRONTEND
-            # Le frontend attend 'type', la BDD a 'geometry'. On fait le lien ici.
-            results = []
-            for row in rows:
-                r = row._mapping
-                results.append({
-                    "id": r.id,
-                    "brand": r.brand,
-                    "edi_code": r.edi_code,
-                    "commercial_code": r.commercial_code,
-                    "name": r.name,
-                    "type": r.geometry,      # <--- CRUCIAL : On envoie 'geometry' sous le nom 'type'
-                    "geometry": r.geometry,  # On garde aussi l'original
-                    "design": r.design,
-                    "index_mat": r.index_mat,
-                    "material": r.material,
-                    "coating": r.coating,
-                    "commercial_flow": r.commercial_flow,
-                    "color": r.color,
-                    "purchase_price": float(r.purchase_price or 0),
-                    "sellingPrice": float(r.selling_price or 0),
-                    "sell_kalixia": float(r.sell_kalixia or 0),
-                    "sell_itelis": float(r.sell_itelis or 0),
-                    "sell_carteblanche": float(r.sell_carteblanche or 0),
-                    "sell_seveane": float(r.sell_seveane or 0),
-                    "sell_santeclair": float(r.sell_santeclair or 0)
-                })
-            return results
+            return [{
+                "id": r.id,
+                "brand": r.brand,
+                "name": r.name,
+                "commercial_code": r.commercial_code,
+                "type": r.geometry,
+                "geometry": r.geometry,
+                "design": r.design,
+                "index_mat": r.index_mat,
+                "material": r.material,
+                "coating": r.coating,
+                "commercial_flow": r.commercial_flow,
+                "color": r.color,
+                "purchase_price": float(r.purchase_price or 0),
+                "sellingPrice": float(r.selling_price or 0),
+                "sell_kalixia": float(r.sell_kalixia or 0),
+                "sell_itelis": float(r.sell_itelis or 0),
+                "sell_carteblanche": float(r.sell_carteblanche or 0),
+                "sell_seveane": float(r.sell_seveane or 0),
+                "sell_santeclair": float(r.sell_santeclair or 0),
+            } for r in rows]
 
     except Exception as e:
         print(f"❌ Erreur Lecture Verres: {e}")
@@ -213,7 +207,6 @@ async def upload_catalog(file: UploadFile = File(...)):
                 header_idx = -1
                 headers = []
                 
-                # Recherche En-tête (20 premières lignes)
                 for i, row in enumerate(rows[:20]):
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
@@ -223,7 +216,6 @@ async def upload_catalog(file: UploadFile = File(...)):
                 
                 if header_idx == -1: continue
 
-                # Mapping EXACT
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
@@ -252,7 +244,6 @@ async def upload_catalog(file: UploadFile = File(...)):
                     if not row[c_nom]: continue
                     
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
-                    # On laisse passer les prix nuls pour le moment pour debug
                     
                     brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
@@ -261,19 +252,31 @@ async def upload_catalog(file: UploadFile = File(...)):
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
                     if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA']): name += f" {mat}"
                     
+                    # CLASSIFICATION INTELLIGENTE
                     geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
+                    design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
+                    
+                    # Logique par défaut
                     ltype = 'UNIFOCAL'
                     if 'PROG' in geo_raw: ltype = 'PROGRESSIF'
-                    elif 'DEGRESSIF' in geo_raw: ltype = 'DEGRESSIF'
+                    elif 'DEGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: ltype = 'INTERIEUR'
                     elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
+                    
+                    # CORRECTION SPECIFIQUE POUR PROXEO ET MYPROXI
+                    name_up = name.upper()
+                    design_up = design_val.upper()
+                    if 'PROXEO' in name_up or 'PROXEO' in design_up:
+                        ltype = 'INTERIEUR'
+                    if 'MYPROXI' in name_up or 'MYPROXI' in design_up:
+                        ltype = 'INTERIEUR'
 
                     lens = {
                         "brand": brand[:100], 
                         "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
                         "code": clean_text(row[c_code]) if c_code != -1 else "",
                         "name": name,
-                        "geo": ltype,
-                        "design": clean_text(row[c_design]) if c_design != -1 else "STANDARD",
+                        "geo": ltype, # Type corrigé
+                        "design": design_val,
                         "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
                         "mat": mat,
                         "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
@@ -312,8 +315,9 @@ async def upload_catalog(file: UploadFile = File(...)):
         gc.collect()
         
         print(f"✅ TERMINE : {total_inserted} verres insérés.", flush=True)
-        return {"status": "success", "count": total_inserted}
+        return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
 
     except Exception as e:
+        print(f"❌ ERREUR UPLOAD: {traceback.format_exc()}", flush=True)
         if os.path.exists(temp_file): os.remove(temp_file)
         raise HTTPException(500, f"Erreur traitement: {str(e)}")
