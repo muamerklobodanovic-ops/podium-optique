@@ -79,24 +79,40 @@ def clean_index(value):
 
 def clean_text(value): return str(value).strip() if value else ""
 
+# NOUVEAU : FONCTION DE NORMALISATION PUISSANTE
+def normalize_string(text):
+    if not text: return ""
+    # 1. Majuscules
+    text = str(text).upper().strip()
+    # 2. Suppression des accents courants
+    replacements = {
+        'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
+        'À': 'A', 'Â': 'A', 'Ä': 'A',
+        'Î': 'I', 'Ï': 'I',
+        'Ô': 'O', 'Ö': 'O',
+        'Ù': 'U', 'Û': 'U', 'Ü': 'U',
+        'Ç': 'C', "’": "'", "‘": "'"
+    }
+    for acc, char in replacements.items():
+        text = text.replace(acc, char)
+    return text
+
 def get_col_idx(headers, candidates):
     for i, h in enumerate(headers):
         if h:
-            h_str = str(h).upper().strip()
-            if any(c.upper() in h_str for c in candidates): 
-                return i
+            h_str = normalize_string(h) # On normalise aussi les en-têtes pour la recherche
+            for c in candidates:
+                if normalize_string(c) in h_str: 
+                    return i
     return -1
 
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
 # --- ROUTES ---
 
-# Route racine standard
 @app.get("/")
-def read_root(): 
-    return {"status": "online", "version": "3.71", "msg": "Backend Stable & Healthy"}
+def read_root(): return {"status": "online", "version": "3.73", "msg": "Backend Fix Accents & Espaces"}
 
-# FIX CRITIQUE : Support du Health Check de Render (HEAD request)
 @app.head("/")
 def read_root_head():
     return read_root()
@@ -124,30 +140,44 @@ def get_offers():
 def get_lenses(
     type: str = Query(None), 
     brand: str = Query(None),
-    limit: int = Query(300) # Limite réduite par défaut pour éviter OOM
+    limit: int = Query(2000)
 ):
     if not engine: return []
     try:
         with engine.connect() as conn:
             sql = "SELECT * FROM lenses WHERE 1=1"
             params = {}
+            
             if brand: 
                 sql += " AND brand ILIKE :brand"
                 params["brand"] = brand
+            
             if type: 
-                if "INTERIEUR" in type.upper(): 
-                    sql += " AND (geometry ILIKE '%INTERIEUR%' OR geometry ILIKE '%DEGRESSIF%')"
-                else: 
+                # Mapping Frontend -> Backend (Le frontend demande 'INTERIEUR', la BDD a 'INTERIEUR')
+                # On normalise aussi la requête au cas où
+                type_norm = normalize_string(type)
+                
+                if "INTERIEUR" in type_norm or "DEGRESSIF" in type_norm: 
+                    # On cherche tout ce qui ressemble à Interieur ou Degressif
+                    sql += " AND (geometry = 'INTERIEUR' OR geometry = 'DEGRESSIF')"
+                elif "PROGRESSIF" in type_norm:
+                    # On exclut explicitement INTERIEUR pour ne pas avoir de doublons si "Progressif d'intérieur"
+                    sql += " AND geometry = 'PROGRESSIF'"
+                elif "UNIFOCAL" in type_norm:
+                    sql += " AND geometry = 'UNIFOCAL'"
+                elif "MULTIFOCAL" in type_norm:
+                    sql += " AND geometry = 'MULTIFOCAL'"
+                else:
+                    # Fallback générique
                     sql += " AND geometry ILIKE :geo"
                     params["geo"] = f"%{type}%"
             
-            # Limite stricte pour protéger la RAM
-            safe_limit = min(limit, 1000)
+            safe_limit = min(limit, 3000) 
             sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
             
             rows = conn.execute(text(sql), params).fetchall()
             
-            result = [{
+            return [{
                 "id": r.id,
                 "brand": r.brand,
                 "name": r.name,
@@ -168,18 +198,12 @@ def get_lenses(
                 "sell_seveane": float(r.sell_seveane or 0),
                 "sell_santeclair": float(r.sell_santeclair or 0),
             } for r in rows]
-            
-            # Nettoyage immédiat de la mémoire
-            del rows
-            gc.collect()
-            
-            return result
 
     except Exception as e:
         print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
-# --- UPLOAD ROBUSTE (NON-BLOQUANT & LOW MEMORY) ---
+# --- UPLOAD ROBUSTE (NORMALISATION) ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
     print("🚀 Début requête upload (Threaded)...", flush=True)
@@ -192,7 +216,7 @@ def upload_catalog(file: UploadFile = File(...)):
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        print("📖 Lecture Excel (Mode Streaming Read-Only)...", flush=True)
+        print("📖 Lecture Excel...", flush=True)
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
@@ -223,7 +247,6 @@ def upload_catalog(file: UploadFile = File(...)):
                 header_idx = -1
                 headers = []
                 
-                # Recherche En-tête (30 premières lignes)
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
@@ -242,7 +265,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
                 c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
-                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
+                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE'])
                 c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
                 c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
                 c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
@@ -260,7 +283,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 50 # Batch très réduit pour éviter OOM
+                BATCH_SIZE = 100 
 
                 for row in row_iterator:
                     if not row[c_nom]: continue
@@ -271,21 +294,42 @@ def upload_catalog(file: UploadFile = File(...)):
                     if not brand or brand == "None": brand = sheet_brand
                     
                     name = clean_text(row[c_nom])
+                    # Utilisation de la fonction de normalisation (SANS ACCENTS)
+                    name_norm = normalize_string(name)
+                    
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
                     if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
                     
-                    geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
-                    design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
-                    code = clean_text(row[c_code]) if c_code != -1 else ""
+                    # Normalisation de la Géométrie
+                    geo_raw = clean_text(row[c_geo]) if c_geo != -1 else ""
+                    geo_norm = normalize_string(geo_raw) # ex: "DÉGRESSIF" -> "DEGRESSIF"
 
-                    ltype = 'UNIFOCAL'
-                    if 'PROG' in geo_raw: ltype = 'PROGRESSIF'
-                    elif 'DEGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: ltype = 'INTERIEUR'
-                    elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
+                    design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
+                    design_norm = normalize_string(design_val)
                     
-                    full_search = (name + " " + design_val + " " + code).upper()
-                    if 'PROXEO' in full_search: ltype = 'INTERIEUR'
-                    if 'MYPROXI' in full_search or 'MY PROXI' in full_search: ltype = 'INTERIEUR'
+                    code = clean_text(row[c_code]) if c_code != -1 else ""
+                    code_norm = normalize_string(code)
+
+                    # --- LOGIQUE DE CLASSIFICATION ROBUSTE ---
+                    ltype = 'UNIFOCAL' # Par défaut
+                    
+                    # 1. Check explicite sur la colonne géométrie (prioritaire si "INTÉRIEUR" ou "DÉGRESSIF")
+                    if 'INTERIEUR' in geo_norm or 'DEGRESSIF' in geo_norm:
+                        ltype = 'INTERIEUR'
+                    elif 'PROG' in geo_norm:
+                        ltype = 'PROGRESSIF'
+                    elif 'MULTIFOCAL' in geo_norm:
+                        ltype = 'MULTIFOCAL'
+                    
+                    # 2. Correction Spécifique (Proxeo / MyProxi)
+                    # On cherche "PROXEO" ou "MYPROXI" partout (Nom, Design, Code)
+                    # On retire les espaces pour matcher "MY PROXI" avec "MYPROXI"
+                    full_search = (name_norm + design_norm + code_norm).replace(' ', '')
+                    
+                    if 'PROXEO' in full_search:
+                        ltype = 'INTERIEUR' # Force INTERIEUR pour Proxeo
+                    elif 'MYPROXI' in full_search:
+                        ltype = 'INTERIEUR' # Force INTERIEUR pour MyProxi
 
                     if buy <= 0:
                          buy = clean_price(row[c_kal]) if c_kal != -1 else 0
@@ -295,7 +339,7 @@ def upload_catalog(file: UploadFile = File(...)):
                         "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
                         "code": code,
                         "name": name,
-                        "geo": ltype,
+                        "geo": ltype, # Type final normalisé
                         "design": design_val,
                         "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
                         "mat": mat,
