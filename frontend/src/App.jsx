@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.90"; // Fix URL Persistence (No Auto-Reset)
+const APP_VERSION = "3.91"; // Fix Filtres Dégressifs & Intérieurs
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -116,43 +116,34 @@ function App() {
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 }); const [secondPairPrice, setSecondPairPrice] = useState(0);
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
 
-  // --- LISTES DE RÉFÉRENCE ---
+  // LISTES DE RÉFÉRENCE
   const brands = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
-  const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF D'INTÉRIEUR", label: "PROG. INTÉRIEUR" } ];
+  
+  // CORRECTION: ID pour Prog Intérieur aligné avec le backend
+  const lensTypes = [ 
+      { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
+      { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
+      { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, 
+      { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, 
+      { id: "PROGRESSIF_INTERIEUR", label: "PROG. INTÉRIEUR" } 
+  ];
+  
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   const currentCoatings = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
 
-  // INITIALISATION ROBUSTE
   const [userSettings, setUserSettings] = useState(() => {
-    try { 
-      const saved = localStorage.getItem("optique_user_settings");
-      if (saved) {
-          const parsed = JSON.parse(saved);
-          return {
-              ...DEFAULT_SETTINGS,
-              ...parsed,
-              pricing: { ...DEFAULT_SETTINGS.pricing, ...(parsed.pricing || {}) }
-          };
-      }
-      return DEFAULT_SETTINGS;
-    } catch (e) { 
-      return DEFAULT_SETTINGS; 
-    }
+    try { const saved = localStorage.getItem("optique_user_settings"); if(saved) { const p = JSON.parse(saved); return { ...DEFAULT_SETTINGS, ...p, pricing: { ...DEFAULT_SETTINGS.pricing, ...(p.pricing||{}) } }; } return DEFAULT_SETTINGS; } catch (e) { return DEFAULT_SETTINGS; }
   });
-
   useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
 
-  const [formData, setFormData] = useState({ network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '1.60', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false });
+  const [formData, setFormData] = useState({ network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false });
 
-  // --- URL SERVEUR (CORRECTIF PERSISTANCE) ---
   const [serverUrl, setServerUrl] = useState(() => {
       const saved = localStorage.getItem("optique_server_url");
-      if (saved) return saved; // On respecte le choix de l'utilisateur
-      
-      // Sinon valeur par défaut
+      if (saved) return saved;
       const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
-      return isLocal ? "http://127.0.0.1:8000" : "https://api-podium-optique.onrender.com";
+      return isLocal ? "http://127.0.0.1:8000" : PROD_API_URL;
   });
   
   const cleanBaseUrl = (url) => url.replace(/\/lenses\/?$/, '').replace(/\/sync\/?$/, '').replace(/\/offers\/?$/, '').replace(/\/upload-catalog\/?$/, '').replace(/\/$/, '');
@@ -162,16 +153,13 @@ function App() {
   const UPLOAD_URL = `${baseBackendUrl}/upload-catalog`; 
   const SAVE_URL = `${baseBackendUrl}/offers`;
 
-  // On ne force plus la mise à jour automatique de l'URL
   useEffect(() => { if (window.location.hostname.includes("localhost")) return; const pingInterval = setInterval(() => { axios.get(API_URL, { params: { pocketLimit: -1 } }).catch(() => {}); }, 14 * 60 * 1000); return () => clearInterval(pingInterval); }, [API_URL]);
-  
   useEffect(() => { const root = document.documentElement; if (userSettings.themeColor === 'custom') { const rgb = hexToRgb(userSettings.customColor); root.style.setProperty('--theme-primary', userSettings.customColor); } else { root.style.removeProperty('--theme-primary'); } }, [userSettings.themeColor, userSettings.customColor]);
 
   const bgClass = userSettings.bgColor || "bg-slate-50"; const isDarkTheme = bgClass.includes("900") || bgClass.includes("black"); const textClass = isDarkTheme ? "text-white" : "text-slate-800"; const currentTheme = { primary: userSettings.themeColor === 'custom' ? 'bg-[var(--theme-primary)]' : 'bg-blue-700' };
-  
+
   useEffect(() => { setFormData(prev => ({ ...prev, coating: '' })); fetchData(); }, [formData.brand, formData.network, formData.type]); 
 
-  // FILTRAGE MARQUES
   const getFilteredBrandsList = () => {
       const net = formData.network;
       if (net === 'HORS_RESEAU') return brands; 
@@ -184,11 +172,9 @@ function App() {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
        let workingList = safeLenses.map(l => ({...l}));
-       // 1. Filtre Marque Intelligent (Appliqué même si "TOUTES" est sélectionné)
        if (formData.brand && formData.brand !== '') { 
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
-           // Si "TOUTES", on exclut quand même les marques interdites par le réseau
            if (formData.network === 'SANTECLAIR') {
                 workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand)));
            } else if (formData.network !== 'HORS_RESEAU') {
@@ -196,13 +182,19 @@ function App() {
            }
        }
 
-       // 2. Filtre Type
+       // 2. Filtre Type (Amélioré pour INTERIEUR/DEGRESSIF)
        if (formData.type) { 
            const targetType = cleanText(formData.type); 
-           if (targetType.includes("INTERIEUR")) { 
-               workingList = workingList.filter(l => cleanText(l.type).includes("INTERIEUR")); 
+           
+           if (targetType === 'PROGRESSIF_INTERIEUR') {
+               // Filtre large pour attraper tout ce qui est "intérieur"
+               workingList = workingList.filter(l => {
+                   const type = cleanText(l.type);
+                   return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR');
+               });
            } else { 
-               workingList = workingList.filter(l => cleanText(l.type).includes(targetType)); 
+               // Filtrage standard exact
+               workingList = workingList.filter(l => cleanText(l.type) === targetType); 
            } 
        }
 
@@ -210,11 +202,15 @@ function App() {
           const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
           workingList = workingList.map(lens => {
              let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
-             const lensType = cleanText(lens.type); const lensName = cleanText(lens.name); const flow = cleanText(lens.commercial_flow);
-             if (lensType.includes('UNIFOCAL')) { const isStock = flow.includes('STOCK') || lensName.includes(' ST') || lensName.includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
+             const lensType = cleanText(lens.type);
+             if (lensType.includes('UNIFOCAL')) { 
+                 const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); 
+                 rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); 
+             } 
              else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
              else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
+             
              const pPrice = parseFloat(lens.purchase_price || 0);
              const newSelling = (pPrice * rule.x) + rule.b;
              const newMargin = newSelling - pPrice;
@@ -226,11 +222,18 @@ function App() {
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { const sPrice = l[key] ? parseFloat(l[key]) : 0; return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; });
            workingList = workingList.filter(l => l.sellingPrice > 0);
-           // AJOUT: Tri par marge pour les réseaux aussi
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
-       workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
+       if (formData.materialIndex && formData.materialIndex !== '') {
+           workingList = workingList.filter(l => { 
+               if(!l.index_mat) return false; 
+               const lIdx = String(l.index_mat).replace(',', '.'); 
+               const fIdx = String(formData.materialIndex).replace(',', '.'); 
+               return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; 
+           });
+       }
+
        const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
        if (formData.photochromic) { workingList = workingList.filter(l => isPhotoC(l)); } else { workingList = workingList.filter(l => !isPhotoC(l)); }
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
@@ -247,13 +250,13 @@ function App() {
   const fetchData = () => {
     setLoading(true); setError(null); 
     const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
-    // Si API URL par défaut et pas en local, on utilise les démos
-    // Mais ici on veut utiliser le serveur configuré
+    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
     axios.get(API_URL, { params: { type: formData.type, brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 } })
       .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
 
+  // ... (Reste des handlers et rendu identiques à la v3.90) ...
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
@@ -262,24 +265,14 @@ function App() {
       const payload = { client: client, lens: selectedLens, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
       axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
   };
-
   const triggerFileUpload = () => {
       if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)");
-      setSyncLoading(true);
-      setUploadProgress(0);
-      const data = new FormData();
-      data.append('file', uploadFile);
-      axios.post(UPLOAD_URL, data, {
-          onUploadProgress: (progressEvent) => {
-              const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-              setUploadProgress(percent);
-          }
-      })
+      setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile);
+      axios.post(UPLOAD_URL, data, { onUploadProgress: (progressEvent) => { const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total); setUploadProgress(percent); } })
       .then(res => { alert(`✅ Succès ! ${res.data.count} verres importés.`); fetchData(); })
       .catch(err => { console.error("Upload Error:", err); alert(`❌ Erreur upload : ${err.response?.data?.detail || err.message}`); })
       .finally(() => { setSyncLoading(false); setUploadProgress(0); });
   };
-
   const triggerSync = () => { if (!sheetsUrl) return alert("URL?"); setSyncLoading(true); axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { fetchData(); }).finally(() => setSyncLoading(false)); };
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
