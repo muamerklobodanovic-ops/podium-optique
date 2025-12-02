@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.91"; // Fix Filtres Dégressifs & Intérieurs
+const APP_VERSION = "3.92"; // Fix Proxeo -> Degressif
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -120,7 +120,6 @@ function App() {
   const brands = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
   
-  // CORRECTION: ID pour Prog Intérieur aligné avec le backend
   const lensTypes = [ 
       { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
       { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
@@ -171,7 +170,15 @@ function App() {
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
-       let workingList = safeLenses.map(l => ({...l}));
+       let workingList = safeLenses.map(l => {
+           // PATCH CLASSIFICATION FRONTEND : FORCE PROXEO EN DEGRESSIF
+           const lens = {...l};
+           if (cleanText(lens.name).includes('PROXEO')) {
+               lens.type = 'DEGRESSIF';
+           }
+           return lens;
+       });
+
        if (formData.brand && formData.brand !== '') { 
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
@@ -182,18 +189,15 @@ function App() {
            }
        }
 
-       // 2. Filtre Type (Amélioré pour INTERIEUR/DEGRESSIF)
        if (formData.type) { 
            const targetType = cleanText(formData.type); 
            
            if (targetType === 'PROGRESSIF_INTERIEUR') {
-               // Filtre large pour attraper tout ce qui est "intérieur"
                workingList = workingList.filter(l => {
                    const type = cleanText(l.type);
                    return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR');
                });
            } else { 
-               // Filtrage standard exact
                workingList = workingList.filter(l => cleanText(l.type) === targetType); 
            } 
        }
@@ -256,7 +260,7 @@ function App() {
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
 
-  // ... (Reste des handlers et rendu identiques à la v3.90) ...
+  // ... (Handlers identiques v3.42)
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
