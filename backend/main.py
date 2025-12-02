@@ -99,10 +99,11 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 # --- ROUTES ---
 
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.76", "msg": "Backend Classification & Limit Fix"}
+def read_root(): return {"status": "online", "version": "3.87", "msg": "Backend Fix Classification Fine"}
 
 @app.head("/")
-def read_root_head(): return read_root()
+def read_root_head():
+    return read_root()
 
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
@@ -127,15 +128,11 @@ def get_offers():
 def get_lenses(
     type: str = Query(None), 
     brand: str = Query(None),
-    limit: int = Query(800) # Augmentation de la limite par défaut (100 -> 800)
+    limit: int = Query(3000)
 ):
-    # Nettoyage mémoire AVANT la requête pour faire de la place
-    gc.collect()
-    
     if not engine: return []
     try:
         with engine.connect() as conn:
-            # SELECT OPTIMISÉ : On ne prend que les colonnes utiles
             cols = "id, brand, name, commercial_code, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair"
             sql = f"SELECT {cols} FROM lenses WHERE 1=1"
             params = {}
@@ -146,31 +143,40 @@ def get_lenses(
             
             if type: 
                 type_norm = normalize_string(type)
-                if "INTERIEUR" in type_norm or "DEGRESSIF" in type_norm: 
-                    sql += " AND (geometry = 'INTERIEUR' OR geometry = 'DEGRESSIF')"
+                
+                if "DEGRESSIF" in type_norm:
+                    # Filtre Dégressif strict (inclut PROXEO)
+                    sql += " AND geometry = 'DEGRESSIF'"
+                
+                elif "INTERIEUR" in type_norm:
+                    # Filtre Prog Intérieur strict (inclut MYPROXI) + compatibilité avec ancien tag INTERIEUR
+                    sql += " AND (geometry = 'PROGRESSIF_INTERIEUR' OR geometry = 'INTERIEUR')"
+                
                 elif "PROGRESSIF" in type_norm:
                     sql += " AND geometry = 'PROGRESSIF'"
+                
                 elif "UNIFOCAL" in type_norm:
                     sql += " AND geometry = 'UNIFOCAL'"
+                
                 elif "MULTIFOCAL" in type_norm:
                     sql += " AND geometry = 'MULTIFOCAL'"
+                
                 else:
+                    # Fallback
                     sql += " AND geometry ILIKE :geo"
                     params["geo"] = f"%{type}%"
             
-            # Limite de sécurité (Plafond à 1000 pour éviter le crash)
-            safe_limit = min(limit, 1000)
+            safe_limit = min(limit, 5000)
             sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
             
             rows = conn.execute(text(sql), params).fetchall()
             
-            # Construction manuelle du résultat pour être sûr des clés
             result = [{
                 "id": r.id,
                 "brand": r.brand,
                 "name": r.name,
                 "commercial_code": r.commercial_code,
-                "type": r.geometry, # Mapping vital
+                "type": r.geometry,
                 "geometry": r.geometry,
                 "design": r.design,
                 "index_mat": r.index_mat,
@@ -187,46 +193,31 @@ def get_lenses(
                 "sell_santeclair": float(r.sell_santeclair or 0),
             } for r in rows]
             
-            # Nettoyage mémoire APRES la requête
-            del rows
-            gc.collect()
-            
             return result
 
     except Exception as e:
-        print(f"❌ Erreur Lecture: {e}")
+        print(f"❌ Erreur Lecture Verres: {e}")
         return []
 
 # --- UPLOAD ROBUSTE ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
-    print("🚀 Upload start...", flush=True)
+    print("🚀 Début requête upload (Turbo)...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
+    print(f"📥 Réception fichier : {file.filename}", flush=True)
     
-    wb = None
     try:
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Mode read_only=True est OBLIGATOIRE
+        print("📖 Lecture Excel...", flush=True)
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
-            conn.execute(text("""
-                CREATE TABLE lenses (
-                    id SERIAL PRIMARY KEY,
-                    brand TEXT, edi_code TEXT, commercial_code TEXT, name TEXT,
-                    geometry TEXT, design TEXT, index_mat TEXT,
-                    material TEXT, coating TEXT, commercial_flow TEXT, color TEXT,
-                    purchase_price DECIMAL(10,2), selling_price DECIMAL(10,2),
-                    sell_kalixia DECIMAL(10,2), sell_itelis DECIMAL(10,2),
-                    sell_carteblanche DECIMAL(10,2), sell_seveane DECIMAL(10,2),
-                    sell_santeclair DECIMAL(10,2)
-                );
-            """))
+            print("♻️  Vidage table...", flush=True)
+            conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY CASCADE;"))
         
         total_inserted = 0
         
@@ -234,7 +225,7 @@ def upload_catalog(file: UploadFile = File(...)):
             for sheet_name in wb.sheetnames:
                 sheet = wb[sheet_name]
                 sheet_brand = sheet_name.strip().upper()
-                print(f"   🔹 {sheet_brand}...", flush=True)
+                print(f"   🔹 Traitement {sheet_brand}...", flush=True)
 
                 row_iterator = sheet.iter_rows(values_only=True)
                 header_idx = -1
@@ -243,7 +234,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
-                    if current_row_idx > 30: break
+                    if current_row_idx > 20: break
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
@@ -274,7 +265,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 if c_nom == -1: continue
 
                 batch = []
-                BATCH_SIZE = 100 
+                BATCH_SIZE = 2000 
 
                 for row in row_iterator:
                     if not row[c_nom]: continue
@@ -292,24 +283,30 @@ def upload_catalog(file: UploadFile = File(...)):
                     design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
                     code = clean_text(row[c_code]) if c_code != -1 else ""
 
-                    ltype = 'UNIFOCAL'
-                    # CORRECTION : Ordre des vérifications inversé
-                    # On vérifie d'abord si c'est un "INTERIEUR" ou "DEGRESSIF"
-                    # Car "PROGRESSIF D'INTERIEUR" contient le mot "PROG"
-                    if 'INTERIEUR' in geo_raw or 'DEGRESSIF' in geo_raw: 
-                        ltype = 'INTERIEUR'
-                    elif 'PROG' in geo_raw: 
+                    ltype = 'UNIFOCAL' # Default
+                    
+                    # LOGIQUE DE CLASSIFICATION MISE A JOUR
+                    # 1. Détection classique (Ordre important)
+                    if 'DEGRESSIF' in geo_raw:
+                        ltype = 'DEGRESSIF'
+                    elif 'INTERIEUR' in geo_raw:
+                         ltype = 'PROGRESSIF_INTERIEUR' # Ex: "PROGRESSIF D'INTERIEUR"
+                    elif 'PROG' in geo_raw:
                         ltype = 'PROGRESSIF'
-                    elif 'MULTIFOCAL' in geo_raw: 
+                    elif 'MULTIFOCAL' in geo_raw:
                         ltype = 'MULTIFOCAL'
                     
-                    # Fix Proxeo/MyProxi (Prioritaire sur tout le reste)
+                    # 2. Forçage Spécifique (L'emporte sur le reste)
                     full_search = (name + " " + design_val + " " + code).upper().replace(" ", "")
-                    if 'PROXEO' in full_search: ltype = 'INTERIEUR'
-                    if 'MYPROXI' in full_search: ltype = 'INTERIEUR'
+                    if 'PROXEO' in full_search: 
+                        ltype = 'DEGRESSIF' # CORRECTION : Proxeo = Degressif
+                    if 'MYPROXI' in full_search: 
+                        ltype = 'PROGRESSIF_INTERIEUR' # CORRECTION : MyProxi = Prog Intérieur
 
                     if buy <= 0:
                          buy = clean_price(row[c_kal]) if c_kal != -1 else 0
+                    
+                    if buy <= 0: buy = 0.01
 
                     lens = {
                         "brand": brand[:100], 
@@ -342,7 +339,7 @@ def upload_catalog(file: UploadFile = File(...)):
                         total_inserted += len(batch)
                         batch = []
                         gc.collect()
-                        time.sleep(0.01)
+                        # time.sleep(0.01) # Pas besoin si serveur Oracle puissant
                 
                 if batch:
                     with conn.begin():
@@ -351,14 +348,15 @@ def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-                    gc.collect()
-
-        return {"status": "success", "count": total_inserted}
-
-    except Exception as e:
-        print(f"❌ ERREUR: {traceback.format_exc()}", flush=True)
-        raise HTTPException(500, f"Erreur: {str(e)}")
-    finally:
-        if wb: wb.close()
+        
+        wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
         gc.collect()
+        
+        print(f"✅ TERMINE : {total_inserted} verres insérés.", flush=True)
+        return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
+
+    except Exception as e:
+        print(f"❌ ERREUR UPLOAD: {traceback.format_exc()}", flush=True)
+        if os.path.exists(temp_file): os.remove(temp_file)
+        raise HTTPException(500, f"Erreur traitement: {str(e)}")
