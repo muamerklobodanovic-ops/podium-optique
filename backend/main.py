@@ -54,6 +54,17 @@ if DATABASE_URL:
                     is_first_login BOOLEAN DEFAULT TRUE
                 );
             """))
+            
+            # --- INITIALISATION ADMIN PAR DÉFAUT (Si table vide) ---
+            user_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
+            if user_count == 0:
+                print("⚠️ Base utilisateurs vide : Création de l'admin par défaut...")
+                conn.execute(text("""
+                    INSERT INTO users (username, shop_name, password, email, is_first_login) 
+                    VALUES ('admin', 'ADMINISTRATION', 'admin', 'admin@podium.optique', FALSE)
+                """))
+                print("✅ Utilisateur 'admin' créé (Mdp: admin)")
+
             # Table Dossiers Clients
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS client_offers (
@@ -170,7 +181,7 @@ def upload_users(file: UploadFile = File(...)):
 
 # --- ROUTES GLOBALES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "4.02", "msg": "Full Backend"}
+def read_root(): return {"status": "online", "version": "4.03", "msg": "Default Admin Enabled"}
 @app.head("/")
 def read_root_head(): return read_root()
 
@@ -180,8 +191,13 @@ def save_offer(offer: OfferRequest):
     if not engine: raise HTTPException(500, "Pas de connexion BDD")
     try:
         with engine.begin() as conn:
+            # Extraction correction si présente dans 'correction_data' ou ailleurs
+            lens_data = offer.lens
+            if hasattr(offer, 'correction') and offer.correction:
+                 lens_data['correction_data'] = offer.correction
+            
             conn.execute(text("INSERT INTO client_offers (encrypted_identity, lens_details, financials) VALUES (:ident, :lens, :fin)"), 
-                {"ident": encrypt_dict(offer.client), "lens": json.dumps(offer.lens), "fin": json.dumps(offer.finance)})
+                {"ident": encrypt_dict(offer.client), "lens": json.dumps(lens_data), "fin": json.dumps(offer.finance)})
         return {"status": "success"}
     except Exception as e: raise HTTPException(500, str(e))
 
@@ -191,8 +207,28 @@ def get_offers():
     try:
         with engine.connect() as conn:
             res = conn.execute(text("SELECT * FROM client_offers ORDER BY created_at DESC LIMIT 50"))
-            return [{"id":r.id, "date":r.created_at.strftime("%d/%m/%Y %H:%M"), "client":decrypt_dict(r.encrypted_identity), "lens":r.lens_details, "finance":r.financials} for r in res.fetchall()]
-    except: return []
+            results = []
+            for r in res.fetchall():
+                try:
+                    lens_data = r.lens_details
+                    # Compatibilité ascendante pour la correction
+                    correction = lens_data.get('correction_data', None)
+                    
+                    results.append({
+                        "id": r.id,
+                        "date": r.created_at.strftime("%d/%m/%Y %H:%M"),
+                        "client": decrypt_dict(r.encrypted_identity),
+                        "lens": lens_data,
+                        "finance": r.financials,
+                        "correction": correction # On l'expose explicitement pour le frontend
+                    })
+                except Exception as inner_e:
+                    print(f"Erreur lecture ligne {r.id}: {inner_e}")
+                    continue
+            return results
+    except Exception as e:
+        print(f"Erreur globale offers: {e}")
+        return []
 
 @app.delete("/offers/{offer_id}")
 def delete_offer(offer_id: int):
@@ -290,7 +326,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
                 c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
                 c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
-                c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
+                c_idx = get_col_idx(headers, ['INDICE', 'INDEX', 'INDEX_MAT'])
                 c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
                 c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
                 c_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL_FLOW'])
