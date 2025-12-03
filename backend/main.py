@@ -293,32 +293,81 @@ def delete_offer(offer_id: int):
 
 # --- ROUTES CATALOGUE ---
 @app.get("/lenses")
-def get_lenses(type: str = Query(None), brand: str = Query(None), limit: int = Query(3000)):
+def get_lenses(
+    type: str = Query(None), 
+    brand: str = Query(None),
+    limit: int = Query(3000)
+):
     if not engine: return []
     try:
         with engine.connect() as conn:
             cols = "id, brand, name, commercial_code, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair"
             sql = f"SELECT {cols} FROM lenses WHERE 1=1"
             params = {}
-            if brand: sql += " AND brand ILIKE :brand"; params["brand"] = brand
+            
+            if brand: 
+                sql += " AND brand ILIKE :brand"
+                params["brand"] = brand
+            
             if type: 
                 type_norm = normalize_string(type)
-                if "DEGRESSIF" in type_norm: sql += " AND geometry = 'DEGRESSIF'"
-                elif "INTERIEUR" in type_norm: sql += " AND (geometry = 'PROGRESSIF_INTERIEUR' OR geometry = 'INTERIEUR')"
-                elif "PROGRESSIF" in type_norm: sql += " AND geometry = 'PROGRESSIF'"
-                elif "UNIFOCAL" in type_norm: sql += " AND geometry = 'UNIFOCAL'"
-                elif "MULTIFOCAL" in type_norm: sql += " AND geometry = 'MULTIFOCAL'"
-                else: sql += " AND geometry ILIKE :geo"; params["geo"] = f"%{type}%"
+                
+                if "DEGRESSIF" in type_norm:
+                    sql += " AND geometry = 'DEGRESSIF'"
+                
+                elif "INTERIEUR" in type_norm:
+                    sql += " AND (geometry = 'PROGRESSIF_INTERIEUR' OR geometry = 'INTERIEUR')"
+                
+                elif "PROGRESSIF" in type_norm:
+                    sql += " AND geometry = 'PROGRESSIF'"
+                
+                elif "UNIFOCAL" in type_norm:
+                    sql += " AND geometry = 'UNIFOCAL'"
+                
+                elif "MULTIFOCAL" in type_norm:
+                    sql += " AND geometry = 'MULTIFOCAL'"
+                
+                else:
+                    sql += " AND geometry ILIKE :geo"
+                    params["geo"] = f"%{type}%"
             
             safe_limit = min(limit, 5000)
             sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
+            
             rows = conn.execute(text(sql), params).fetchall()
-            return [row._mapping for row in rows]
-    except: return []
+            
+            result = [{
+                "id": r.id,
+                "brand": r.brand,
+                "name": r.name,
+                "commercial_code": r.commercial_code,
+                "type": r.geometry,
+                "geometry": r.geometry,
+                "design": r.design,
+                "index_mat": r.index_mat,
+                "material": r.material,
+                "coating": r.coating,
+                "commercial_flow": r.commercial_flow,
+                "color": r.color,
+                "purchase_price": float(r.purchase_price or 0),
+                "sellingPrice": float(r.selling_price or 0),
+                "sell_kalixia": float(r.sell_kalixia or 0),
+                "sell_itelis": float(r.sell_itelis or 0),
+                "sell_carteblanche": float(r.sell_carteblanche or 0),
+                "sell_seveane": float(r.sell_seveane or 0),
+                "sell_santeclair": float(r.sell_santeclair or 0),
+            } for r in rows]
+            
+            return result
 
+    except Exception as e:
+        print(f"❌ Erreur Lecture Verres: {e}")
+        return []
+
+# --- UPLOAD ROBUSTE ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
-    print("🚀 Début requête upload (Threaded)...", flush=True)
+    print("🚀 Début requête upload (Turbo)...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
@@ -332,20 +381,8 @@ def upload_catalog(file: UploadFile = File(...)):
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
-            print("♻️  Recréation de la table 'lenses'...", flush=True)
-            conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
-            conn.execute(text("""
-                CREATE TABLE lenses (
-                    id SERIAL PRIMARY KEY,
-                    brand TEXT, edi_code TEXT, commercial_code TEXT, name TEXT,
-                    geometry TEXT, design TEXT, index_mat TEXT,
-                    material TEXT, coating TEXT, commercial_flow TEXT, color TEXT,
-                    purchase_price DECIMAL(10,2), selling_price DECIMAL(10,2),
-                    sell_kalixia DECIMAL(10,2), sell_itelis DECIMAL(10,2),
-                    sell_carteblanche DECIMAL(10,2), sell_seveane DECIMAL(10,2),
-                    sell_santeclair DECIMAL(10,2)
-                );
-            """))
+            print("♻️  Vidage table...", flush=True)
+            conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY CASCADE;"))
         
         total_inserted = 0
         
@@ -362,7 +399,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
-                    if current_row_idx > 30: break
+                    if current_row_idx > 20: break
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
@@ -388,7 +425,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 c_ite = get_col_idx(headers, ['ITELIS', 'SELL_ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE', 'SELL_CARTEBLANCHE'])
                 c_sev = get_col_idx(headers, ['SEVEANE', 'SELL_SEVEANE'])
-                c_sant = get_col_idx(headers, ['SANTECLAIRE', 'SANTECLAIR', 'SELL_SANTECLAIR'])
+                c_sant = get_col_idx(headers, ['SANTECLAIR', 'SANTECLAIR', 'SELL_SANTECLAIR'])
 
                 if c_nom == -1: continue
 
@@ -397,9 +434,12 @@ def upload_catalog(file: UploadFile = File(...)):
 
                 for row in row_iterator:
                     if not row[c_nom]: continue
+                    
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
+                    
                     brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
+                    
                     name = clean_text(row[c_nom])
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
                     if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
@@ -418,7 +458,9 @@ def upload_catalog(file: UploadFile = File(...)):
                     if 'PROXEO' in full_search: ltype = 'DEGRESSIF'
                     if 'MYPROXI' in full_search: ltype = 'PROGRESSIF_INTERIEUR'
 
-                    if buy <= 0: buy = clean_price(row[c_kal]) if c_kal != -1 else 0
+                    if buy <= 0:
+                         buy = clean_price(row[c_kal]) if c_kal != -1 else 0
+                    
                     if buy <= 0: buy = 0.01
 
                     batch.append({
