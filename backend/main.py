@@ -99,7 +99,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 # --- ROUTES ---
 
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.98", "msg": "Backend Delete Restored"}
+def read_root(): return {"status": "online", "version": "3.99", "msg": "Backend Full Features"}
 
 @app.head("/")
 def read_root_head():
@@ -120,11 +120,20 @@ def get_offers():
     if not engine: return []
     try:
         with engine.connect() as conn:
+            # On récupère les 50 derniers dossiers
             res = conn.execute(text("SELECT * FROM client_offers ORDER BY created_at DESC LIMIT 50"))
-            return [{"id":r.id, "date":r.created_at.strftime("%d/%m/%Y %H:%M"), "client":decrypt_dict(r.encrypted_identity), "lens":r.lens_details, "finance":r.financials} for r in res.fetchall()]
-    except: return []
+            return [{
+                "id": r.id,
+                "date": r.created_at.strftime("%d/%m/%Y %H:%M"),
+                "client": decrypt_dict(r.encrypted_identity),
+                "lens": r.lens_details, # Contient maintenant la correction aussi
+                "finance": r.financials
+            } for r in res.fetchall()]
+    except Exception as e:
+        print(f"❌ Erreur Get Offers: {e}")
+        return []
 
-# --- FIX : ROUTE DELETE RESTAURÉE ---
+# --- ROUTE DELETE RESTAURÉE ---
 @app.delete("/offers/{offer_id}")
 def delete_offer(offer_id: int):
     if not engine: raise HTTPException(500, "Pas de connexion BDD")
@@ -157,7 +166,6 @@ def get_lenses(
             
             if type: 
                 type_norm = normalize_string(type)
-                
                 if "DEGRESSIF" in type_norm:
                     sql += " AND geometry = 'DEGRESSIF'"
                 elif "INTERIEUR" in type_norm:
@@ -240,7 +248,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
-                    if current_row_idx > 20: break
+                    if current_row_idx > 30: break
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
