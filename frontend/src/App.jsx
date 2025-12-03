@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "4.07"; // Fix White Screen (Safe Storage Parsing)
+const APP_VERSION = "4.08"; // Error Boundary & Safe Init
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -33,6 +33,45 @@ const DEMO_LENSES = [
   { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
 ];
+
+// --- BARRIÈRE DE SÉCURITÉ (ERROR BOUNDARY) ---
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center font-sans">
+            <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border border-red-100">
+                <div className="inline-flex p-4 bg-red-50 rounded-full mb-4 text-red-500"><AlertTriangle className="w-10 h-10"/></div>
+                <h1 className="text-2xl font-bold text-slate-800 mb-2">Oups ! Une erreur est survenue</h1>
+                <p className="text-slate-500 mb-6 text-sm">L'application a rencontré un problème inattendu (probablement des données locales corrompues).</p>
+                
+                <button 
+                    onClick={() => {
+                        sessionStorage.clear();
+                        localStorage.clear();
+                        window.location.reload();
+                    }}
+                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                    <RotateCcw className="w-4 h-4"/> RÉINITIALISER L'APPLICATION
+                </button>
+                <p className="text-[10px] text-slate-400 mt-4">Cela effacera le cache et relancera l'outil proprement.</p>
+            </div>
+        </div>
+      );
+    }
+    return this.props.children; 
+  }
+}
 
 // --- OUTILS ---
 const hexToRgb = (hex) => {
@@ -118,14 +157,14 @@ const LoginScreen = ({ onLogin }) => {
             .catch(err => { setError(err.response?.data?.detail || "Erreur de connexion"); setLoading(false); });
     };
     return (
-        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
                 <div className="text-center mb-8"><div className="inline-flex p-4 bg-blue-50 rounded-full mb-4 text-blue-600"><Store className="w-8 h-8"/></div><h1 className="text-2xl font-bold text-slate-800">Podium Optique</h1><p className="text-sm text-slate-400 mt-2">Identification requise</p></div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div><label className="block text-xs font-bold text-slate-500 mb-1">IDENTIFIANT</label><input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 ring-blue-100 outline-none transition-all" placeholder="Votre identifiant" required /></div>
                     <div><label className="block text-xs font-bold text-slate-500 mb-1">MOT DE PASSE</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 ring-blue-100 outline-none transition-all" placeholder="••••••••" required /></div>
                     {error && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg flex items-center gap-2"><XCircle className="w-4 h-4"/> {error}</div>}
-                    <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex justify-center items-center gap-2">{loading ? <Activity className="w-5 h-5 animate-spin"/> : <Lock className="w-5 h-5"/>} SE CONNECTER</button>
+                    <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2">{loading ? <Activity className="w-5 h-5 animate-spin"/> : <Lock className="w-5 h-5"/>} SE CONNECTER</button>
                 </form>
                 <div className="mt-8 text-center text-[10px] text-slate-300">V{APP_VERSION} • Accès Sécurisé</div>
             </div>
@@ -146,7 +185,7 @@ const FirstLoginModal = ({ user, onPasswordChanged }) => {
             .catch(() => setError("Erreur serveur"));
     };
     return (
-        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 font-sans">
             <div className="bg-white p-8 rounded-2xl w-full max-w-md">
                 <div className="flex items-center gap-3 mb-6 text-orange-500"><KeyRound className="w-8 h-8"/><h2 className="text-xl font-bold text-slate-800">Première Connexion</h2></div>
                 <p className="text-sm text-slate-500 mb-6">Veuillez définir votre mot de passe personnel.</p>
@@ -161,14 +200,16 @@ const FirstLoginModal = ({ user, onPasswordChanged }) => {
     );
 };
 
-// --- APP PRINCIPALE ---
-function App() {
-  const [user, setUser] = useState(() => { 
-      try { const s = sessionStorage.getItem("optique_user"); return s ? JSON.parse(s) : null; }
-      catch { return null; }
+// --- LOGIC & RENDER ---
+function MainContent() {
+  // --- ETATS ---
+  const [user, setUser] = useState(() => {
+      try { 
+          const s = sessionStorage.getItem("optique_user");
+          return s ? JSON.parse(s) : null;
+      } catch { return null; }
   });
 
-  // --- ETATS ---
   const [lenses, setLenses] = useState([]); const [filteredLenses, setFilteredLenses] = useState([]); const [availableDesigns, setAvailableDesigns] = useState([]); const [availableCoatings, setAvailableCoatings] = useState([]);
   const [loading, setLoading] = useState(false); const [error, setError] = useState(null); const [isOnline, setIsOnline] = useState(true); 
   const [showSettings, setShowSettings] = useState(false); const [showMargins, setShowMargins] = useState(false); const [selectedLens, setSelectedLens] = useState(null); const [isSidebarOpen, setIsSidebarOpen] = useState(true); const [comparisonLens, setComparisonLens] = useState(null); const [showHistory, setShowHistory] = useState(false); const [savedOffers, setSavedOffers] = useState([]); 
@@ -201,23 +242,25 @@ function App() {
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   const currentCoatings = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
 
+  // INITIALISATION ROBUSTE DES SETTINGS
   const [userSettings, setUserSettings] = useState(() => {
     try { 
         const saved = localStorage.getItem("optique_user_settings"); 
         if(saved) { 
             const p = JSON.parse(saved); 
+            // Fusion sécurisée avec les défauts
             return { 
                 ...DEFAULT_SETTINGS, 
                 ...p, 
-                pricing: { ...DEFAULT_SETTINGS.pricing, ...(p.pricing||{}) },
-                disabledBrands: p.disabledBrands || [] 
+                pricing: { ...DEFAULT_SETTINGS.pricing, ...(p && p.pricing ? p.pricing : {}) },
+                disabledBrands: (p && p.disabledBrands) || [] 
             }; 
         } 
         return DEFAULT_SETTINGS; 
-    } catch { return DEFAULT_SETTINGS; }
+    } catch (e) { return DEFAULT_SETTINGS; }
   });
-
   useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
+
   const currentSettings = { ...userSettings, shopName: user?.shop_name || userSettings.shopName };
 
   const [formData, setFormData] = useState(() => {
@@ -226,7 +269,7 @@ function App() {
           return saved ? JSON.parse(saved) : { network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false };
       } catch { return { network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false }; }
   });
-  
+
   // AUTO SAVE SESSION
   useEffect(() => { sessionStorage.setItem("optique_client", JSON.stringify(client)); }, [client]);
   useEffect(() => { sessionStorage.setItem("optique_second_pair", secondPairPrice); }, [secondPairPrice]);
@@ -291,10 +334,7 @@ function App() {
           workingList = workingList.map(lens => {
              let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
              const lensType = cleanText(lens.type);
-             if (lensType.includes('UNIFOCAL')) { 
-                 const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); 
-                 rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); 
-             } 
+             if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
              else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
              else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
@@ -338,12 +378,23 @@ function App() {
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
 
-  const handleReset = () => { if(window.confirm("Tout remettre à zéro ?")) { sessionStorage.clear(); window.location.reload(); } };
+  const handleReset = () => {
+      if(window.confirm("Tout remettre à zéro ?")) {
+          sessionStorage.clear();
+          // On ne recharge PAS la page pour ne pas déconnecter, on reset juste les states
+          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
+          setSecondPairPrice(0);
+          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0 });
+          setSelectedLens(null);
+      }
+  };
+
   const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
-  const handleLogout = () => { setUser(null); sessionStorage.clear(); window.location.reload(); };
+  const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); }; // Full reset on logout
   const handlePasswordUpdated = (newPass) => { const updated = { ...user, is_first_login: false }; setUser(updated); sessionStorage.setItem("optique_user", JSON.stringify(updated)); alert("Succès !"); };
 
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
+  
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
       const totalPair = selectedLens.sellingPrice * 2;
@@ -354,21 +405,23 @@ function App() {
   };
   const deleteOffer = (id) => {
       if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) {
-          axios.delete(`${SAVE_URL}/${id}`).then(() => { alert("Dossier supprimé."); fetchHistory(); }).catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur suppression : ${msg}`); });
+          axios.delete(`${SAVE_URL}/${id}`)
+              .then(() => { alert("Dossier supprimé."); fetchHistory(); })
+              .catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur suppression : ${msg}`); });
       }
   };
   const triggerFileUpload = () => {
       if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)");
       setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile);
       axios.post(UPLOAD_URL, data, { onUploadProgress: (e) => { setUploadProgress(Math.round((e.loaded * 100) / e.total)); } })
-      .then(res => { alert(`✅ Succès ! ${res.data.count} verres.`); fetchData(); })
+      .then(res => { alert(`✅ Succès ! ${res.data.count} verres importés.`); fetchData(); })
       .catch(err => alert(`❌ Erreur upload`))
       .finally(() => { setSyncLoading(false); setUploadProgress(0); });
   };
   const triggerUserUpload = () => {
       if (!userFile) return alert("Sélectionner un fichier Excel");
       setSyncLoading(true); const data = new FormData(); data.append('file', userFile);
-      axios.post(`${baseBackendUrl}/upload-users`, data).then(res => alert(`✅ ${res.data.count} utilisateurs`)).catch(err => alert("Erreur upload")).finally(() => setSyncLoading(false));
+      axios.post(`${baseBackendUrl}/upload-users`, data).then(res => alert(`✅ ${res.data.count} utilisateurs importés`)).catch(err => alert("Erreur upload")).finally(() => setSyncLoading(false));
   };
   const handleUrlChange = (value) => { setServerUrl(value); localStorage.setItem("optique_server_url", value); };
   const handleSettingChange = (section, field, value) => { if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); } };
@@ -399,7 +452,7 @@ function App() {
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* HEADER */}
+      {/* HEADER ... Identique */}
       <div className="bg-slate-900 text-white px-4 lg:px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
           <div className="flex items-center gap-3">
               <button onClick={toggleSidebar} className="lg:hidden p-1 rounded hover:bg-slate-700"><Menu className="w-5 h-5"/></button>
@@ -425,23 +478,13 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative z-0">
-        {/* SIDEBAR */}
-        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={toggleSidebar}></div>}
+        {/* SIDEBAR FILTRES */}
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-50 transition-transform duration-300 w-80 fixed inset-y-0 left-0 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-6 space-y-6 pb-32 pt-20 lg:pt-6">
                 <div className="lg:hidden flex justify-end mb-4"><button onClick={toggleSidebar}><X className="w-6 h-6"/></button></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
-                
-                {/* CORRECTION */}
-                <div>
-                    <label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label>
-                    <div className="grid grid-cols-1 gap-2 mb-2">
-                        <div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">SPH</span><div className="relative flex-1"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
-                        <div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">CYL</span><div className="relative flex-1"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
-                    </div>
-                    <div className={`flex items-center gap-2 transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><span className="text-[10px] font-bold w-6 opacity-50 text-right">ADD</span><div className="relative flex-1"><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
-                </div>
-
+                {/* ... Autres filtres ... */}
+                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label><div className="grid grid-cols-2 gap-3 mb-2"><div className="relative"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="SPH"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div><div className="relative"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="CYL"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div><div className={`relative transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="ADD"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{lensTypes.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{indices.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
@@ -459,6 +502,7 @@ function App() {
                     </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {/* RESTRICTION AUX 3 PREMIERS RÉSULTATS */}
                     {filteredLenses.slice(0, 3).map((lens, index) => (<LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} onSelect={setSelectedLens} isSelected={selectedLens && selectedLens.id === lens.id} />))}
                 </div>
                 {filteredLenses.length === 0 && !loading && <div className="text-center py-20 opacity-50 text-sm font-bold">AUCUN VERRE TROUVÉ</div>}
@@ -466,7 +510,7 @@ function App() {
         </section>
       </div>
 
-      {/* FOOTER DEVIS */}
+      {/* FOOTER DEVIS ... (Identique) */}
       {selectedLens && (
           <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800">
               <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
@@ -514,10 +558,9 @@ function App() {
            </div>
         </div>
       )}
-
-      {/* MODALE HISTORIQUE */}
-      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
-      <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+      
+      {/* MODALE HISTORIQUE (Identique) */}
+      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
         <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
           <div className="flex items-center gap-4">
             <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
@@ -538,4 +581,11 @@ function App() {
   );
 }
 
-export default App;
+// --- ERROR BOUNDARY WRAPPER ---
+export default function AppWrapper() {
+    return (
+        <ErrorBoundary>
+            <App />
+        </ErrorBoundary>
+    );
+}
