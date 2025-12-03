@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.92"; // Fix Proxeo -> Degressif
+const APP_VERSION = "3.94"; // Force Classification Frontend (Proxeo/MyProxi)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -170,11 +170,15 @@ function App() {
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
+       // 1. FORCE LA CLASSIFICATION (Correction immédiate sans re-upload)
        let workingList = safeLenses.map(l => {
-           // PATCH CLASSIFICATION FRONTEND : FORCE PROXEO EN DEGRESSIF
-           const lens = {...l};
-           if (cleanText(lens.name).includes('PROXEO')) {
-               lens.type = 'DEGRESSIF';
+           const lens = { ...l };
+           const fullName = (cleanText(lens.name) + " " + cleanText(lens.design)).toUpperCase();
+           
+           if (fullName.includes("PROXEO")) {
+               lens.type = "DEGRESSIF";
+           } else if (fullName.includes("MYPROXI") || fullName.includes("MY PROXI")) {
+               lens.type = "PROGRESSIF_INTERIEUR";
            }
            return lens;
        });
@@ -189,15 +193,18 @@ function App() {
            }
        }
 
+       // 2. Filtre Type (Amélioré pour INTERIEUR/DEGRESSIF)
        if (formData.type) { 
            const targetType = cleanText(formData.type); 
            
            if (targetType === 'PROGRESSIF_INTERIEUR') {
+               // Filtre large pour attraper tout ce qui est "intérieur"
                workingList = workingList.filter(l => {
                    const type = cleanText(l.type);
                    return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR');
                });
            } else { 
+               // Filtrage standard exact
                workingList = workingList.filter(l => cleanText(l.type) === targetType); 
            } 
        }
@@ -226,6 +233,7 @@ function App() {
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { const sPrice = l[key] ? parseFloat(l[key]) : 0; return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; });
            workingList = workingList.filter(l => l.sellingPrice > 0);
+           // AJOUT: Tri par marge pour les réseaux aussi
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
@@ -333,7 +341,7 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative z-0">
-        {/* SIDEBAR ... Identique */}
+        {/* SIDEBAR FILTRES */}
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-20 transition-all duration-300 w-80 ${isSidebarOpen ? '' : 'hidden'}`}>
             <div className="p-6 space-y-6 pb-32">
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
