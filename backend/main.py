@@ -30,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 3. Connexion BDD
+# 3. Connexion BDD Robuste
 engine = None
 if DATABASE_URL:
     if DATABASE_URL.startswith("postgres://"):
@@ -41,15 +41,38 @@ if DATABASE_URL:
         DATABASE_URL += f"{separator}sslmode=require"
 
     try:
-        # pool_pre_ping=True garde la connexion vivante
+        # pool_pre_ping=True est vital pour la stabilité sur le cloud
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         with engine.begin() as conn:
+            # Table Utilisateurs (Auth)
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS users (
+                    username VARCHAR(100) PRIMARY KEY,
+                    shop_name TEXT,
+                    password TEXT,
+                    email TEXT,
+                    is_first_login BOOLEAN DEFAULT TRUE
+                );
+            """))
+            
+            # --- INITIALISATION ADMIN PAR DÉFAUT (Si table vide) ---
+            user_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
+            if user_count == 0:
+                print("⚠️ Base utilisateurs vide : Création de l'admin par défaut...")
+                conn.execute(text("""
+                    INSERT INTO users (username, shop_name, password, email, is_first_login) 
+                    VALUES ('admin', 'ADMINISTRATION', 'admin', 'admin@podium.optique', FALSE)
+                """))
+                print("✅ Utilisateur 'admin' créé (Mdp: admin)")
+
+            # Table Dossiers Clients
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS client_offers (
                     id SERIAL PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     encrypted_identity TEXT, lens_details JSONB, financials JSONB
                 );
             """))
+            # Table Catalogue Verres
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS lenses (
                     id SERIAL PRIMARY KEY, brand TEXT, name TEXT, purchase_price DECIMAL(10,2)
@@ -94,24 +117,87 @@ def get_col_idx(headers, candidates):
                 if normalize_string(c) in h_str: return i
     return -1
 
+# --- MODELES ---
+class LoginRequest(BaseModel): username: str; password: str
+class PasswordUpdate(BaseModel): username: str; new_password: str
 class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 
-# --- ROUTES ---
+# --- ROUTES AUTHENTIFICATION ---
+@app.post("/auth/login")
+def login(creds: LoginRequest):
+    if not engine: raise HTTPException(500, "Pas de BDD")
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT * FROM users WHERE LOWER(username) = LOWER(:u)"), {"u": creds.username}).fetchone()
+            if not result: raise HTTPException(401, "Utilisateur inconnu")
+            user = result._mapping
+            if user['password'] != creds.password: raise HTTPException(401, "Mot de passe incorrect")
+            return {
+                "status": "success",
+                "user": {
+                    "username": user['username'], "shop_name": user['shop_name'],
+                    "email": user['email'], "is_first_login": user['is_first_login']
+                }
+            }
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(500, str(e))
 
+@app.post("/auth/update-password")
+def update_password(data: PasswordUpdate):
+    if not engine: raise HTTPException(500, "Pas de BDD")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE users SET password = :p, is_first_login = FALSE WHERE username = :u"), 
+                         {"p": data.new_password, "u": data.username})
+        return {"status": "success"}
+    except Exception as e: raise HTTPException(500, str(e))
+
+@app.post("/upload-users")
+def upload_users(file: UploadFile = File(...)):
+    if not engine: raise HTTPException(500, "Pas de BDD")
+    temp = f"/tmp/users_{int(time.time())}.xlsx"
+    try:
+        with open(temp, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
+        wb = openpyxl.load_workbook(temp, data_only=True)
+        sheet = wb.active
+        users_to_insert = []
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            if not row[0]: continue
+            users_to_insert.append({
+                "u": str(row[0]).strip(),
+                "s": str(row[1]).strip() if len(row) > 1 else "Opticien",
+                "p": str(row[2]).strip() if len(row) > 2 else "1234",
+                "e": str(row[3]).strip() if len(row) > 3 else "",
+            })
+        if users_to_insert:
+            with engine.begin() as conn:
+                conn.execute(text("TRUNCATE TABLE users"))
+                conn.execute(text("INSERT INTO users (username, shop_name, password, email, is_first_login) VALUES (:u, :s, :p, :e, TRUE)"), users_to_insert)
+        return {"status": "success", "count": len(users_to_insert)}
+    except Exception as e: raise HTTPException(500, str(e))
+    finally:
+        if os.path.exists(temp): os.remove(temp)
+
+# --- ROUTES GLOBALES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.99", "msg": "Backend Full Features"}
-
+def read_root(): return {"status": "online", "version": "4.03", "msg": "Default Admin Enabled"}
 @app.head("/")
-def read_root_head():
-    return read_root()
+def read_root_head(): return read_root()
 
+# --- ROUTES DOSSIERS ---
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
     if not engine: raise HTTPException(500, "Pas de connexion BDD")
     try:
         with engine.begin() as conn:
+            # Extraction correction si présente dans 'correction_data' ou ailleurs
+            lens_data = offer.lens
+            if hasattr(offer, 'correction') and offer.correction:
+                 lens_data['correction_data'] = offer.correction
+            
             conn.execute(text("INSERT INTO client_offers (encrypted_identity, lens_details, financials) VALUES (:ident, :lens, :fin)"), 
-                {"ident": encrypt_dict(offer.client), "lens": json.dumps(offer.lens), "fin": json.dumps(offer.finance)})
+                {"ident": encrypt_dict(offer.client), "lens": json.dumps(lens_data), "fin": json.dumps(offer.finance)})
         return {"status": "success"}
     except Exception as e: raise HTTPException(500, str(e))
 
@@ -120,103 +206,68 @@ def get_offers():
     if not engine: return []
     try:
         with engine.connect() as conn:
-            # On récupère les 50 derniers dossiers
             res = conn.execute(text("SELECT * FROM client_offers ORDER BY created_at DESC LIMIT 50"))
-            return [{
-                "id": r.id,
-                "date": r.created_at.strftime("%d/%m/%Y %H:%M"),
-                "client": decrypt_dict(r.encrypted_identity),
-                "lens": r.lens_details, # Contient maintenant la correction aussi
-                "finance": r.financials
-            } for r in res.fetchall()]
+            results = []
+            for r in res.fetchall():
+                try:
+                    lens_data = r.lens_details
+                    # Compatibilité ascendante pour la correction
+                    correction = lens_data.get('correction_data', None)
+                    
+                    results.append({
+                        "id": r.id,
+                        "date": r.created_at.strftime("%d/%m/%Y %H:%M"),
+                        "client": decrypt_dict(r.encrypted_identity),
+                        "lens": lens_data,
+                        "finance": r.financials,
+                        "correction": correction # On l'expose explicitement pour le frontend
+                    })
+                except Exception as inner_e:
+                    print(f"Erreur lecture ligne {r.id}: {inner_e}")
+                    continue
+            return results
     except Exception as e:
-        print(f"❌ Erreur Get Offers: {e}")
+        print(f"Erreur globale offers: {e}")
         return []
 
-# --- ROUTE DELETE RESTAURÉE ---
 @app.delete("/offers/{offer_id}")
 def delete_offer(offer_id: int):
-    if not engine: raise HTTPException(500, "Pas de connexion BDD")
+    if not engine: raise HTTPException(500, "Pas de BDD")
     try:
         with engine.begin() as conn:
             result = conn.execute(text("DELETE FROM client_offers WHERE id = :id"), {"id": offer_id})
-            if result.rowcount == 0:
-                raise HTTPException(404, "Dossier introuvable")
-        return {"status": "success", "message": "Dossier supprimé"}
-    except Exception as e:
-        print(f"❌ Erreur Delete: {e}")
-        raise HTTPException(500, str(e))
+            if result.rowcount == 0: raise HTTPException(404, "Introuvable")
+        return {"status": "success"}
+    except Exception as e: raise HTTPException(500, str(e))
 
+# --- ROUTES CATALOGUE ---
 @app.get("/lenses")
-def get_lenses(
-    type: str = Query(None), 
-    brand: str = Query(None),
-    limit: int = Query(3000)
-):
+def get_lenses(type: str = Query(None), brand: str = Query(None), limit: int = Query(3000)):
     if not engine: return []
     try:
         with engine.connect() as conn:
             cols = "id, brand, name, commercial_code, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair"
             sql = f"SELECT {cols} FROM lenses WHERE 1=1"
             params = {}
-            
-            if brand: 
-                sql += " AND brand ILIKE :brand"
-                params["brand"] = brand
-            
+            if brand: sql += " AND brand ILIKE :brand"; params["brand"] = brand
             if type: 
                 type_norm = normalize_string(type)
-                if "DEGRESSIF" in type_norm:
-                    sql += " AND geometry = 'DEGRESSIF'"
-                elif "INTERIEUR" in type_norm:
-                    sql += " AND (geometry = 'PROGRESSIF_INTERIEUR' OR geometry = 'INTERIEUR')"
-                elif "PROGRESSIF" in type_norm:
-                    sql += " AND geometry = 'PROGRESSIF'"
-                elif "UNIFOCAL" in type_norm:
-                    sql += " AND geometry = 'UNIFOCAL'"
-                elif "MULTIFOCAL" in type_norm:
-                    sql += " AND geometry = 'MULTIFOCAL'"
-                else:
-                    sql += " AND geometry ILIKE :geo"
-                    params["geo"] = f"%{type}%"
+                if "DEGRESSIF" in type_norm: sql += " AND geometry = 'DEGRESSIF'"
+                elif "INTERIEUR" in type_norm: sql += " AND (geometry = 'PROGRESSIF_INTERIEUR' OR geometry = 'INTERIEUR')"
+                elif "PROGRESSIF" in type_norm: sql += " AND geometry = 'PROGRESSIF'"
+                elif "UNIFOCAL" in type_norm: sql += " AND geometry = 'UNIFOCAL'"
+                elif "MULTIFOCAL" in type_norm: sql += " AND geometry = 'MULTIFOCAL'"
+                else: sql += " AND geometry ILIKE :geo"; params["geo"] = f"%{type}%"
             
             safe_limit = min(limit, 5000)
             sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
-            
             rows = conn.execute(text(sql), params).fetchall()
-            
-            result = [{
-                "id": r.id,
-                "brand": r.brand,
-                "name": r.name,
-                "commercial_code": r.commercial_code,
-                "type": r.geometry,
-                "geometry": r.geometry,
-                "design": r.design,
-                "index_mat": r.index_mat,
-                "material": r.material,
-                "coating": r.coating,
-                "commercial_flow": r.commercial_flow,
-                "color": r.color,
-                "purchase_price": float(r.purchase_price or 0),
-                "sellingPrice": float(r.selling_price or 0),
-                "sell_kalixia": float(r.sell_kalixia or 0),
-                "sell_itelis": float(r.sell_itelis or 0),
-                "sell_carteblanche": float(r.sell_carteblanche or 0),
-                "sell_seveane": float(r.sell_seveane or 0),
-                "sell_santeclair": float(r.sell_santeclair or 0),
-            } for r in rows]
-            
-            return result
+            return [row._mapping for row in rows]
+    except: return []
 
-    except Exception as e:
-        print(f"❌ Erreur Lecture Verres: {e}")
-        return []
-
-# --- UPLOAD ROBUSTE ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
-    print("🚀 Début requête upload (Turbo)...", flush=True)
+    print("🚀 Début requête upload (Threaded)...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
@@ -230,8 +281,20 @@ def upload_catalog(file: UploadFile = File(...)):
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
-            print("♻️  Vidage table...", flush=True)
-            conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY CASCADE;"))
+            print("♻️  Recréation table lenses...", flush=True)
+            conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
+            conn.execute(text("""
+                CREATE TABLE lenses (
+                    id SERIAL PRIMARY KEY,
+                    brand TEXT, edi_code TEXT, commercial_code TEXT, name TEXT,
+                    geometry TEXT, design TEXT, index_mat TEXT,
+                    material TEXT, coating TEXT, commercial_flow TEXT, color TEXT,
+                    purchase_price DECIMAL(10,2), selling_price DECIMAL(10,2),
+                    sell_kalixia DECIMAL(10,2), sell_itelis DECIMAL(10,2),
+                    sell_carteblanche DECIMAL(10,2), sell_seveane DECIMAL(10,2),
+                    sell_santeclair DECIMAL(10,2)
+                );
+            """))
         
         total_inserted = 0
         
@@ -283,12 +346,9 @@ def upload_catalog(file: UploadFile = File(...)):
 
                 for row in row_iterator:
                     if not row[c_nom]: continue
-                    
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
-                    
                     brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
-                    
                     name = clean_text(row[c_nom])
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
                     if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
@@ -307,12 +367,10 @@ def upload_catalog(file: UploadFile = File(...)):
                     if 'PROXEO' in full_search: ltype = 'DEGRESSIF'
                     if 'MYPROXI' in full_search: ltype = 'PROGRESSIF_INTERIEUR'
 
-                    if buy <= 0:
-                         buy = clean_price(row[c_kal]) if c_kal != -1 else 0
-                    
+                    if buy <= 0: buy = clean_price(row[c_kal]) if c_kal != -1 else 0
                     if buy <= 0: buy = 0.01
 
-                    lens = {
+                    batch.append({
                         "brand": brand[:100], "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
                         "code": code, "name": name, "geo": ltype, "design": design_val,
                         "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
@@ -326,8 +384,7 @@ def upload_catalog(file: UploadFile = File(...)):
                         "cb": clean_price(row[c_cb]) if c_cb != -1 else 0,
                         "sev": clean_price(row[c_sev]) if c_sev != -1 else 0,
                         "sant": clean_price(row[c_sant]) if c_sant != -1 else 0,
-                    }
-                    batch.append(lens)
+                    })
 
                     if len(batch) >= BATCH_SIZE:
                         with conn.begin():
