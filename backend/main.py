@@ -99,7 +99,7 @@ class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
 # --- ROUTES ---
 
 @app.get("/")
-def read_root(): return {"status": "online", "version": "3.87", "msg": "Backend Fix Classification Fine"}
+def read_root(): return {"status": "online", "version": "3.98", "msg": "Backend Delete Restored"}
 
 @app.head("/")
 def read_root_head():
@@ -124,6 +124,20 @@ def get_offers():
             return [{"id":r.id, "date":r.created_at.strftime("%d/%m/%Y %H:%M"), "client":decrypt_dict(r.encrypted_identity), "lens":r.lens_details, "finance":r.financials} for r in res.fetchall()]
     except: return []
 
+# --- FIX : ROUTE DELETE RESTAURÉE ---
+@app.delete("/offers/{offer_id}")
+def delete_offer(offer_id: int):
+    if not engine: raise HTTPException(500, "Pas de connexion BDD")
+    try:
+        with engine.begin() as conn:
+            result = conn.execute(text("DELETE FROM client_offers WHERE id = :id"), {"id": offer_id})
+            if result.rowcount == 0:
+                raise HTTPException(404, "Dossier introuvable")
+        return {"status": "success", "message": "Dossier supprimé"}
+    except Exception as e:
+        print(f"❌ Erreur Delete: {e}")
+        raise HTTPException(500, str(e))
+
 @app.get("/lenses")
 def get_lenses(
     type: str = Query(None), 
@@ -145,24 +159,16 @@ def get_lenses(
                 type_norm = normalize_string(type)
                 
                 if "DEGRESSIF" in type_norm:
-                    # Filtre Dégressif strict (inclut PROXEO)
                     sql += " AND geometry = 'DEGRESSIF'"
-                
                 elif "INTERIEUR" in type_norm:
-                    # Filtre Prog Intérieur strict (inclut MYPROXI) + compatibilité avec ancien tag INTERIEUR
                     sql += " AND (geometry = 'PROGRESSIF_INTERIEUR' OR geometry = 'INTERIEUR')"
-                
                 elif "PROGRESSIF" in type_norm:
                     sql += " AND geometry = 'PROGRESSIF'"
-                
                 elif "UNIFOCAL" in type_norm:
                     sql += " AND geometry = 'UNIFOCAL'"
-                
                 elif "MULTIFOCAL" in type_norm:
                     sql += " AND geometry = 'MULTIFOCAL'"
-                
                 else:
-                    # Fallback
                     sql += " AND geometry ILIKE :geo"
                     params["geo"] = f"%{type}%"
             
@@ -283,25 +289,15 @@ def upload_catalog(file: UploadFile = File(...)):
                     design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
                     code = clean_text(row[c_code]) if c_code != -1 else ""
 
-                    ltype = 'UNIFOCAL' # Default
+                    ltype = 'UNIFOCAL'
+                    if 'DEGRESSIF' in geo_raw: ltype = 'DEGRESSIF'
+                    elif 'INTERIEUR' in geo_raw: ltype = 'PROGRESSIF_INTERIEUR'
+                    elif 'PROG' in geo_raw: ltype = 'PROGRESSIF'
+                    elif 'MULTIFOCAL' in geo_raw: ltype = 'MULTIFOCAL'
                     
-                    # LOGIQUE DE CLASSIFICATION MISE A JOUR
-                    # 1. Détection classique (Ordre important)
-                    if 'DEGRESSIF' in geo_raw:
-                        ltype = 'DEGRESSIF'
-                    elif 'INTERIEUR' in geo_raw:
-                         ltype = 'PROGRESSIF_INTERIEUR' # Ex: "PROGRESSIF D'INTERIEUR"
-                    elif 'PROG' in geo_raw:
-                        ltype = 'PROGRESSIF'
-                    elif 'MULTIFOCAL' in geo_raw:
-                        ltype = 'MULTIFOCAL'
-                    
-                    # 2. Forçage Spécifique (L'emporte sur le reste)
                     full_search = (name + " " + design_val + " " + code).upper().replace(" ", "")
-                    if 'PROXEO' in full_search: 
-                        ltype = 'DEGRESSIF' # CORRECTION : Proxeo = Degressif
-                    if 'MYPROXI' in full_search: 
-                        ltype = 'PROGRESSIF_INTERIEUR' # CORRECTION : MyProxi = Prog Intérieur
+                    if 'PROXEO' in full_search: ltype = 'DEGRESSIF'
+                    if 'MYPROXI' in full_search: ltype = 'PROGRESSIF_INTERIEUR'
 
                     if buy <= 0:
                          buy = clean_price(row[c_kal]) if c_kal != -1 else 0
@@ -309,15 +305,10 @@ def upload_catalog(file: UploadFile = File(...)):
                     if buy <= 0: buy = 0.01
 
                     lens = {
-                        "brand": brand[:100], 
-                        "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
-                        "code": code,
-                        "name": name,
-                        "geo": ltype,
-                        "design": design_val,
+                        "brand": brand[:100], "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
+                        "code": code, "name": name, "geo": ltype, "design": design_val,
                         "idx": clean_index(row[c_idx]) if c_idx != -1 else "1.50",
-                        "mat": mat,
-                        "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
+                        "mat": mat, "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
                         "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
                         "color": clean_text(row[c_color]) if c_color != -1 else "",
                         "buy": buy,
@@ -339,7 +330,7 @@ def upload_catalog(file: UploadFile = File(...)):
                         total_inserted += len(batch)
                         batch = []
                         gc.collect()
-                        # time.sleep(0.01) # Pas besoin si serveur Oracle puissant
+                        time.sleep(0.01)
                 
                 if batch:
                     with conn.begin():
@@ -348,15 +339,14 @@ def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch)
-        
-        wb.close()
-        if os.path.exists(temp_file): os.remove(temp_file)
-        gc.collect()
-        
-        print(f"✅ TERMINE : {total_inserted} verres insérés.", flush=True)
-        return {"status": "success", "count": total_inserted, "message": f"Import réussi : {total_inserted} verres."}
+                    gc.collect()
+
+        return {"status": "success", "count": total_inserted}
 
     except Exception as e:
-        print(f"❌ ERREUR UPLOAD: {traceback.format_exc()}", flush=True)
+        print(f"❌ ERREUR: {traceback.format_exc()}", flush=True)
+        raise HTTPException(500, f"Erreur: {str(e)}")
+    finally:
+        if wb: wb.close()
         if os.path.exists(temp_file): os.remove(temp_file)
-        raise HTTPException(500, f"Erreur traitement: {str(e)}")
+        gc.collect()
