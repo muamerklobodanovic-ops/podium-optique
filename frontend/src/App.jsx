@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.94"; // Force Classification Frontend (Proxeo/MyProxi)
+const APP_VERSION = "3.95"; // Restore Shop Identity Bar
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -142,7 +142,7 @@ function App() {
       const saved = localStorage.getItem("optique_server_url");
       if (saved) return saved;
       const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
-      return isLocal ? "http://127.0.0.1:8000" : PROD_API_URL;
+      return isLocal ? "http://127.0.0.1:8000" : "https://api-podium.onrender.com";
   });
   
   const cleanBaseUrl = (url) => url.replace(/\/lenses\/?$/, '').replace(/\/sync\/?$/, '').replace(/\/offers\/?$/, '').replace(/\/upload-catalog\/?$/, '').replace(/\/$/, '');
@@ -324,6 +324,19 @@ function App() {
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
+      {/* BARRE IDENTITÉ MAGASIN (Restaurée) */}
+      <div className="bg-slate-900 text-white px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
+          <div className="flex items-center gap-3">
+              {userSettings.shopLogo ? (
+                  <img src={userSettings.shopLogo} alt="Logo Magasin" className="h-8 w-auto object-contain rounded bg-white p-0.5"/>
+              ) : (
+                  <div className="h-8 w-8 bg-slate-700 rounded flex items-center justify-center"><Store className="w-4 h-4"/></div>
+              )}
+              <span>{userSettings.shopName}</span>
+          </div>
+          <span className="opacity-50">V{APP_VERSION}</span>
+      </div>
+
       {/* HEADER ... Identique */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
