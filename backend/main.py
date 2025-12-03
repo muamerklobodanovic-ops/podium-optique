@@ -44,26 +44,30 @@ if DATABASE_URL:
         # pool_pre_ping=True est vital pour la stabilité sur le cloud
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         with engine.begin() as conn:
-            # Table Utilisateurs (Auth)
+            # Table Utilisateurs (Auth) - Mise à jour structure
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS users (
                     username VARCHAR(100) PRIMARY KEY,
                     shop_name TEXT,
                     password TEXT,
                     email TEXT,
+                    role VARCHAR(50) DEFAULT 'user',  -- Nouvelle colonne Role
                     is_first_login BOOLEAN DEFAULT TRUE
                 );
             """))
             
             # --- INITIALISATION ADMIN PAR DÉFAUT (Si table vide) ---
-            user_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
-            if user_count == 0:
-                print("⚠️ Base utilisateurs vide : Création de l'admin par défaut...")
-                conn.execute(text("""
-                    INSERT INTO users (username, shop_name, password, email, is_first_login) 
-                    VALUES ('admin', 'ADMINISTRATION', 'admin', 'admin@podium.optique', FALSE)
-                """))
-                print("✅ Utilisateur 'admin' créé (Mdp: admin)")
+            try:
+                user_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
+                if user_count == 0:
+                    print("⚠️ Base utilisateurs vide : Création de l'admin par défaut...")
+                    conn.execute(text("""
+                        INSERT INTO users (username, shop_name, password, email, role, is_first_login) 
+                        VALUES ('admin', 'ADMINISTRATION', 'admin', 'admin@podium.optique', 'admin', FALSE)
+                    """))
+                    print("✅ Utilisateur 'admin' créé (Mdp: admin)")
+            except Exception as e:
+                print(f"⚠️ Info: Impossible de vérifier/créer admin par défaut (Table peut-être en cours de modif): {e}")
 
             # Table Dossiers Clients
             conn.execute(text("""
@@ -132,15 +136,20 @@ def login(creds: LoginRequest):
             if not result: raise HTTPException(401, "Utilisateur inconnu")
             user = result._mapping
             if user['password'] != creds.password: raise HTTPException(401, "Mot de passe incorrect")
+            
+            # On gère le cas où la colonne role n'existerait pas encore (ancien user)
+            role = user['role'] if 'role' in user else 'user'
+            
             return {
                 "status": "success",
                 "user": {
                     "username": user['username'], "shop_name": user['shop_name'],
-                    "email": user['email'], "is_first_login": user['is_first_login']
+                    "email": user['email'], "role": role, "is_first_login": user['is_first_login']
                 }
             }
     except Exception as e:
         if isinstance(e, HTTPException): raise e
+        print(f"Login Error: {e}")
         raise HTTPException(500, str(e))
 
 @app.post("/auth/update-password")
@@ -155,33 +164,75 @@ def update_password(data: PasswordUpdate):
 
 @app.post("/upload-users")
 def upload_users(file: UploadFile = File(...)):
+    print("🚀 Début upload USERS...", flush=True)
     if not engine: raise HTTPException(500, "Pas de BDD")
+    
     temp = f"/tmp/users_{int(time.time())}.xlsx"
     try:
         with open(temp, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
+        
+        print("📖 Lecture Excel Users...", flush=True)
         wb = openpyxl.load_workbook(temp, data_only=True)
         sheet = wb.active
+        
         users_to_insert = []
+        # On suppose que la ligne 1 est l'en-tête
         for row in sheet.iter_rows(min_row=2, values_only=True):
-            if not row[0]: continue
+            if not row[0]: continue # Pas d'identifiant
+            
+            # Mapping Colonnes
+            # A=ID, B=Shop, C=Pass, D=Mail, E=Role
+            u_id = str(row[0]).strip()
+            u_shop = str(row[1]).strip() if len(row) > 1 and row[1] else "Opticien"
+            u_pass = str(row[2]).strip() if len(row) > 2 and row[2] else "1234"
+            u_mail = str(row[3]).strip() if len(row) > 3 and row[3] else ""
+            
+            # Gestion Rôle (Colonne E)
+            u_role = "user" # Valeur par défaut
+            if len(row) > 4 and row[4]:
+                val_role = str(row[4]).lower().strip()
+                if "admin" in val_role: u_role = "admin"
+            
             users_to_insert.append({
-                "u": str(row[0]).strip(),
-                "s": str(row[1]).strip() if len(row) > 1 else "Opticien",
-                "p": str(row[2]).strip() if len(row) > 2 else "1234",
-                "e": str(row[3]).strip() if len(row) > 3 else "",
+                "u": u_id, "s": u_shop, "p": u_pass, "e": u_mail, "r": u_role
             })
+            
+        print(f"✅ {len(users_to_insert)} utilisateurs trouvés.", flush=True)
+            
         if users_to_insert:
             with engine.begin() as conn:
-                conn.execute(text("TRUNCATE TABLE users"))
-                conn.execute(text("INSERT INTO users (username, shop_name, password, email, is_first_login) VALUES (:u, :s, :p, :e, TRUE)"), users_to_insert)
+                print("♻️  Recréation table USERS (Mise à jour structure)...", flush=True)
+                # On force la suppression pour s'assurer que la colonne 'role' existe bien
+                conn.execute(text("DROP TABLE IF EXISTS users CASCADE;"))
+                conn.execute(text("""
+                    CREATE TABLE users (
+                        username VARCHAR(100) PRIMARY KEY,
+                        shop_name TEXT,
+                        password TEXT,
+                        email TEXT,
+                        role VARCHAR(50) DEFAULT 'user',
+                        is_first_login BOOLEAN DEFAULT TRUE
+                    );
+                """))
+                
+                print("💾 Insertion en base...", flush=True)
+                conn.execute(text("""
+                    INSERT INTO users (username, shop_name, password, email, role, is_first_login)
+                    VALUES (:u, :s, :p, :e, :r, TRUE)
+                """), users_to_insert)
+                
         return {"status": "success", "count": len(users_to_insert)}
-    except Exception as e: raise HTTPException(500, str(e))
+
+    except Exception as e: 
+        error_msg = traceback.format_exc()
+        print(f"❌ ERREUR UPLOAD USERS: {error_msg}", flush=True)
+        raise HTTPException(500, f"Erreur technique: {str(e)}")
     finally:
         if os.path.exists(temp): os.remove(temp)
 
 # --- ROUTES GLOBALES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "4.03", "msg": "Default Admin Enabled"}
+def read_root(): return {"status": "online", "version": "4.05", "msg": "Auth Role Update"}
 @app.head("/")
 def read_root_head(): return read_root()
 
@@ -281,7 +332,7 @@ def upload_catalog(file: UploadFile = File(...)):
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
         with engine.begin() as conn:
-            print("♻️  Recréation table lenses...", flush=True)
+            print("♻️  Recréation de la table 'lenses'...", flush=True)
             conn.execute(text("DROP TABLE IF EXISTS lenses CASCADE;"))
             conn.execute(text("""
                 CREATE TABLE lenses (
