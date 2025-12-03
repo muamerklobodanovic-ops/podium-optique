@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "4.02"; // Fix Hook Order (White Screen Fix)
+const APP_VERSION = "3.99.1"; // Correction Display & Input Auto-Select
 
-// --- CONFIGURATION ---
+// --- CONFIGURATION STATIQUE ---
+// Adresse du Backend Oracle (Mise à jour Cloudflare Tunnel)
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
+
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
 const DEFAULT_SETTINGS = {
     shopName: "MON OPTICIEN",
@@ -28,6 +30,7 @@ const DEFAULT_SETTINGS = {
     }
 };
 
+// --- DONNÉES DE DÉMO ---
 const DEMO_LENSES = [
   { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
@@ -39,10 +42,12 @@ const hexToRgb = (hex) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0";
 };
+
 const cleanText = (text) => {
   if (text === null || text === undefined) return "";
   return String(text).toUpperCase().trim();
 };
+
 const safeNum = (val) => {
   const num = parseFloat(val);
   return isNaN(num) ? 0 : num;
@@ -74,6 +79,7 @@ const NetworkLogo = ({ network, isSelected, onClick }) => {
 
 const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected, onCompare, isReference = false }) => {
   if (!lens) return null;
+
   const podiumStyles = [{ border: "border-yellow-400 ring-4 ring-yellow-50 shadow-xl shadow-yellow-100", badge: "bg-yellow-400 text-white border-yellow-500", icon: <Trophy className="w-5 h-5 text-white" />, label: "MEILLEUR CHOIX" }, { border: `border-slate-200 shadow-lg ${currentTheme.shadow || ''}`, badge: `${currentTheme.light || 'bg-gray-100'} ${currentTheme.textDark || 'text-gray-800'} ${currentTheme.border || 'border-gray-200'}`, icon: <Shield className={`w-5 h-5 ${currentTheme.text || 'text-gray-600'}`} />, label: "OFFRE OPTIMISÉE" }, { border: "border-slate-200 shadow-lg", badge: "bg-slate-100 text-slate-600 border-slate-200", icon: <Star className="w-5 h-5 text-orange-400" />, label: "PREMIUM" }];
   let activeStyle = podiumStyles[index !== undefined && index < 3 ? index : 1];
   if (isReference) activeStyle = { border: "border-blue-500 ring-4 ring-blue-50 shadow-xl", badge: "bg-blue-600 text-white", icon: <ArrowRightLeft className="w-5 h-5"/>, label: "RÉFÉRENCE" };
@@ -104,67 +110,7 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   );
 };
 
-// --- COMPOSANTS AUTH ---
-const LoginScreen = ({ onLogin }) => {
-    const [username, setUsername] = useState("");
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const handleSubmit = (e) => {
-        e.preventDefault(); setLoading(true); setError(null);
-        axios.post(`${PROD_API_URL}/auth/login`, { username, password })
-            .then(res => onLogin(res.data.user))
-            .catch(err => { setError(err.response?.data?.detail || "Erreur de connexion"); setLoading(false); });
-    };
-    return (
-        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
-                <div className="text-center mb-8"><div className="inline-flex p-4 bg-blue-50 rounded-full mb-4 text-blue-600"><Store className="w-8 h-8"/></div><h1 className="text-2xl font-bold text-slate-800">Podium Optique</h1><p className="text-sm text-slate-400 mt-2">Identification requise</p></div>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div><label className="block text-xs font-bold text-slate-500 mb-1">IDENTIFIANT</label><input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50" required /></div>
-                    <div><label className="block text-xs font-bold text-slate-500 mb-1">MOT DE PASSE</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50" required /></div>
-                    {error && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg flex items-center gap-2"><XCircle className="w-4 h-4"/> {error}</div>}
-                    <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex justify-center items-center gap-2">{loading ? <Activity className="w-5 h-5 animate-spin"/> : <Lock className="w-5 h-5"/>} SE CONNECTER</button>
-                </form>
-                <div className="mt-8 text-center text-[10px] text-slate-300">V{APP_VERSION} • Accès Sécurisé</div>
-            </div>
-        </div>
-    );
-};
-
-const FirstLoginModal = ({ user, onPasswordChanged }) => {
-    const [newPass, setNewPass] = useState("");
-    const [confirmPass, setConfirmPass] = useState("");
-    const [error, setError] = useState(null);
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (newPass !== confirmPass) return setError("Les mots de passe ne correspondent pas");
-        if (newPass.length < 4) return setError("Trop court");
-        axios.post(`${PROD_API_URL}/auth/update-password`, { username: user.username, new_password: newPass })
-            .then(() => onPasswordChanged(newPass))
-            .catch(() => setError("Erreur serveur"));
-    };
-    return (
-        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white p-8 rounded-2xl w-full max-w-md">
-                <div className="flex items-center gap-3 mb-6 text-orange-500"><KeyRound className="w-8 h-8"/><h2 className="text-xl font-bold text-slate-800">Première Connexion</h2></div>
-                <p className="text-sm text-slate-500 mb-6">Veuillez définir votre mot de passe personnel.</p>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <input type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="Nouveau mot de passe" className="w-full p-3 border rounded-xl" required/>
-                    <input type="password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} placeholder="Confirmer le mot de passe" className="w-full p-3 border rounded-xl" required/>
-                    {error && <p className="text-xs text-red-500">{error}</p>}
-                    <button type="submit" className="w-full py-3 bg-orange-500 text-white font-bold rounded-xl">VALIDER</button>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-// --- APP PRINCIPALE ---
 function App() {
-  // 1. DÉCLARATION DES HOOKS D'ABORD (TOUS !)
-  const [user, setUser] = useState(() => { const s = sessionStorage.getItem("optique_user"); return s ? JSON.parse(s) : null; });
-  
   const [lenses, setLenses] = useState([]); const [filteredLenses, setFilteredLenses] = useState([]); const [availableDesigns, setAvailableDesigns] = useState([]); const [availableCoatings, setAvailableCoatings] = useState([]);
   const [loading, setLoading] = useState(false); const [error, setError] = useState(null); const [isOnline, setIsOnline] = useState(true); 
   const [showSettings, setShowSettings] = useState(false); const [showMargins, setShowMargins] = useState(false); const [selectedLens, setSelectedLens] = useState(null); const [isSidebarOpen, setIsSidebarOpen] = useState(true); const [comparisonLens, setComparisonLens] = useState(null); const [showHistory, setShowHistory] = useState(false); const [savedOffers, setSavedOffers] = useState([]); 
@@ -172,26 +118,43 @@ function App() {
   const [stats, setStats] = useState({ total: 0, filtered: 0 });
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 }); const [secondPairPrice, setSecondPairPrice] = useState(0);
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
-  const [userFile, setUserFile] = useState(null);
 
-  // Listes
+  // LISTES DE RÉFÉRENCE
   const brands = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
-  const lensTypes = [ { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF_INTERIEUR", label: "PROG. INTÉRIEUR" } ];
+  
+  const lensTypes = [ 
+      { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
+      { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
+      { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, 
+      { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, 
+      { id: "PROGRESSIF_INTERIEUR", label: "PROG. INTÉRIEUR" } 
+  ];
+  
   const indices = ['1.50', '1.58', '1.60', '1.67', '1.74'];
   const currentCoatings = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
 
-  // Settings Safe Merge
   const [userSettings, setUserSettings] = useState(() => {
     try { const saved = localStorage.getItem("optique_user_settings"); if(saved) { const p = JSON.parse(saved); return { ...DEFAULT_SETTINGS, ...p, pricing: { ...DEFAULT_SETTINGS.pricing, ...(p.pricing||{}) } }; } return DEFAULT_SETTINGS; } catch (e) { return DEFAULT_SETTINGS; }
   });
   useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
 
-  // Shop Override
-  const currentSettings = { ...userSettings, shopName: user?.shop_name || userSettings.shopName };
+  const [formData, setFormData] = useState(() => {
+      const saved = sessionStorage.getItem("optique_form_data");
+      return saved ? JSON.parse(saved) : { network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false };
+  });
 
-  const [formData, setFormData] = useState({ network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false });
-  const [serverUrl, setServerUrl] = useState(PROD_API_URL);
+  // AUTO SAVE SESSION
+  useEffect(() => { sessionStorage.setItem("optique_client", JSON.stringify(client)); }, [client]);
+  useEffect(() => { sessionStorage.setItem("optique_second_pair", secondPairPrice); }, [secondPairPrice]);
+  useEffect(() => { sessionStorage.setItem("optique_form_data", JSON.stringify(formData)); }, [formData]);
+
+  const [serverUrl, setServerUrl] = useState(() => {
+      const saved = localStorage.getItem("optique_server_url");
+      if (saved) return saved;
+      const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
+      return isLocal ? "http://127.0.0.1:8000" : PROD_API_URL;
+  });
   
   const cleanBaseUrl = (url) => url.replace(/\/lenses\/?$/, '').replace(/\/sync\/?$/, '').replace(/\/offers\/?$/, '').replace(/\/upload-catalog\/?$/, '').replace(/\/$/, '');
   const baseBackendUrl = cleanBaseUrl(serverUrl);
@@ -205,7 +168,7 @@ function App() {
 
   const bgClass = userSettings.bgColor || "bg-slate-50"; const isDarkTheme = bgClass.includes("900") || bgClass.includes("black"); const textClass = isDarkTheme ? "text-white" : "text-slate-800"; const currentTheme = { primary: userSettings.themeColor === 'custom' ? 'bg-[var(--theme-primary)]' : 'bg-blue-700' };
 
-  useEffect(() => { setFormData(prev => ({ ...prev, coating: '' })); fetchData(); }, [formData.brand, formData.network, formData.type]); 
+  useEffect(() => { fetchData(); }, [formData.brand, formData.network, formData.type]); 
 
   const getFilteredBrandsList = () => {
       const net = formData.network;
@@ -291,25 +254,50 @@ function App() {
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
 
+  const handleReset = () => {
+      if(window.confirm("Tout remettre à zéro ?")) {
+          sessionStorage.clear();
+          window.location.reload();
+      }
+  };
+
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
       const totalPair = selectedLens.sellingPrice * 2;
       const remainder = (totalPair + secondPairPrice) - client.reimbursement;
+      
+      // CORRECTION: Intégration des données correction DANS l'objet lens pour affichage ultérieur
       const lensWithCorrection = { 
           ...selectedLens, 
-          correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } 
+          correction_data: { 
+              sphere: formData.sphere, 
+              cylinder: formData.cylinder, 
+              addition: formData.addition, 
+              index: formData.materialIndex 
+          } 
       };
-      const payload = { client: client, lens: lensWithCorrection, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
+
+      const payload = { 
+          client: client, 
+          lens: lensWithCorrection, 
+          finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } 
+      };
       axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
   };
+
+  // --- DELETE ---
   const deleteOffer = (id) => {
       if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) {
           axios.delete(`${SAVE_URL}/${id}`)
               .then(() => { alert("Dossier supprimé."); fetchHistory(); })
-              .catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); });
+              .catch(err => { 
+                  const msg = err.response ? `Erreur ${err.response.status}` : err.message;
+                  alert(`Erreur lors de la suppression : ${msg}`); 
+              });
       }
   };
+
   const triggerFileUpload = () => {
       if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)");
       setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile);
@@ -318,12 +306,6 @@ function App() {
       .catch(err => { console.error("Upload Error:", err); alert(`❌ Erreur upload : ${err.response?.data?.detail || err.message}`); })
       .finally(() => { setSyncLoading(false); setUploadProgress(0); });
   };
-  const triggerUserUpload = () => {
-      if (!userFile) return alert("Sélectionner un fichier Excel");
-      setSyncLoading(true); const data = new FormData(); data.append('file', userFile);
-      axios.post(`${baseBackendUrl}/upload-users`, data).then(res => alert(`✅ ${res.data.count} utilisateurs importés`)).catch(err => alert("Erreur upload")).finally(() => setSyncLoading(false));
-  };
-
   const triggerSync = () => { if (!sheetsUrl) return alert("URL?"); setSyncLoading(true); axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { fetchData(); }).finally(() => setSyncLoading(false)); };
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
@@ -338,36 +320,42 @@ function App() {
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const clearComparison = () => { setComparisonLens(null); };
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-  const handleReset = () => { if(window.confirm("Tout remettre à zéro ?")) { sessionStorage.clear(); window.location.reload(); } };
-  const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
-  const handleLogout = () => { setUser(null); sessionStorage.clear(); window.location.reload(); };
-  const handlePasswordUpdated = (newPass) => { const updated = { ...user, is_first_login: false }; setUser(updated); sessionStorage.setItem("optique_user", JSON.stringify(updated)); alert("Succès !"); };
-
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
+  
   const safePricing = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
   const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
   const totalPair = lensPrice * 2;
   const totalRefund = parseFloat(client.reimbursement || 0);
   const remainder = (totalPair + secondPairPrice) - totalRefund;
 
-  const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
-  const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
-
-  // 2. CONDITION RENDER : APRÈS TOUS LES HOOKS
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
+  const checkDatabase = () => {
+      setSyncLoading(true);
+      axios.get(API_URL) 
+        .then(res => { 
+            const data = Array.isArray(res.data) ? res.data : [];
+            if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); }
+        })
+        .catch(err => { alert(`❌ ERREUR: ${err.message}`); })
+        .finally(() => setSyncLoading(false));
+  };
+  const testConnection = () => {
+      setSyncLoading(true);
+      axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false));
+  };
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* MODALE PREMIERE CONNEXION */}
-      {user.is_first_login && <FirstLoginModal user={user} onPasswordChanged={handlePasswordUpdated} />}
-      {/* HEADER */}
+      {/* HEADER (Avec Bouton Reset) */}
       <div className="bg-slate-900 text-white px-4 lg:px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
           <div className="flex items-center gap-3">
               <button onClick={toggleSidebar} className="lg:hidden p-1 rounded hover:bg-slate-700"><Menu className="w-5 h-5"/></button>
-              {currentSettings.shopLogo ? (<img src={currentSettings.shopLogo} alt="Logo" className="h-8 w-auto object-contain rounded bg-white p-0.5"/>) : (<div className="h-8 w-8 bg-slate-700 rounded flex items-center justify-center"><Store className="w-4 h-4"/></div>)}
-              <span>{currentSettings.shopName}</span>
+              {userSettings.shopLogo ? (<img src={userSettings.shopLogo} alt="Logo Magasin" className="h-8 w-auto object-contain rounded bg-white p-0.5"/>) : (<div className="h-8 w-8 bg-slate-700 rounded flex items-center justify-center"><Store className="w-4 h-4"/></div>)}
+              <span>{userSettings.shopName}</span>
           </div>
-          <div className="flex items-center gap-4"><button onClick={handleReset} className="flex items-center gap-1 text-red-400 hover:text-red-300" title="RAZ"><RotateCcw className="w-4 h-4"/> <span className="hidden sm:inline">RAZ</span></button><button onClick={handleLogout} className="flex items-center gap-1 text-red-400 hover:text-red-300"><LogOut className="w-4 h-4"/> <span className="hidden sm:inline">QUITTER</span></button></div>
+          <div className="flex items-center gap-4">
+            <button onClick={handleReset} className="flex items-center gap-1 text-red-400 hover:text-red-300 transition-colors" title="Tout effacer"><RotateCcw className="w-4 h-4"/> <span className="hidden sm:inline">RAZ</span></button>
+            <span className="opacity-50">V{APP_VERSION}</span>
+          </div>
       </div>
 
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-4 lg:px-6 py-4 shadow-sm z-40`}>
@@ -386,22 +374,33 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative z-0">
-        {/* SIDEBAR */}
+        {/* RESPONSIVE SIDEBAR */}
         {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={toggleSidebar}></div>}
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-50 transition-transform duration-300 w-80 fixed inset-y-0 left-0 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-6 space-y-6 pb-32 pt-20 lg:pt-6">
                 <div className="lg:hidden flex justify-end mb-4"><button onClick={toggleSidebar}><X className="w-6 h-6"/></button></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
                 
+                {/* CORRECTION (AVEC SELECTION AUTOMATIQUE) */}
                 <div>
                     <label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label>
                     <div className="grid grid-cols-1 gap-2 mb-2">
-                        <div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">SPH</span><div className="relative flex-1"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
-                        <div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">CYL</span><div className="relative flex-1"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold w-6 opacity-50 text-right">SPH</span>
+                            <div className="relative flex-1"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold w-6 opacity-50 text-right">CYL</span>
+                            <div className="relative flex-1"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div>
+                        </div>
                     </div>
-                    <div className={`flex items-center gap-2 transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><span className="text-[10px] font-bold w-6 opacity-50 text-right">ADD</span><div className="relative flex-1"><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
+                    <div className={`flex items-center gap-2 transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}>
+                        <span className="text-[10px] font-bold w-6 opacity-50 text-right">ADD</span>
+                        <div className="relative flex-1"><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div>
+                    </div>
                 </div>
 
+                {/* ... Autres filtres ... */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{lensTypes.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{indices.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
@@ -412,8 +411,14 @@ function App() {
         {/* RESULTATS */}
         <section className="flex-1 p-4 lg:p-6 overflow-y-auto pb-40">
             <div className="max-w-7xl mx-auto">
-                {comparisonLens && (<div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-xl"><div className="flex justify-between mb-4"><h3 className="font-bold text-blue-800 text-sm">PRODUIT DE RÉFÉRENCE</h3><button onClick={() => setComparisonLens(null)}><XCircle className="w-5 h-5 text-blue-400"/></button></div><div className="w-full max-w-sm"><LensCard lens={comparisonLens} index={0} currentTheme={currentTheme} showMargins={showMargins} isReference={true} /></div></div>)}
+                {comparisonLens && (
+                    <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                        <div className="flex justify-between mb-4"><h3 className="font-bold text-blue-800 text-sm">PRODUIT DE RÉFÉRENCE</h3><button onClick={() => setComparisonLens(null)}><XCircle className="w-5 h-5 text-blue-400"/></button></div>
+                        <div className="w-full max-w-sm"><LensCard lens={comparisonLens} index={0} currentTheme={currentTheme} showMargins={showMargins} isReference={true} /></div>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {/* RESTRICTION AUX 3 PREMIERS RÉSULTATS */}
                     {filteredLenses.slice(0, 3).map((lens, index) => (<LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} onSelect={setSelectedLens} isSelected={selectedLens && selectedLens.id === lens.id} />))}
                 </div>
                 {filteredLenses.length === 0 && !loading && <div className="text-center py-20 opacity-50 text-sm font-bold">AUCUN VERRE TROUVÉ</div>}
@@ -429,7 +434,13 @@ function App() {
                     <div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div>
                     <div>
                        <div className="text-[10px] font-bold text-slate-400 mt-1">RÉFÉRENCE DE COMMANDE</div>
-                       <div className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all" onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }} title="Cliquer pour copier">{selectedLens.commercial_code || "N/A"}</div>
+                       <div 
+                          className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all"
+                          onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }}
+                          title="Cliquer pour copier"
+                        >
+                          {selectedLens.commercial_code || "N/A"}
+                       </div>
                        <div className="font-bold text-slate-800 text-sm leading-tight mt-1">{selectedLens.name}</div>
                     </div>
                   </div>
@@ -439,51 +450,29 @@ function App() {
           </div>
       )}
 
-      {/* MODALE SETTINGS (Avec Upload User + Excel) */}
-      {showSettings && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
-           <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
-              <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
-              {/* ADMIN USERS */}
-              <div className="mb-6 bg-orange-50 p-4 rounded-xl border border-orange-200">
-                 <label className="block text-xs font-bold text-orange-700 mb-2">ADMINISTRATION UTILISATEURS</label>
-                 <div className="flex gap-2">
-                    <input type="file" accept=".xlsx" onChange={(e) => setUserFile(e.target.files[0])} className="flex-1 text-xs bg-white"/>
-                    <button onClick={triggerUserUpload} disabled={syncLoading} className="bg-orange-600 text-white px-4 py-2 rounded text-xs font-bold flex items-center gap-2">{syncLoading ? <Activity className="w-3 h-3 animate-spin"/> : <Upload className="w-3 h-3"/>} IMPORTER</button>
-                 </div>
-                 <p className="text-[10px] text-orange-600 mt-2">Excel: Col A=ID, Col B=Magasin, Col C=Mdp, Col D=Email</p>
-              </div>
-              {/* IMPORT EXCEL CATALOGUE */}
-              <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER UN CATALOGUE (EXCEL)</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUploadFile(e.target.files[0])} className="flex-1 text-xs"/><button onClick={triggerFileUpload} disabled={syncLoading || !uploadFile} className="bg-blue-600 text-white px-4 py-2 rounded text-xs font-bold flex items-center gap-2">{syncLoading ? <RefreshCw className="w-3 h-3 animate-spin"/> : <FileUp className="w-3 h-3"/>} {uploadProgress > 0 && uploadProgress < 100 ? `${uploadProgress}%` : "ENVOYER"}</button></div></div>
-              <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center"><div><label className="block text-xs font-bold text-slate-600">ÉTAT BASE DE DONNÉES</label><p className="text-[10px] text-slate-400 mt-1">Vérifier le contenu importé</p></div><button onClick={checkDatabase} disabled={syncLoading} className="bg-gray-800 text-white px-4 py-2 rounded text-xs font-bold flex items-center gap-2">{syncLoading ? <Activity className="w-3 h-3 animate-spin"/> : <Database className="w-3 h-3"/>} VÉRIFIER</button></div>
-              
-              {/* PRIX & ESTHETIQUE (Inchangé) */}
-              <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="grid grid-cols-1 gap-4"><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div></div></div>
-              <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
-           </div>
-        </div>
-      )}
-      
-      {/* MODALE HISTORIQUE (Avec Suppression et Correction) */}
-      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+      {/* MODALE HISTORIQUE (AFFICHE LA CORRECTION) */}
+      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+      <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
         <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
           <div className="flex items-center gap-4">
             <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
             <div>
                 <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
-                <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
-                {/* CORRECTION */}
-                {(offer.correction || (offer.lens && offer.lens.correction_data)) && (
+                <div className="text-xs text-slate-500 font-mono flex items-center gap-2">
+                   <Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}
+                </div>
+                {/* AFFICHAGE CORRECTION */}
+                {offer.lens && offer.lens.correction_data && (
                     <div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono">
-                        <span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span>
-                        <span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span>
-                        <span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span>
+                        <span>SPH: {offer.lens.correction_data.sphere || "0"}</span>
+                        <span>CYL: {offer.lens.correction_data.cylinder || "0"}</span>
+                        <span>ADD: {offer.lens.correction_data.addition || "0"}</span>
                     </div>
                 )}
             </div>
           </div>
           <div className="text-right">
-              <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
+              <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1">{offer.lens?.commercial_code || "REF-N/A"}</div>
               <div className="font-bold text-slate-800">{offer.lens?.name}</div>
               <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
           </div>
@@ -492,6 +481,24 @@ function App() {
              <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button>
           </div>
         </div>))}</div></div></div>)}
+
+      {/* MODALE SETTINGS (Identique v3.97) */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
+           <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
+              <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
+              <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER UN CATALOGUE (EXCEL)</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUploadFile(e.target.files[0])} className="flex-1 text-xs"/><button onClick={triggerFileUpload} disabled={syncLoading || !uploadFile} className="bg-blue-600 text-white px-4 py-2 rounded text-xs font-bold flex items-center gap-2">{syncLoading ? <RefreshCw className="w-3 h-3 animate-spin"/> : <FileUp className="w-3 h-3"/>} {uploadProgress > 0 && uploadProgress < 100 ? `${uploadProgress}%` : "ENVOYER"}</button></div><p className="text-[10px] text-slate-400 mt-2">Format .xlsx avec un onglet par Marque.</p></div>
+              <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center"><div><label className="block text-xs font-bold text-slate-600">ÉTAT BASE DE DONNÉES</label><p className="text-[10px] text-slate-400 mt-1">Vérifier le contenu importé</p></div><button onClick={checkDatabase} disabled={syncLoading} className="bg-gray-800 text-white px-4 py-2 rounded text-xs font-bold flex items-center gap-2">{syncLoading ? <Activity className="w-3 h-3 animate-spin"/> : <Database className="w-3 h-3"/>} VÉRIFIER</button></div>
+              <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL DE L'API (BACKEND)</label><div className="flex gap-2"><input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={testConnection} disabled={syncLoading} className="bg-gray-800 text-white px-4 rounded text-xs font-bold">{syncLoading ? <Activity className="w-4 h-4 animate-spin"/> : "TEST"}</button></div><p className="text-[10px] text-slate-400 mt-1">Si le test échoue, vérifiez que le serveur Render est actif.</p></div>
+              <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL GOOGLE SHEETS (LEGACY)</label><div className="flex gap-2"><input type="text" value={sheetsUrl} onChange={(e) => setSheetsUrl(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={triggerSync} disabled={syncLoading} className="bg-blue-600 text-white px-4 rounded text-xs font-bold">SYNCHRO</button></div>{syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}</div>
+              
+              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
+               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
+               <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="grid grid-cols-1 gap-4"><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div></div></div>
+              <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
+           </div>
+        </div>
+      )}
     </div>
   );
 }
