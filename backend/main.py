@@ -164,7 +164,7 @@ def update_password(data: PasswordUpdate):
 
 @app.post("/upload-users")
 def upload_users(file: UploadFile = File(...)):
-    print("🚀 Début upload USERS (Smart Mapping)...", flush=True)
+    print("🚀 Début upload USERS (Smart Scan)...", flush=True)
     if not engine: raise HTTPException(500, "Pas de BDD")
     
     temp = f"/tmp/users_{int(time.time())}.xlsx"
@@ -175,14 +175,29 @@ def upload_users(file: UploadFile = File(...)):
         wb = openpyxl.load_workbook(temp, data_only=True)
         sheet = wb.active
         
-        # Lecture de tous les rangs pour trouver l'en-tête
+        # Lecture de tous les rangs
         rows = list(sheet.iter_rows(values_only=True))
         if not rows: raise Exception("Fichier vide")
 
-        # Recherche des en-têtes (Ligne 1 généralement)
-        headers = rows[0]
-        print(f"   En-têtes détectés: {headers}", flush=True)
+        # --- SCAN INTELLIGENT EN-TÊTES ---
+        header_idx = -1
+        headers = []
         
+        # On cherche la ligne qui contient "IDENTIFIANT" ou "ID" ou "USERNAME"
+        for i, row in enumerate(rows[:20]):
+            row_str = [str(c).upper() for c in row if c]
+            if any(k in s for s in row_str for k in ["IDENTIFIANT", "USERNAME", "LOGIN", "ID CLIENT"]):
+                headers = row
+                header_idx = i
+                print(f"   ✅ En-têtes trouvés ligne {i+1}: {headers}", flush=True)
+                break
+        
+        if header_idx == -1:
+             # Fallback ligne 1 si pas trouvé, pour voir l'erreur
+             headers = rows[0]
+             header_idx = 0
+             print(f"   ⚠️ Pas d'en-tête évident, essai ligne 1: {headers}", flush=True)
+
         # Mapping Intelligent
         c_id = get_col_idx(headers, ['IDENTIFIANT', 'ID', 'USERNAME', 'LOGIN'])
         c_shop = get_col_idx(headers, ['MAGASIN', 'SHOP', 'RAISON SOCIALE', 'NOM'])
@@ -192,11 +207,12 @@ def upload_users(file: UploadFile = File(...)):
         
         # Vérification critique
         if c_id == -1:
-            raise Exception(f"Colonne 'IDENTIFIANT' introuvable. En-têtes vus: {headers}")
+            raise Exception(f"Colonne 'IDENTIFIANT' introuvable. En-têtes analysés : {headers}")
 
         users_to_insert = []
         
-        for row in rows[1:]: # On saute l'entête
+        # Parcours des données APRES la ligne d'en-tête
+        for row in rows[header_idx+1:]:
             if not row[c_id]: continue # Pas d'identifiant
             
             u_id = str(row[c_id]).strip()
@@ -219,6 +235,7 @@ def upload_users(file: UploadFile = File(...)):
         if users_to_insert:
             with engine.begin() as conn:
                 print("♻️  Recréation table USERS...", flush=True)
+                # On force la suppression pour s'assurer que la colonne 'role' existe bien
                 conn.execute(text("DROP TABLE IF EXISTS users CASCADE;"))
                 conn.execute(text("""
                     CREATE TABLE users (
@@ -248,7 +265,7 @@ def upload_users(file: UploadFile = File(...)):
 
 # --- ROUTES GLOBALES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "4.06", "msg": "Full Stack Complete"}
+def read_root(): return {"status": "online", "version": "4.07", "msg": "Smart User Import"}
 @app.head("/")
 def read_root_head(): return read_root()
 
