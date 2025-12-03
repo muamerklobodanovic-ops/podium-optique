@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.98"; // Responsive Mobile & Session Persistence
+const APP_VERSION = "3.99"; // LocalStorage Persistence & Robust History
 
 // --- CONFIGURATION STATIQUE ---
 const PROD_API_URL = "https://api-podium.onrender.com";
@@ -116,13 +116,13 @@ function App() {
   const [syncLoading, setSyncLoading] = useState(false); const [syncStatus, setSyncStatus] = useState(null); const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
   const [stats, setStats] = useState({ total: 0, filtered: 0 });
   
-  // ETATS SESSION (Persistants via sessionStorage)
+  // ETATS SESSION (PASSAGE EN LOCALSTORAGE POUR PERSISTANCE LONGUE DURÉE)
   const [client, setClient] = useState(() => {
-      const saved = sessionStorage.getItem("optique_client");
+      const saved = localStorage.getItem("optique_client"); // CHANGE: sessionStorage -> localStorage
       return saved ? JSON.parse(saved) : { name: '', firstname: '', dob: '', reimbursement: 0 };
   });
   const [secondPairPrice, setSecondPairPrice] = useState(() => {
-      const saved = sessionStorage.getItem("optique_second_pair");
+      const saved = localStorage.getItem("optique_second_pair"); // CHANGE: sessionStorage -> localStorage
       return saved ? parseFloat(saved) : 0;
   });
   
@@ -148,16 +148,16 @@ function App() {
   });
   useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
 
-  // ETAT FORMULAIRE PERSISTANT (sessionStorage)
+  // ETAT FORMULAIRE PERSISTANT (localStorage)
   const [formData, setFormData] = useState(() => {
-      const saved = sessionStorage.getItem("optique_form_data");
+      const saved = localStorage.getItem("optique_form_data"); // CHANGE: sessionStorage -> localStorage
       return saved ? JSON.parse(saved) : { network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false };
   });
 
-  // SAUVEGARDE AUTOMATIQUE EN SESSION
-  useEffect(() => { sessionStorage.setItem("optique_client", JSON.stringify(client)); }, [client]);
-  useEffect(() => { sessionStorage.setItem("optique_second_pair", secondPairPrice); }, [secondPairPrice]);
-  useEffect(() => { sessionStorage.setItem("optique_form_data", JSON.stringify(formData)); }, [formData]);
+  // SAUVEGARDE AUTOMATIQUE EN LOCAL (LONG TERME)
+  useEffect(() => { localStorage.setItem("optique_client", JSON.stringify(client)); }, [client]);
+  useEffect(() => { localStorage.setItem("optique_second_pair", secondPairPrice); }, [secondPairPrice]);
+  useEffect(() => { localStorage.setItem("optique_form_data", JSON.stringify(formData)); }, [formData]);
 
   const [serverUrl, setServerUrl] = useState(() => {
       const saved = localStorage.getItem("optique_server_url");
@@ -178,7 +178,7 @@ function App() {
 
   const bgClass = userSettings.bgColor || "bg-slate-50"; const isDarkTheme = bgClass.includes("900") || bgClass.includes("black"); const textClass = isDarkTheme ? "text-white" : "text-slate-800"; const currentTheme = { primary: userSettings.themeColor === 'custom' ? 'bg-[var(--theme-primary)]' : 'bg-blue-700' };
 
-  useEffect(() => { fetchData(); }, [formData.brand, formData.network, formData.type]); // Retrait setFormData coating pour eviter boucle infinie avec session
+  useEffect(() => { fetchData(); }, [formData.brand, formData.network, formData.type]); 
 
   const getFilteredBrandsList = () => {
       const net = formData.network;
@@ -272,19 +272,21 @@ function App() {
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
 
-  // FONCTION RESET
+  // FONCTION RESET (NETTOIE TOUT, Y COMPRIS LOCALSTORAGE)
   const handleReset = () => {
-      if(window.confirm("Tout remettre à zéro ?")) {
-          sessionStorage.clear();
+      if(window.confirm("Tout remettre à zéro ? (Efface le client en cours)")) {
+          localStorage.removeItem("optique_client");
+          localStorage.removeItem("optique_second_pair");
+          localStorage.removeItem("optique_form_data");
+          
           setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
           setSecondPairPrice(0);
           setFormData({ network: 'HORS_RESEAU', brand: '', type: 'PROGRESSIF', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false });
           setSelectedLens(null);
-          window.location.reload(); // Force refresh propre
+          window.location.reload(); 
       }
   };
 
-  // ... (Handlers identiques v3.42)
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
@@ -448,7 +450,20 @@ function App() {
       {selectedLens && (
           <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800">
               <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
-                  <div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div><div><div className="text-[10px] text-slate-400 font-bold mb-0.5">VERRE SÉLECTIONNÉ</div><div className="font-bold text-slate-800 text-sm leading-tight">{selectedLens.name}</div><div className="text-[10px] text-slate-500">{selectedLens.design} - {selectedLens.index_mat} - {selectedLens.coating}</div></div></div>
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div>
+                    <div>
+                       <div className="text-[10px] font-bold text-slate-400 mt-1">RÉFÉRENCE DE COMMANDE</div>
+                       <div 
+                          className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all"
+                          onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }}
+                          title="Cliquer pour copier"
+                        >
+                          {selectedLens.commercial_code || "N/A"}
+                       </div>
+                       <div className="font-bold text-slate-800 text-sm leading-tight mt-1">{selectedLens.name}</div>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-8 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100"><div className="text-center"><div className="text-[9px] font-bold text-slate-400">UNITAIRE</div><div className="font-bold text-lg text-slate-700">{parseFloat(selectedLens.sellingPrice).toFixed(2)} €</div></div><div className="text-slate-300 text-xl">x 2</div><div className="text-center"><div className="text-[9px] font-bold text-blue-600">TOTAL PAIRE</div><div className="font-bold text-2xl text-blue-700">{totalPair.toFixed(2)} €</div></div></div>
                   <div className="flex items-center gap-4"><div className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-xl border border-orange-100"><Coins className="w-4 h-4 text-orange-500"/><div className="flex flex-col"><span className="text-[8px] font-bold text-orange-400">2ÈME PAIRE</span><input type="number" value={secondPairPrice} onChange={(e) => setSecondPairPrice(safeNum(e.target.value))} className="w-16 bg-transparent font-bold text-orange-700 outline-none text-sm" placeholder="0" min="0"/></div></div><div className="flex flex-col items-end"><div className="text-[10px] font-bold text-slate-400">RESTE À CHARGE CLIENT</div><div className={`text-3xl font-black ${remainder > 0 ? 'text-slate-800' : 'text-green-600'}`}>{remainder.toFixed(2)} €</div></div><button onClick={saveOffer} className="ml-4 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-green-200 transition-all"><CheckCircle className="w-5 h-5"/> VALIDER L'OFFRE</button></div>
               </div>
@@ -487,7 +502,9 @@ function App() {
            </div>
         </div>
       )}
-      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob} • DOSSIER DU {offer.date}</div></div></div><div className="text-right"><div className="font-bold text-slate-800">{offer.lens.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance.remainder).toFixed(2)} €</div></div><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div><button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer définitivement"><Trash2 className="w-4 h-4"/></button></div>))}</div></div></div>)}
+      
+      {/* MODALE HISTORIQUE (Identique) */}
+      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob} • DOSSIER DU {offer.date}</div></div></div><div className="text-right"><div className="font-bold text-slate-800">{offer.lens.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance.remainder).toFixed(2)} €</div></div><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div></div>))}</div></div></div>)}
     </div>
   );
 }
