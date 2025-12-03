@@ -164,7 +164,7 @@ def update_password(data: PasswordUpdate):
 
 @app.post("/upload-users")
 def upload_users(file: UploadFile = File(...)):
-    print("🚀 Début upload USERS...", flush=True)
+    print("🚀 Début upload USERS (Smart Mapping)...", flush=True)
     if not engine: raise HTTPException(500, "Pas de BDD")
     
     temp = f"/tmp/users_{int(time.time())}.xlsx"
@@ -175,34 +175,50 @@ def upload_users(file: UploadFile = File(...)):
         wb = openpyxl.load_workbook(temp, data_only=True)
         sheet = wb.active
         
+        # Lecture de tous les rangs pour trouver l'en-tête
+        rows = list(sheet.iter_rows(values_only=True))
+        if not rows: raise Exception("Fichier vide")
+
+        # Recherche des en-têtes (Ligne 1 généralement)
+        headers = rows[0]
+        print(f"   En-têtes détectés: {headers}", flush=True)
+        
+        # Mapping Intelligent
+        c_id = get_col_idx(headers, ['IDENTIFIANT', 'ID', 'USERNAME', 'LOGIN'])
+        c_shop = get_col_idx(headers, ['MAGASIN', 'SHOP', 'RAISON SOCIALE', 'NOM'])
+        c_pass = get_col_idx(headers, ['PASSWORD', 'MOT DE PASSE', 'MDP'])
+        c_mail = get_col_idx(headers, ['MAIL', 'EMAIL', 'COURRIEL'])
+        c_role = get_col_idx(headers, ['ROLE', 'TYPE', 'DROIT'])
+        
+        # Vérification critique
+        if c_id == -1:
+            raise Exception(f"Colonne 'IDENTIFIANT' introuvable. En-têtes vus: {headers}")
+
         users_to_insert = []
-        # On suppose que la ligne 1 est l'en-tête
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            if not row[0]: continue # Pas d'identifiant
+        
+        for row in rows[1:]: # On saute l'entête
+            if not row[c_id]: continue # Pas d'identifiant
             
-            # Mapping Colonnes
-            # A=ID, B=Shop, C=Pass, D=Mail, E=Role
-            u_id = str(row[0]).strip()
-            u_shop = str(row[1]).strip() if len(row) > 1 and row[1] else "Opticien"
-            u_pass = str(row[2]).strip() if len(row) > 2 and row[2] else "1234"
-            u_mail = str(row[3]).strip() if len(row) > 3 and row[3] else ""
+            u_id = str(row[c_id]).strip()
+            u_shop = str(row[c_shop]).strip() if c_shop != -1 and row[c_shop] else "Opticien"
+            u_pass = str(row[c_pass]).strip() if c_pass != -1 and row[c_pass] else "1234"
+            u_mail = str(row[c_mail]).strip() if c_mail != -1 and row[c_mail] else ""
             
-            # Gestion Rôle (Colonne E)
-            u_role = "user" # Valeur par défaut
-            if len(row) > 4 and row[4]:
-                val_role = str(row[4]).lower().strip()
+            # Gestion Rôle
+            u_role = "user"
+            if c_role != -1 and row[c_role]:
+                val_role = str(row[c_role]).lower().strip()
                 if "admin" in val_role: u_role = "admin"
             
             users_to_insert.append({
                 "u": u_id, "s": u_shop, "p": u_pass, "e": u_mail, "r": u_role
             })
             
-        print(f"✅ {len(users_to_insert)} utilisateurs trouvés.", flush=True)
+        print(f"✅ {len(users_to_insert)} utilisateurs prêts à insérer.", flush=True)
             
         if users_to_insert:
             with engine.begin() as conn:
-                print("♻️  Recréation table USERS (Mise à jour structure)...", flush=True)
-                # On force la suppression pour s'assurer que la colonne 'role' existe bien
+                print("♻️  Recréation table USERS...", flush=True)
                 conn.execute(text("DROP TABLE IF EXISTS users CASCADE;"))
                 conn.execute(text("""
                     CREATE TABLE users (
@@ -215,7 +231,7 @@ def upload_users(file: UploadFile = File(...)):
                     );
                 """))
                 
-                print("💾 Insertion en base...", flush=True)
+                print("💾 Insertion...", flush=True)
                 conn.execute(text("""
                     INSERT INTO users (username, shop_name, password, email, role, is_first_login)
                     VALUES (:u, :s, :p, :e, :r, TRUE)
@@ -232,7 +248,7 @@ def upload_users(file: UploadFile = File(...)):
 
 # --- ROUTES GLOBALES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "4.05", "msg": "Auth Role Update"}
+def read_root(): return {"status": "online", "version": "4.06", "msg": "Full Stack Complete"}
 @app.head("/")
 def read_root_head(): return read_root()
 
@@ -262,24 +278,18 @@ def get_offers():
             for r in res.fetchall():
                 try:
                     lens_data = r.lens_details
-                    # Compatibilité ascendante pour la correction
                     correction = lens_data.get('correction_data', None)
-                    
                     results.append({
                         "id": r.id,
                         "date": r.created_at.strftime("%d/%m/%Y %H:%M"),
                         "client": decrypt_dict(r.encrypted_identity),
                         "lens": lens_data,
                         "finance": r.financials,
-                        "correction": correction # On l'expose explicitement pour le frontend
+                        "correction": correction
                     })
-                except Exception as inner_e:
-                    print(f"Erreur lecture ligne {r.id}: {inner_e}")
-                    continue
+                except: continue
             return results
-    except Exception as e:
-        print(f"Erreur globale offers: {e}")
-        return []
+    except: return []
 
 @app.delete("/offers/{offer_id}")
 def delete_offer(offer_id: int):
@@ -293,81 +303,33 @@ def delete_offer(offer_id: int):
 
 # --- ROUTES CATALOGUE ---
 @app.get("/lenses")
-def get_lenses(
-    type: str = Query(None), 
-    brand: str = Query(None),
-    limit: int = Query(3000)
-):
+def get_lenses(type: str = Query(None), brand: str = Query(None), limit: int = Query(3000)):
     if not engine: return []
     try:
         with engine.connect() as conn:
             cols = "id, brand, name, commercial_code, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair"
             sql = f"SELECT {cols} FROM lenses WHERE 1=1"
             params = {}
-            
-            if brand: 
-                sql += " AND brand ILIKE :brand"
-                params["brand"] = brand
-            
+            if brand: sql += " AND brand ILIKE :brand"; params["brand"] = brand
             if type: 
                 type_norm = normalize_string(type)
-                
-                if "DEGRESSIF" in type_norm:
-                    sql += " AND geometry = 'DEGRESSIF'"
-                
-                elif "INTERIEUR" in type_norm:
-                    sql += " AND (geometry = 'PROGRESSIF_INTERIEUR' OR geometry = 'INTERIEUR')"
-                
-                elif "PROGRESSIF" in type_norm:
-                    sql += " AND geometry = 'PROGRESSIF'"
-                
-                elif "UNIFOCAL" in type_norm:
-                    sql += " AND geometry = 'UNIFOCAL'"
-                
-                elif "MULTIFOCAL" in type_norm:
-                    sql += " AND geometry = 'MULTIFOCAL'"
-                
-                else:
-                    sql += " AND geometry ILIKE :geo"
-                    params["geo"] = f"%{type}%"
+                if "DEGRESSIF" in type_norm: sql += " AND geometry = 'DEGRESSIF'"
+                elif "INTERIEUR" in type_norm: sql += " AND (geometry = 'PROGRESSIF_INTERIEUR' OR geometry = 'INTERIEUR')"
+                elif "PROGRESSIF" in type_norm: sql += " AND geometry = 'PROGRESSIF'"
+                elif "UNIFOCAL" in type_norm: sql += " AND geometry = 'UNIFOCAL'"
+                elif "MULTIFOCAL" in type_norm: sql += " AND geometry = 'MULTIFOCAL'"
+                else: sql += " AND geometry ILIKE :geo"; params["geo"] = f"%{type}%"
             
             safe_limit = min(limit, 5000)
             sql += f" ORDER BY purchase_price ASC LIMIT {safe_limit}"
-            
             rows = conn.execute(text(sql), params).fetchall()
-            
-            result = [{
-                "id": r.id,
-                "brand": r.brand,
-                "name": r.name,
-                "commercial_code": r.commercial_code,
-                "type": r.geometry,
-                "geometry": r.geometry,
-                "design": r.design,
-                "index_mat": r.index_mat,
-                "material": r.material,
-                "coating": r.coating,
-                "commercial_flow": r.commercial_flow,
-                "color": r.color,
-                "purchase_price": float(r.purchase_price or 0),
-                "sellingPrice": float(r.selling_price or 0),
-                "sell_kalixia": float(r.sell_kalixia or 0),
-                "sell_itelis": float(r.sell_itelis or 0),
-                "sell_carteblanche": float(r.sell_carteblanche or 0),
-                "sell_seveane": float(r.sell_seveane or 0),
-                "sell_santeclair": float(r.sell_santeclair or 0),
-            } for r in rows]
-            
-            return result
+            return [row._mapping for row in rows]
+    except: return []
 
-    except Exception as e:
-        print(f"❌ Erreur Lecture Verres: {e}")
-        return []
-
-# --- UPLOAD ROBUSTE ---
+# --- UPLOAD CATALOGUE COMPLET (Turbo Mode) ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
-    print("🚀 Début requête upload (Turbo)...", flush=True)
+    print("🚀 Début requête upload (Threaded)...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
     
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
@@ -399,7 +361,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
-                    if current_row_idx > 20: break
+                    if current_row_idx > 30: break
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
                         headers = row
@@ -425,7 +387,7 @@ def upload_catalog(file: UploadFile = File(...)):
                 c_ite = get_col_idx(headers, ['ITELIS', 'SELL_ITELIS'])
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE', 'SELL_CARTEBLANCHE'])
                 c_sev = get_col_idx(headers, ['SEVEANE', 'SELL_SEVEANE'])
-                c_sant = get_col_idx(headers, ['SANTECLAIR', 'SANTECLAIR', 'SELL_SANTECLAIR'])
+                c_sant = get_col_idx(headers, ['SANTECLAIRE', 'SANTECLAIR', 'SELL_SANTECLAIR'])
 
                 if c_nom == -1: continue
 
