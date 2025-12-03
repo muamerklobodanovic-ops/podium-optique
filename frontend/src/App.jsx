@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "3.95"; // Restore Shop Identity Bar
+const APP_VERSION = "3.96"; // Dossiers Complets (Ref, Correction, Delete)
 
 // --- CONFIGURATION STATIQUE ---
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
@@ -116,7 +116,6 @@ function App() {
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 }); const [secondPairPrice, setSecondPairPrice] = useState(0);
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
 
-  // LISTES DE RÉFÉRENCE
   const brands = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
   const networks = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
   
@@ -170,41 +169,26 @@ function App() {
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
-       // 1. FORCE LA CLASSIFICATION (Correction immédiate sans re-upload)
        let workingList = safeLenses.map(l => {
            const lens = { ...l };
            const fullName = (cleanText(lens.name) + " " + cleanText(lens.design)).toUpperCase();
-           
-           if (fullName.includes("PROXEO")) {
-               lens.type = "DEGRESSIF";
-           } else if (fullName.includes("MYPROXI") || fullName.includes("MY PROXI")) {
-               lens.type = "PROGRESSIF_INTERIEUR";
-           }
+           if (fullName.includes("PROXEO")) { lens.type = "DEGRESSIF"; } 
+           else if (fullName.includes("MYPROXI") || fullName.includes("MY PROXI")) { lens.type = "PROGRESSIF_INTERIEUR"; }
            return lens;
        });
 
        if (formData.brand && formData.brand !== '') { 
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
-           if (formData.network === 'SANTECLAIR') {
-                workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand)));
-           } else if (formData.network !== 'HORS_RESEAU') {
-                workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand)));
-           }
+           if (formData.network === 'SANTECLAIR') { workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand))); } 
+           else if (formData.network !== 'HORS_RESEAU') { workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand))); }
        }
 
-       // 2. Filtre Type (Amélioré pour INTERIEUR/DEGRESSIF)
        if (formData.type) { 
            const targetType = cleanText(formData.type); 
-           
            if (targetType === 'PROGRESSIF_INTERIEUR') {
-               // Filtre large pour attraper tout ce qui est "intérieur"
-               workingList = workingList.filter(l => {
-                   const type = cleanText(l.type);
-                   return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR');
-               });
+               workingList = workingList.filter(l => { const type = cleanText(l.type); return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); });
            } else { 
-               // Filtrage standard exact
                workingList = workingList.filter(l => cleanText(l.type) === targetType); 
            } 
        }
@@ -214,14 +198,10 @@ function App() {
           workingList = workingList.map(lens => {
              let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
              const lensType = cleanText(lens.type);
-             if (lensType.includes('UNIFOCAL')) { 
-                 const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); 
-                 rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); 
-             } 
+             if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
              else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
              else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
-             
              const pPrice = parseFloat(lens.purchase_price || 0);
              const newSelling = (pPrice * rule.x) + rule.b;
              const newMargin = newSelling - pPrice;
@@ -233,17 +213,11 @@ function App() {
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { const sPrice = l[key] ? parseFloat(l[key]) : 0; return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; });
            workingList = workingList.filter(l => l.sellingPrice > 0);
-           // AJOUT: Tri par marge pour les réseaux aussi
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
        if (formData.materialIndex && formData.materialIndex !== '') {
-           workingList = workingList.filter(l => { 
-               if(!l.index_mat) return false; 
-               const lIdx = String(l.index_mat).replace(',', '.'); 
-               const fIdx = String(formData.materialIndex).replace(',', '.'); 
-               return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; 
-           });
+           workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
        }
 
        const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
@@ -268,15 +242,20 @@ function App() {
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
 
-  // ... (Handlers identiques v3.42)
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
       const totalPair = selectedLens.sellingPrice * 2;
       const remainder = (totalPair + secondPairPrice) - client.reimbursement;
-      const payload = { client: client, lens: selectedLens, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
+      const payload = { 
+          client: client, 
+          lens: selectedLens, 
+          correction: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex }, // AJOUT CORRECTION
+          finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } 
+      };
       axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
   };
+
   const triggerFileUpload = () => {
       if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)");
       setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile);
@@ -285,6 +264,7 @@ function App() {
       .catch(err => { console.error("Upload Error:", err); alert(`❌ Erreur upload : ${err.response?.data?.detail || err.message}`); })
       .finally(() => { setSyncLoading(false); setUploadProgress(0); });
   };
+
   const triggerSync = () => { if (!sheetsUrl) return alert("URL?"); setSyncLoading(true); axios.post(SYNC_URL, { url: sheetsUrl }).then(res => { fetchData(); }).finally(() => setSyncLoading(false)); };
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
@@ -322,21 +302,20 @@ function App() {
       axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false));
   };
 
+  // ACTION DE SUPPRESSION (Dans la modale historique)
+  const deleteOffer = (id) => {
+      if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) {
+          axios.delete(`${SAVE_URL}/${id}`)
+              .then(() => {
+                  alert("Dossier supprimé.");
+                  fetchHistory(); // Rafraichir la liste
+              })
+              .catch(err => alert("Erreur lors de la suppression"));
+      }
+  };
+
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* BARRE IDENTITÉ MAGASIN (Restaurée) */}
-      <div className="bg-slate-900 text-white px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
-          <div className="flex items-center gap-3">
-              {userSettings.shopLogo ? (
-                  <img src={userSettings.shopLogo} alt="Logo Magasin" className="h-8 w-auto object-contain rounded bg-white p-0.5"/>
-              ) : (
-                  <div className="h-8 w-8 bg-slate-700 rounded flex items-center justify-center"><Store className="w-4 h-4"/></div>
-              )}
-              <span>{userSettings.shopName}</span>
-          </div>
-          <span className="opacity-50">V{APP_VERSION}</span>
-      </div>
-
       {/* HEADER ... Identique */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -354,11 +333,11 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative z-0">
-        {/* SIDEBAR FILTRES */}
+        {/* SIDEBAR */}
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-20 transition-all duration-300 w-80 ${isSidebarOpen ? '' : 'hidden'}`}>
             <div className="p-6 space-y-6 pb-32">
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
-                {/* ... Autres filtres ... */}
+                {/* Filtres... */}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label><div className="grid grid-cols-2 gap-3 mb-2"><div className="relative"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="SPH"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div><div className="relative"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="CYL"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div><div className={`relative transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="ADD"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{lensTypes.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
@@ -385,51 +364,77 @@ function App() {
         </section>
       </div>
 
-      {/* FOOTER DEVIS ... (Identique) */}
+      {/* FOOTER DEVIS (MODIFIÉ) */}
       {selectedLens && (
           <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800">
               <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
-                  <div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div><div><div className="text-[10px] text-slate-400 font-bold mb-0.5">VERRE SÉLECTIONNÉ</div><div className="font-bold text-slate-800 text-sm leading-tight">{selectedLens.name}</div><div className="text-[10px] text-slate-500">{selectedLens.design} - {selectedLens.index_mat} - {selectedLens.coating}</div></div></div>
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div>
+                    <div>
+                       <div className="text-[10px] font-bold text-slate-400 mt-1">RÉFÉRENCE DE COMMANDE</div>
+                       <div 
+                          className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all"
+                          onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }}
+                          title="Cliquer pour copier"
+                        >
+                          {selectedLens.commercial_code || "N/A"}
+                       </div>
+                       <div className="font-bold text-slate-800 text-sm leading-tight mt-1">{selectedLens.name}</div>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-8 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100"><div className="text-center"><div className="text-[9px] font-bold text-slate-400">UNITAIRE</div><div className="font-bold text-lg text-slate-700">{parseFloat(selectedLens.sellingPrice).toFixed(2)} €</div></div><div className="text-slate-300 text-xl">x 2</div><div className="text-center"><div className="text-[9px] font-bold text-blue-600">TOTAL PAIRE</div><div className="font-bold text-2xl text-blue-700">{totalPair.toFixed(2)} €</div></div></div>
                   <div className="flex items-center gap-4"><div className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-xl border border-orange-100"><Coins className="w-4 h-4 text-orange-500"/><div className="flex flex-col"><span className="text-[8px] font-bold text-orange-400">2ÈME PAIRE</span><input type="number" value={secondPairPrice} onChange={(e) => setSecondPairPrice(safeNum(e.target.value))} className="w-16 bg-transparent font-bold text-orange-700 outline-none text-sm" placeholder="0" min="0"/></div></div><div className="flex flex-col items-end"><div className="text-[10px] font-bold text-slate-400">RESTE À CHARGE CLIENT</div><div className={`text-3xl font-black ${remainder > 0 ? 'text-slate-800' : 'text-green-600'}`}>{remainder.toFixed(2)} €</div></div><button onClick={saveOffer} className="ml-4 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-green-200 transition-all"><CheckCircle className="w-5 h-5"/> VALIDER L'OFFRE</button></div>
               </div>
           </div>
       )}
 
-      {/* MODALE SETTINGS */}
+      {/* MODALE HISTORIQUE (MODIFIÉ) */}
+      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+      <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+        <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+            <div>
+                <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
+                <div className="text-xs text-slate-500 font-mono flex items-center gap-2">
+                   <Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}
+                </div>
+                {offer.correction && (
+                    <div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-2 border border-yellow-200">
+                        <span>SPH: {offer.correction.sphere || "0"}</span>
+                        <span>CYL: {offer.correction.cylinder || "0"}</span>
+                        <span>ADD: {offer.correction.addition || "0"}</span>
+                    </div>
+                )}
+            </div>
+          </div>
+          <div className="text-right">
+              <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1">{offer.lens?.commercial_code || "REF-N/A"}</div>
+              <div className="font-bold text-slate-800">{offer.lens?.name}</div>
+              <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
+          </div>
+          <div className="flex items-center gap-2">
+             <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+             <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer définitivement"><Trash2 className="w-4 h-4"/></button>
+          </div>
+        </div>))}</div></div></div>)}
+      
+      {/* MODALE SETTINGS ... (Identique) */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
            <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
               <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
-              {/* IMPORT EXCEL */}
               <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER UN CATALOGUE (EXCEL)</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUploadFile(e.target.files[0])} className="flex-1 text-xs"/><button onClick={triggerFileUpload} disabled={syncLoading || !uploadFile} className="bg-blue-600 text-white px-4 py-2 rounded text-xs font-bold flex items-center gap-2">{syncLoading ? <RefreshCw className="w-3 h-3 animate-spin"/> : <FileUp className="w-3 h-3"/>} {uploadProgress > 0 && uploadProgress < 100 ? `${uploadProgress}%` : "ENVOYER"}</button></div><p className="text-[10px] text-slate-400 mt-2">Format .xlsx avec un onglet par Marque.</p></div>
-              {/* CHECK BDD */}
               <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center"><div><label className="block text-xs font-bold text-slate-600">ÉTAT BASE DE DONNÉES</label><p className="text-[10px] text-slate-400 mt-1">Vérifier le contenu importé</p></div><button onClick={checkDatabase} disabled={syncLoading} className="bg-gray-800 text-white px-4 py-2 rounded text-xs font-bold flex items-center gap-2">{syncLoading ? <Activity className="w-3 h-3 animate-spin"/> : <Database className="w-3 h-3"/>} VÉRIFIER</button></div>
-              {/* URL API */}
               <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL DE L'API (BACKEND)</label><div className="flex gap-2"><input type="text" value={serverUrl} onChange={(e) => handleUrlChange(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={testConnection} disabled={syncLoading} className="bg-gray-800 text-white px-4 rounded text-xs font-bold">{syncLoading ? <Activity className="w-4 h-4 animate-spin"/> : "TEST"}</button></div><p className="text-[10px] text-slate-400 mt-1">Si le test échoue, vérifiez que le serveur Render est actif.</p></div>
               <div className="mb-6"><label className="block text-xs font-bold text-slate-500 mb-2">URL GOOGLE SHEETS (LEGACY)</label><div className="flex gap-2"><input type="text" value={sheetsUrl} onChange={(e) => setSheetsUrl(e.target.value)} className="flex-1 p-2 border rounded"/><button onClick={triggerSync} disabled={syncLoading} className="bg-blue-600 text-white px-4 rounded text-xs font-bold">SYNCHRO</button></div>{syncStatus && <p className="text-xs mt-2 text-green-600">{syncStatus.msg}</p>}</div>
-              
               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
-               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
-               
-               {/* PRIX MARCHÉ LIBRE */}
-               <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4>
-                 <div className="grid grid-cols-1 gap-4">
-                    <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                    <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                    <div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                    <div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                    <div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                    <div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                 </div>
-               </div>
+              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
+              <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="grid grid-cols-1 gap-4"><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div></div></div>
               <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
            </div>
         </div>
       )}
-      
-      {/* MODALE HISTORIQUE (Identique) */}
-      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob} • DOSSIER DU {offer.date}</div></div></div><div className="text-right"><div className="font-bold text-slate-800">{offer.lens.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance.remainder).toFixed(2)} €</div></div><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div></div>))}</div></div></div>)}
     </div>
   );
 }
