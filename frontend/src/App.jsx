@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "4.31"; // Default Geo to ALL
+const APP_VERSION = "4.32"; // Filtre Géométrie Strict (Base de données uniquement)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS = {
         degressif: { x: 3.0, b: 40 },  
         interieur: { x: 3.0, b: 40 },
         multifocal: { x: 3.0, b: 40 },
-        calisize: { price: 10 } // Prix par défaut Marché Libre
+        calisize: { price: 10 }
     }
 };
 
@@ -45,7 +45,7 @@ const DEMO_LENSES = [
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
 ];
 
-// --- LISTES STATIQUES ---
+// --- LISTES STATIQUES (ID = Valeur exacte en base de données) ---
 const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
 const NETWORKS = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
 const LENS_TYPES = [ 
@@ -220,17 +220,8 @@ function App() {
   useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
 
   const currentSettings = { ...userSettings, shopName: user?.shop_name || userSettings.shopName };
-  
-  // CORRECTION INITIALISATION : type: '' (TOUS) PAR DÉFAUT
   const [formData, setFormData] = useState(() => {
-      try { 
-          const saved = sessionStorage.getItem("optique_form_data"); 
-          return saved ? JSON.parse(saved) : { 
-              network: 'HORS_RESEAU', brand: '', type: '', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false 
-          }; 
-      } catch { 
-          return { network: 'HORS_RESEAU', brand: '', type: '', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false }; 
-      }
+      try { const saved = sessionStorage.getItem("optique_form_data"); return saved ? JSON.parse(saved) : { network: 'HORS_RESEAU', brand: '', type: '', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false }; } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false }; }
   });
   
   const [serverUrl, setServerUrl] = useState(PROD_API_URL);
@@ -263,13 +254,7 @@ function App() {
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
-       let workingList = safeLenses.map(l => {
-           const lens = { ...l };
-           const fullName = (cleanText(lens.name) + " " + cleanText(lens.design)).toUpperCase();
-           if (fullName.includes("PROXEO")) { lens.type = "DEGRESSIF"; } 
-           else if (fullName.includes("MYPROXI") || fullName.includes("MY PROXI")) { lens.type = "PROGRESSIF_INTERIEUR"; }
-           return lens;
-       });
+       let workingList = safeLenses.map(l => { return {...l}; }); // Pas de modif ici car backend fait le travail
 
        if (formData.brand && formData.brand !== '') { 
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
@@ -351,10 +336,10 @@ function App() {
     setLoading(true); setError(null); 
     const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
-    // MODIF : Si type est vide, on n'envoie pas le paramètre pour tout récupérer
+    // MODIF : Si type est vide (TOUS), on ne l'envoie pas
     const params = { brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 };
     if (formData.type) params.type = formData.type;
-    
+
     axios.get(API_URL, { params })
       .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
@@ -403,8 +388,7 @@ function App() {
   const triggerUserUpload = () => {
       if (!userFile) return alert("Sélectionner un fichier Excel");
       setSyncLoading(true); const data = new FormData(); data.append('file', userFile);
-      // Correction chemin upload users
-      axios.post(`${PROD_API_URL}/upload-users`, data)
+      axios.post(`${baseBackendUrl}/upload-users`, data)
           .then(res => alert(`✅ ${res.data.count} utilisateurs importés`))
           .catch(err => {
               const msg = err.response?.data?.detail || err.message;
@@ -455,10 +439,8 @@ function App() {
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* ... (Header, Sidebar, Resultats, Footer identiques au code précédent) ... */}
-      {/* Copiez ici le bloc JSX de la version précédente (4.22) ou (4.30) qui était complet. */}
-      {/* Pour ne pas tronquer, je remets l'essentiel */}
-      
+      {/* ... (Reste du JSX Identique v4.22) ... */}
+      {/* Je remets le JSX pour que le fichier soit complet et prêt à l'emploi */}
       <div className="bg-slate-900 text-white px-4 lg:px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
           <div className="flex items-center gap-3">
               <button onClick={toggleSidebar} className="lg:hidden p-1 rounded hover:bg-slate-700"><Menu className="w-5 h-5"/></button>
@@ -467,8 +449,6 @@ function App() {
           </div>
           <div className="flex items-center gap-4"><button onClick={handleReset} className="flex items-center gap-1 text-red-400 hover:text-red-300" title="RAZ"><RotateCcw className="w-4 h-4"/> <span className="hidden sm:inline">RAZ</span></button><button onClick={handleLogout} className="flex items-center gap-1 text-red-400 hover:text-red-300"><LogOut className="w-4 h-4"/> <span className="hidden sm:inline">QUITTER</span></button></div>
       </div>
-      
-      {/* ... Header ... */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-4 lg:px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 w-full lg:w-auto overflow-x-auto">
@@ -529,7 +509,7 @@ function App() {
         </section>
       </div>
 
-      {/* FOOTER DEVIS ... */}
+      {/* FOOTER DEVIS */}
       {selectedLens && (
           <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800">
               <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
@@ -537,7 +517,13 @@ function App() {
                     <div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div>
                     <div>
                        <div className="text-[10px] font-bold text-slate-400 mt-1">RÉFÉRENCE DE COMMANDE</div>
-                       <div className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all" onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }} title="Cliquer pour copier">{selectedLens.commercial_code || "N/A"}</div>
+                       <div 
+                          className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all"
+                          onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }}
+                          title="Cliquer pour copier"
+                        >
+                          {selectedLens.commercial_code || "N/A"}
+                       </div>
                        <div className="font-bold text-slate-800 text-sm leading-tight mt-1">{selectedLens.name}</div>
                     </div>
                   </div>
@@ -553,6 +539,7 @@ function App() {
            <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
               <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
               
+              {/* ADMIN */}
               {user?.role === 'admin' && (
                 <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 mb-6">
                     <h3 className="text-xs font-bold text-orange-700 mb-3 flex items-center gap-2"><Lock className="w-3 h-3"/> ADMINISTRATION</h3>
@@ -561,9 +548,12 @@ function App() {
                     <div className="flex justify-between items-center"><span className="text-xs">État Base de Données</span><button onClick={checkDatabase} className="bg-white border border-orange-300 px-3 py-1 rounded text-xs font-bold text-orange-700">VÉRIFIER</button></div>
                 </div>
               )}
-
-              {/* ... Reste Settings ... */}
+              
+              {/* MARQUES VISIBLES */}
               <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(b.id)} className={`px-3 py-2 rounded-lg text-xs font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-blue-600 text-white border-blue-600'}`}>{isDisabled ? <Square className="w-3 h-3 inline mr-1"/> : <CheckSquare className="w-3 h-3 inline mr-1"/>}{b.label}</button>); })}</div></div>
+              {/* SETTINGS COMMUNS */}
+              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
+              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
               
               {/* PRIX MARCHÉ LIBRE */}
                <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4>
@@ -583,8 +573,35 @@ function App() {
         </div>
       )}
 
-      {/* MODALE HISTORIQUE ... (Identique v4.14) */}
-      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>{(offer.correction || (offer.lens && offer.lens.correction_data)) && (<div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono"><span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span><span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span><span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span></div>)}</div></div><div className="text-right"><div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div><div className="font-bold text-slate-800">{offer.lens?.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div></div><div className="flex items-center gap-2"><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div><button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button></div></div>))}</div></div></div>)}
+      {/* MODALE HISTORIQUE (AFFICHE LA CORRECTION) */}
+      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+      <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+        <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+            <div>
+                <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
+                <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
+                {/* AFFICHAGE CORRECTION */}
+                {(offer.correction || (offer.lens && offer.lens.correction_data)) && (
+                    <div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono">
+                        <span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span>
+                        <span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span>
+                        <span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span>
+                    </div>
+                )}
+            </div>
+          </div>
+          <div className="text-right">
+              <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
+              <div className="font-bold text-slate-800">{offer.lens?.name}</div>
+              <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
+          </div>
+          <div className="flex items-center gap-2">
+             <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+             <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button>
+          </div>
+        </div>))}</div></div></div>)}
     </div>
   );
 }
