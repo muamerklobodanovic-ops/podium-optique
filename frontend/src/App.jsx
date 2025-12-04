@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "4.32"; // Filtre Géométrie Strict (Base de données uniquement)
+const APP_VERSION = "4.33"; // Mise à jour : Filtre Géométrie cible la colonne 'type'
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -251,6 +251,7 @@ function App() {
   };
   const activeBrands = getFilteredBrandsList();
 
+  // --- LOGIQUE DE FILTRATION ---
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
@@ -266,12 +267,19 @@ function App() {
            }
        }
 
+       // --- FILTRE GÉOMÉTRIE (TYPE) ---
        if (formData.type) { 
            const targetType = cleanText(formData.type); 
+           
            if (targetType === 'PROGRESSIF_INTERIEUR') {
-               workingList = workingList.filter(l => { const type = cleanText(l.type); return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); });
+               workingList = workingList.filter(l => { 
+                    // Cible spécifiquement la colonne 'type' (ou 'geometry' par sécurité si transition)
+                    const type = cleanText(l.type || l.geometry); 
+                    return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
+               });
            } else { 
-               workingList = workingList.filter(l => cleanText(l.type) === targetType); 
+               // Cible spécifiquement la colonne 'type'
+               workingList = workingList.filter(l => cleanText(l.type || l.geometry) === targetType); 
            } 
        }
 
@@ -289,7 +297,9 @@ function App() {
           const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
           workingList = workingList.map(lens => {
              let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
-             const lensType = cleanText(lens.type);
+             // On utilise bien 'type' ici aussi pour déterminer la règle de prix
+             const lensType = cleanText(lens.type || lens.geometry);
+             
              if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
              else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
@@ -336,7 +346,8 @@ function App() {
     setLoading(true); setError(null); 
     const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
-    // MODIF : Si type est vide (TOUS), on ne l'envoie pas
+    
+    // On envoie le paramètre 'type' au backend pour pré-filtrer si possible
     const params = { brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 };
     if (formData.type) params.type = formData.type;
 
@@ -439,8 +450,6 @@ function App() {
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* ... (Reste du JSX Identique v4.22) ... */}
-      {/* Je remets le JSX pour que le fichier soit complet et prêt à l'emploi */}
       <div className="bg-slate-900 text-white px-4 lg:px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
           <div className="flex items-center gap-3">
               <button onClick={toggleSidebar} className="lg:hidden p-1 rounded hover:bg-slate-700"><Menu className="w-5 h-5"/></button>
@@ -516,15 +525,15 @@ function App() {
                   <div className="flex items-center gap-4">
                     <div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div>
                     <div>
-                       <div className="text-[10px] font-bold text-slate-400 mt-1">RÉFÉRENCE DE COMMANDE</div>
-                       <div 
+                        <div className="text-[10px] font-bold text-slate-400 mt-1">RÉFÉRENCE DE COMMANDE</div>
+                        <div 
                           className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all"
                           onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }}
                           title="Cliquer pour copier"
                         >
                           {selectedLens.commercial_code || "N/A"}
-                       </div>
-                       <div className="font-bold text-slate-800 text-sm leading-tight mt-1">{selectedLens.name}</div>
+                        </div>
+                        <div className="font-bold text-slate-800 text-sm leading-tight mt-1">{selectedLens.name}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-8 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100"><div className="text-center"><div className="text-[9px] font-bold text-slate-400">UNITAIRE</div><div className="font-bold text-lg text-slate-700">{parseFloat(selectedLens.sellingPrice).toFixed(2)} €</div></div><div className="text-slate-300 text-xl">x 2</div><div className="text-center"><div className="text-[9px] font-bold text-blue-600">TOTAL PAIRE</div><div className="font-bold text-2xl text-blue-700">{totalPair.toFixed(2)} €</div></div></div>
