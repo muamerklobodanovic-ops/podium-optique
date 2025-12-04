@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "4.27"; // Ajout Filtre TOUS & Default All
+const APP_VERSION = "4.28"; // Filtre Géométrie Strict (Nettoyage)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -34,11 +34,11 @@ const DEMO_LENSES = [
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
 ];
 
-// --- LISTES STATIQUES ---
+// --- LISTES STATIQUES (Valeurs Strictes BDD) ---
 const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
 const NETWORKS = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
 const LENS_TYPES = [ 
-    { id: '', label: 'TOUS' }, // NOUVEAU FILTRE
+    { id: '', label: 'TOUS' }, 
     { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
     { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
     { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, 
@@ -243,14 +243,9 @@ function App() {
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
-       let workingList = safeLenses.map(l => {
-           const lens = { ...l };
-           const fullName = (cleanText(lens.name) + " " + cleanText(lens.design)).toUpperCase();
-           if (fullName.includes("PROXEO")) { lens.type = "DEGRESSIF"; } 
-           else if (fullName.includes("MYPROXI") || fullName.includes("MY PROXI")) { lens.type = "PROGRESSIF_INTERIEUR"; }
-           return lens;
-       });
-
+       let workingList = safeLenses.map(l => ({...l})); // Nettoyage: on prend les verres tels quels depuis le backend
+       
+       // Filtre Marque
        if (formData.brand && formData.brand !== '') { 
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
@@ -261,13 +256,10 @@ function App() {
            }
        }
 
-       if (formData.type) { 
-           const targetType = cleanText(formData.type); 
-           if (targetType === 'PROGRESSIF_INTERIEUR') {
-               workingList = workingList.filter(l => { const type = cleanText(l.type); return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); });
-           } else { 
-               workingList = workingList.filter(l => cleanText(l.type).includes(targetType)); 
-           } 
+       // Filtre Type (Simplifié et Strict)
+       if (formData.type && formData.type !== '') {
+           const targetType = cleanText(formData.type);
+           workingList = workingList.filter(l => cleanText(l.type) === targetType);
        }
 
        if (formData.network === 'HORS_RESEAU') {
@@ -344,13 +336,23 @@ function App() {
       setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile);
       axios.post(UPLOAD_URL, data, { onUploadProgress: (e) => { setUploadProgress(Math.round((e.loaded * 100) / e.total)); } })
       .then(res => { alert(`✅ Succès ! ${res.data.count} verres importés.`); fetchData(); })
-      .catch(err => { console.error("Upload Error:", err); alert(`❌ Erreur upload : ${err.response?.data?.detail || err.message}`); })
+      .catch(err => {
+          console.error("Upload Error:", err);
+          const msg = err.response?.data?.detail || err.message;
+          alert(`❌ Erreur upload : ${msg}`);
+      })
       .finally(() => { setSyncLoading(false); setUploadProgress(0); });
   };
   const triggerUserUpload = () => {
       if (!userFile) return alert("Sélectionner un fichier Excel");
       setSyncLoading(true); const data = new FormData(); data.append('file', userFile);
-      axios.post(`${baseBackendUrl}/upload-users`, data).then(res => alert(`✅ ${res.data.count} utilisateurs importés`)).catch(err => alert("Erreur upload")).finally(() => setSyncLoading(false));
+      axios.post(`${baseBackendUrl}/upload-users`, data)
+          .then(res => alert(`✅ ${res.data.count} utilisateurs importés`))
+          .catch(err => {
+              const msg = err.response?.data?.detail || err.message;
+              alert(`Erreur upload utilisateurs: ${msg}`);
+          })
+          .finally(() => setSyncLoading(false));
   };
   const handleUrlChange = (value) => { setServerUrl(value); localStorage.setItem("optique_server_url", value); };
   const handleSheetsUrlChange = (value) => { setSheetsUrl(value); localStorage.setItem("optique_sheets_url", value); };
@@ -379,7 +381,12 @@ function App() {
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
-      {/* HEADER ... (Identique v3.99) */}
+      {/* ... (Header, Sidebar, Resultats, Footer identiques au code précédent) ... */}
+      {/* Pour alléger cette réponse, je ne répète pas tout le JSX car il est identique à la v4.02, 
+          les fonctions triggerUserUpload et triggerFileUpload ont été mises à jour ci-dessus.
+          Copiez le bloc JSX de la version 4.02 ici si vous remplacez tout le fichier. */}
+      
+      {/* (Je remets le JSX complet pour éviter tout doute) */}
       <div className="bg-slate-900 text-white px-4 lg:px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
           <div className="flex items-center gap-3">
               <button onClick={toggleSidebar} className="lg:hidden p-1 rounded hover:bg-slate-700"><Menu className="w-5 h-5"/></button>
@@ -508,8 +515,23 @@ function App() {
         </div>
       )}
       
-      {/* MODALE HISTORIQUE */}
-      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>{(offer.correction || (offer.lens && offer.lens.correction_data)) && (<div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono"><span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span><span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span><span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span></div>)}</div></div><div className="text-right"><div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div><div className="font-bold text-slate-800">{offer.lens?.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div></div><div className="flex items-center gap-2"><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div><button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button></div></div>))}</div></div></div>)}
+      {/* MODALE HISTORIQUE (Identique v4.14) */}
+      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+        <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+            <div>
+                <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
+                <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
+                {(offer.correction || (offer.lens && offer.lens.correction_data)) && (<div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono"><span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span><span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span><span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span></div>)}
+            </div>
+          </div>
+          <div className="text-right">
+              <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
+              <div className="font-bold text-slate-800">{offer.lens?.name}</div>
+              <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
+          </div>
+          <div className="flex items-center gap-2"><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div><button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button></div></div>))}</div></div></div>)}
     </div>
   );
 }
