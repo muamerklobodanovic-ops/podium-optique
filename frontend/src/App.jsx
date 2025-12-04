@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "4.28"; // Filtre Géométrie Strict (Nettoyage)
+const APP_VERSION = "4.29"; // Removal of Redundant Client-Side Type Filter
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -34,7 +34,7 @@ const DEMO_LENSES = [
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
 ];
 
-// --- LISTES STATIQUES (Valeurs Strictes BDD) ---
+// --- LISTES STATIQUES ---
 const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
 const NETWORKS = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
 const LENS_TYPES = [ 
@@ -243,9 +243,14 @@ function App() {
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
-       let workingList = safeLenses.map(l => ({...l})); // Nettoyage: on prend les verres tels quels depuis le backend
-       
-       // Filtre Marque
+       let workingList = safeLenses.map(l => {
+           const lens = { ...l };
+           const fullName = (cleanText(lens.name) + " " + cleanText(lens.design)).toUpperCase();
+           if (fullName.includes("PROXEO")) { lens.type = "DEGRESSIF"; } 
+           else if (fullName.includes("MYPROXI") || fullName.includes("MY PROXI")) { lens.type = "PROGRESSIF_INTERIEUR"; }
+           return lens;
+       });
+
        if (formData.brand && formData.brand !== '') { 
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
@@ -256,12 +261,10 @@ function App() {
            }
        }
 
-       // Filtre Type (Simplifié et Strict)
-       if (formData.type && formData.type !== '') {
-           const targetType = cleanText(formData.type);
-           workingList = workingList.filter(l => cleanText(l.type) === targetType);
-       }
-
+       // CORRECTION : Suppression du filtrage Client-Side redondant pour le Type
+       // On laisse l'API faire le travail, sauf pour les classifications spéciales
+       
+       // Filtre Prix
        if (formData.network === 'HORS_RESEAU') {
           const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
           workingList = workingList.map(lens => {
@@ -306,13 +309,21 @@ function App() {
     setLoading(true); setError(null); 
     const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
-    // IMPORTANT: ON PASSE TYPE='' POUR AFFICHER TOUT PAR DÉFAUT
     axios.get(API_URL, { params: { type: formData.type || undefined, brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 } })
       .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
 
-  const handleReset = () => { if(window.confirm("Tout remettre à zéro ?")) { sessionStorage.clear(); window.location.reload(); } };
+  const handleReset = () => {
+      if(window.confirm("Tout remettre à zéro ?")) {
+          sessionStorage.clear();
+          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
+          setSecondPairPrice(0);
+          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0 });
+          setSelectedLens(null);
+      }
+  };
+
   const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
   const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); };
   const handlePasswordUpdated = (newPass) => { const updated = { ...user, is_first_login: false }; setUser(updated); sessionStorage.setItem("optique_user", JSON.stringify(updated)); alert("Succès !"); };
@@ -365,8 +376,16 @@ function App() {
   const handleDesignChange = (newDesign) => { setFormData(prev => ({ ...prev, design: newDesign })); };
   const handleCoatingChange = (newCoating) => { setFormData(prev => ({ ...prev, coating: newCoating })); };
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const clearComparison = () => { setComparisonLens(null); };
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-  const toggleBrand = (brandId) => { setUserSettings(prev => { const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : []; const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId]; return { ...prev, disabledBrands: newDisabled }; }); };
+  const toggleBrand = (brandId) => {
+      setUserSettings(prev => {
+          const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : [];
+          const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId];
+          return { ...prev, disabledBrands: newDisabled };
+      });
+  };
+
   const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
   const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
 
@@ -536,5 +555,4 @@ function App() {
   );
 }
 
-// WRAPPER
-export default function AppWrapper() { return <ErrorBoundary><App /></ErrorBoundary>; }
+export default App;
