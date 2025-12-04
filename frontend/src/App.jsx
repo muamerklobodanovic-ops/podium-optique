@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "4.11"; // Fix handleClientChange & Missing Functions
+const APP_VERSION = "4.12"; // Fix Undefined Variables (NETWORKS, INDICES...)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -305,10 +305,14 @@ function App() {
           workingList = workingList.map(lens => {
              let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
              const lensType = cleanText(lens.type);
-             if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
+             if (lensType.includes('UNIFOCAL')) { 
+                 const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); 
+                 rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); 
+             } 
              else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
              else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
              else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
+             
              const pPrice = parseFloat(lens.purchase_price || 0);
              const newSelling = (pPrice * rule.x) + rule.b;
              const newMargin = newSelling - pPrice;
@@ -320,11 +324,17 @@ function App() {
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { const sPrice = l[key] ? parseFloat(l[key]) : 0; return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; });
            workingList = workingList.filter(l => l.sellingPrice > 0);
+           // AJOUT: Tri par marge pour les réseaux aussi
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
        if (formData.materialIndex && formData.materialIndex !== '') {
-           workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
+           workingList = workingList.filter(l => { 
+               if(!l.index_mat) return false; 
+               const lIdx = String(l.index_mat).replace(',', '.'); 
+               const fIdx = String(formData.materialIndex).replace(',', '.'); 
+               return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; 
+           });
        }
 
        const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
@@ -364,22 +374,18 @@ function App() {
   const handlePasswordUpdated = (newPass) => { const updated = { ...user, is_first_login: false }; setUser(updated); sessionStorage.setItem("optique_user", JSON.stringify(updated)); alert("Succès !"); };
 
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
+  
+  // --- SAUVEGARDE ---
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
       const totalPair = selectedLens.sellingPrice * 2;
       const remainder = (totalPair + secondPairPrice) - client.reimbursement;
-      
-      const lensWithCorrection = { 
-          ...selectedLens, 
-          correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } 
-      };
-      const payload = { 
-          client: client, 
-          lens: lensWithCorrection, 
-          finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } 
-      };
+      const lensWithCorrection = { ...selectedLens, correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } };
+      const payload = { client: client, lens: lensWithCorrection, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
       axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
   };
+
+  // --- SUPPRESSION ---
   const deleteOffer = (id) => {
       if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) {
           axios.delete(`${SAVE_URL}/${id}`)
@@ -387,6 +393,7 @@ function App() {
               .catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); });
       }
   };
+
   const triggerFileUpload = () => {
       if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)");
       setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile);
@@ -452,7 +459,7 @@ function App() {
                 <div className="flex flex-nowrap gap-2 items-center w-full overflow-x-auto pb-1">
                     <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border shrink-0 ${isDarkTheme ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200'}`}><User className="w-4 h-4 opacity-50"/><input type="text" name="name" placeholder="NOM" value={client.name} onChange={handleClientChange} className="bg-transparent w-24 sm:w-32 font-bold text-sm outline-none"/><input type="text" name="firstname" placeholder="PRÉNOM" value={client.firstname} onChange={handleClientChange} className={`bg-transparent w-24 sm:w-32 font-bold text-sm outline-none border-l pl-2 ${isDarkTheme ? 'border-slate-600' : 'border-slate-200'}`}/></div>
                     <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border shrink-0 ${isDarkTheme ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200'}`}><input type="date" name="dob" value={client.dob} onChange={handleClientChange} className={`bg-transparent font-bold text-sm outline-none ${isDarkTheme ? 'text-white' : 'text-slate-600'}`}/></div>
-                    <div className="flex items-center gap-2 ml-2 shrink-0">{networks.map(net => (<NetworkLogo key={net} network={net} isSelected={formData.network === net} onClick={() => setFormData(prev => ({...prev, network: net}))}/>))}</div>
+                    <div className="flex items-center gap-2 ml-2 shrink-0">{NETWORKS.map(net => (<NetworkLogo key={net} network={net} isSelected={formData.network === net} onClick={() => setFormData(prev => ({...prev, network: net}))}/>))}</div>
                     <div className="flex items-center gap-2 bg-green-50 px-3 py-2 rounded-lg border border-green-100 ml-auto shrink-0"><Wallet className="w-4 h-4 text-green-600"/><input type="number" name="reimbursement" placeholder="0" value={client.reimbursement} onChange={handleClientChange} onFocus={(e) => e.target.select()} className="bg-transparent w-12 sm:w-16 font-bold text-sm text-green-700 text-right outline-none" min="0"/><span className="text-xs font-bold text-green-700">€</span></div>
                 </div>
             </div>
@@ -461,15 +468,35 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative z-0">
-        {/* SIDEBAR ... (Identique v3.99) */}
+        {/* SIDEBAR FILTRES */}
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-50 transition-transform duration-300 w-80 fixed inset-y-0 left-0 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-6 space-y-6 pb-32 pt-20 lg:pt-6">
                 <div className="lg:hidden flex justify-end mb-4"><button onClick={toggleSidebar}><X className="w-6 h-6"/></button></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
-                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label><div className="grid grid-cols-1 gap-2 mb-2"><div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">SPH</span><div className="relative flex-1"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">CYL</span><div className="relative flex-1"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div></div><div className={`flex items-center gap-2 transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><span className="text-[10px] font-bold w-6 opacity-50 text-right">ADD</span><div className="relative flex-1"><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div></div>
-                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{lensTypes.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
+                
+                {/* CORRECTION (AVEC SELECTION AUTOMATIQUE) */}
+                <div>
+                    <label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label>
+                    <div className="grid grid-cols-1 gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold w-6 opacity-50 text-right">SPH</span>
+                            <div className="relative flex-1"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold w-6 opacity-50 text-right">CYL</span>
+                            <div className="relative flex-1"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div>
+                        </div>
+                    </div>
+                    <div className={`flex items-center gap-2 transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}>
+                        <span className="text-[10px] font-bold w-6 opacity-50 text-right">ADD</span>
+                        <div className="relative flex-1"><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div>
+                    </div>
+                </div>
+
+                {/* ... Autres filtres ... */}
+                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{LENS_TYPES.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
-                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{indices.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
+                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{INDICES.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">TRAITEMENTS</label><button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-[10px] font-bold rounded border ${formData.coating === '' ? 'text-white border-transparent' : 'border-transparent opacity-60'}`} style={formData.coating === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button><label className={`flex items-center gap-2 p-2 rounded border cursor-pointer mb-2 ${formData.photochromic ? 'bg-yellow-50 border-yellow-300' : 'border-transparent opacity-80'}`}><input type="checkbox" checked={formData.photochromic} onChange={handleChange} name="photochromic" className="accent-yellow-500"/><span className={`text-[10px] font-bold ${formData.photochromic ? 'text-yellow-700' : 'opacity-80'}`}>PHOTOCHROMIQUE</span></label><div className="flex flex-col gap-1">{availableCoatings.length > 0 ? availableCoatings.map(c => (<button key={c} onClick={() => handleCoatingChange(c)} className={`p-2 rounded border text-left text-[10px] font-bold ${formData.coating === c ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}>{c}</button>)) : <div className="text-[10px] opacity-50 italic text-center">Aucun traitement spécifique</div>}</div></div>
             </div>
         </aside>
@@ -492,7 +519,7 @@ function App() {
         </section>
       </div>
 
-      {/* FOOTER DEVIS ... (Identique v4.07) */}
+      {/* FOOTER DEVIS */}
       {selectedLens && (
           <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800">
               <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
@@ -541,9 +568,38 @@ function App() {
            </div>
         </div>
       )}
-      
-      {/* MODALE HISTORIQUE (Identique v4.07) */}
-      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>{(offer.correction || (offer.lens && offer.lens.correction_data)) && (<div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono"><span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span><span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span><span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span></div>)}</div></div><div className="text-right"><div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div><div className="font-bold text-slate-800">{offer.lens?.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div></div><div className="flex items-center gap-2"><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div><button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button></div></div>))}</div></div></div>)}
+
+      {/* MODALE HISTORIQUE (AFFICHE LA CORRECTION) */}
+      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+      <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+        <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+            <div>
+                <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
+                <div className="text-xs text-slate-500 font-mono flex items-center gap-2">
+                   <Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}
+                </div>
+                {/* AFFICHAGE CORRECTION */}
+                {(offer.correction || (offer.lens && offer.lens.correction_data)) && (
+                    <div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono">
+                        <span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span>
+                        <span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span>
+                        <span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span>
+                    </div>
+                )}
+            </div>
+          </div>
+          <div className="text-right">
+              <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
+              <div className="font-bold text-slate-800">{offer.lens?.name}</div>
+              <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
+          </div>
+          <div className="flex items-center gap-2">
+             <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+             <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button>
+          </div>
+        </div>))}</div></div></div>)}
     </div>
   );
 }
