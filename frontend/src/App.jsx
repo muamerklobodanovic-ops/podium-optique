@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.11"; // CORRECTIF : Crash Configurateur (Valeurs nulles)
+const APP_VERSION = "5.12"; // AJOUT : Boutons Tous/Aucun dans Configurateur
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -167,6 +167,17 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
         }));
     };
 
+    // Nouvelle fonction pour gérer Tous/Aucun
+    const setAllAttributes = (type, enableAll, allValues) => {
+        setLocalConfig(prev => ({
+            ...prev,
+            disabledAttributes: {
+                ...prev.disabledAttributes,
+                [type]: enableAll ? [] : [...allValues] // Vide = Tous actifs, Rempli avec tout = Tous désactivés
+            }
+        }));
+    };
+
     const updatePrice = (key, value) => {
         setLocalConfig(prev => ({
             ...prev,
@@ -204,7 +215,13 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
             <div className="flex-1 overflow-hidden flex">
                 <aside className="w-80 bg-white border-r overflow-y-auto p-6 space-y-8">
                     <div>
-                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">Disponibilité Indices</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Indices</h3>
+                            <div className="flex gap-1">
+                                <button onClick={() => setAllAttributes('indices', true, availableIndices)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                                <button onClick={() => setAllAttributes('indices', false, availableIndices)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                            </div>
+                        </div>
                         <div className="flex flex-wrap gap-2">
                             {availableIndices.map(idx => {
                                 const isDisabled = (localConfig.disabledAttributes.indices || []).includes(idx);
@@ -222,7 +239,13 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                         </div>
                     </div>
                     <div>
-                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">Disponibilité Designs</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Designs</h3>
+                            <div className="flex gap-1">
+                                <button onClick={() => setAllAttributes('designs', true, availableDesigns)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                                <button onClick={() => setAllAttributes('designs', false, availableDesigns)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                            </div>
+                        </div>
                         <div className="flex flex-col gap-2">
                             {availableDesigns.map(d => {
                                 const isDisabled = (localConfig.disabledAttributes.designs || []).includes(d);
@@ -240,7 +263,13 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                         </div>
                     </div>
                     <div>
-                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">Disponibilité Traitements</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Traitements</h3>
+                            <div className="flex gap-1">
+                                <button onClick={() => setAllAttributes('coatings', true, availableCoatings)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                                <button onClick={() => setAllAttributes('coatings', false, availableCoatings)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                            </div>
+                        </div>
                         <div className="flex flex-col gap-2">
                             {availableCoatings.map(c => {
                                 const isDisabled = (localConfig.disabledAttributes.coatings || []).includes(c);
