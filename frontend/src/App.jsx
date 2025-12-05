@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.12"; // AJOUT : Boutons Tous/Aucun dans Configurateur
+const APP_VERSION = "5.13"; // AJOUT : RAZ Prix & Filtre Photochromique
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -55,6 +55,12 @@ const cleanText = (text) => { if (text === null || text === undefined) return ""
 const safeNum = (val) => { const num = parseFloat(val); return isNaN(num) ? 0 : num; };
 const safeJSONParse = (key, defaultValue) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : defaultValue; } catch { return defaultValue; } };
 const getLensKey = (l) => `${cleanText(l.type)}_${cleanText(l.design)}_${cleanText(l.index_mat)}_${cleanText(l.coating)}`;
+
+// Fonction de détection Photochromique partagée
+const checkIsPhoto = (item) => {
+    const text = cleanText((item.name || "") + " " + (item.material || "") + " " + (item.coating || "") + " " + (item.design || ""));
+    return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN");
+};
 
 // --- COMPOSANTS UI ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
@@ -114,25 +120,26 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
 
 // --- CORRECTIF : CONFIGURATEUR TARIFAIRE ROBUSTE ---
 const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
-    // 1. Sécurisation : On nettoie les données AVANT de les mettre dans le Map
-    // Cela empêche le crash lors du tri si 'type' ou 'design' est null
+    const [filterPhoto, setFilterPhoto] = useState('all'); // 'all', 'white', 'photo'
+
+    // 1. Sécurisation et Détection Photochromique
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
             const key = getLensKey(l);
             if (!map.has(key)) {
-                // IMPORTANT : On utilise cleanText ici pour être sûr que ce sont des strings
+                // IMPORTANT : On calcule isPhoto ici pour le filtrage
                 map.set(key, {
                     key,
                     type: cleanText(l.type),      
                     design: cleanText(l.design),
                     index_mat: cleanText(l.index_mat),
                     coating: cleanText(l.coating),
-                    avg_purchase: l.purchase_price
+                    avg_purchase: l.purchase_price,
+                    isPhoto: checkIsPhoto(l) // Utilise la fonction partagée
                 });
             }
         });
-        // Le tri est maintenant sûr car on compare des strings nettoyées
         return Array.from(map.values()).sort((a, b) => a.type.localeCompare(b.type) || a.design.localeCompare(b.design));
     }, [lenses]);
 
@@ -140,12 +147,11 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const availableIndices = [...new Set(lenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean);
     const availableCoatings = [...new Set(lenses.map(l => cleanText(l.coating)))].sort().filter(Boolean);
 
-    // 2. Sécurisation : Valeurs par défaut pour éviter le crash si la config est partielle
+    // 2. Sécurisation : Valeurs par défaut
     const [localConfig, setLocalConfig] = useState(() => {
         const safeConfig = JSON.parse(JSON.stringify(config || {}));
         if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = { designs: [], indices: [], coatings: [] };
         if (!safeConfig.prices) safeConfig.prices = {};
-        // Double sécurité sur les tableaux
         if (!safeConfig.disabledAttributes.designs) safeConfig.disabledAttributes.designs = [];
         if (!safeConfig.disabledAttributes.indices) safeConfig.disabledAttributes.indices = [];
         if (!safeConfig.disabledAttributes.coatings) safeConfig.disabledAttributes.coatings = [];
@@ -167,13 +173,12 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
         }));
     };
 
-    // Nouvelle fonction pour gérer Tous/Aucun
     const setAllAttributes = (type, enableAll, allValues) => {
         setLocalConfig(prev => ({
             ...prev,
             disabledAttributes: {
                 ...prev.disabledAttributes,
-                [type]: enableAll ? [] : [...allValues] // Vide = Tous actifs, Rempli avec tout = Tous désactivés
+                [type]: enableAll ? [] : [...allValues] // Vide = Tous actifs
             }
         }));
     };
@@ -188,13 +193,36 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterText, setFilterText] = useState("");
 
     const filteredRows = uniqueCombinations.filter(row => {
-        // Sécurité lors de l'accès aux tableaux (|| [])
+        // Filtres globaux (Sidebar)
         if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
         if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
         if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
         
+        // Filtre Photochromique
+        if (filterPhoto === 'white' && row.isPhoto) return false;
+        if (filterPhoto === 'photo' && !row.isPhoto) return false;
+
+        // Filtre Recherche
         return (row.type + row.design + row.coating).toLowerCase().includes(filterText.toLowerCase());
     });
+
+    // --- LOGIQUE DE REMISE À ZÉRO SÉCURISÉE ---
+    const handleResetFiltered = () => {
+        if (filteredRows.length === 0) return alert("Aucun verre affiché à réinitialiser.");
+        
+        // Validation 1 : Alerte simple
+        if (window.confirm(`⚠️ ATTENTION : Vous allez remettre à 0€ les ${filteredRows.length} lignes actuellement affichées.\n\nCette action affecte uniquement la sélection visible (Filtres + Recherche).\n\nVoulez-vous continuer ?`)) {
+            // Validation 2 : Confirmation explicite
+            if (window.confirm("🔴 DOUBLE CONFIRMATION REQUISE\n\nÊtes-vous ABSOLUMENT sûr de vouloir supprimer ces tarifs ?\nCette action est irréversible.")) {
+                const newPrices = { ...localConfig.prices };
+                filteredRows.forEach(row => {
+                    newPrices[row.key] = 0;
+                });
+                setLocalConfig(prev => ({ ...prev, prices: newPrices }));
+                // Pas d'alerte de succès pour fluidité, ou optionnel
+            }
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-sans">
@@ -289,17 +317,55 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                 </aside>
 
                 <main className="flex-1 flex flex-col bg-slate-50">
-                    <div className="p-4 border-b bg-white flex items-center gap-4">
-                        <Search className="w-5 h-5 text-slate-400"/>
-                        <input 
-                            type="text" 
-                            placeholder="Filtrer le tableau (ex: UNIFOCAL 1.6)" 
-                            className="flex-1 outline-none text-sm font-bold text-slate-700"
-                            value={filterText}
-                            onChange={(e) => setFilterText(e.target.value)}
-                        />
-                        <span className="text-xs font-bold bg-slate-100 px-2 py-1 rounded text-slate-500">{filteredRows.length} combinaisons</span>
+                    <div className="p-4 border-b bg-white flex flex-col gap-4">
+                        <div className="flex items-center gap-4">
+                            {/* RECHERCHE */}
+                            <div className="flex-1 relative">
+                                <Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/>
+                                <input 
+                                    type="text" 
+                                    placeholder="Filtrer le tableau (ex: UNIFOCAL 1.6)" 
+                                    className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none text-sm font-bold text-slate-700 focus:ring-2 ring-blue-100"
+                                    value={filterText}
+                                    onChange={(e) => setFilterText(e.target.value)}
+                                />
+                            </div>
+                            
+                            {/* BOUTON RAZ AVEC SÉCURITÉ */}
+                            <button 
+                                onClick={handleResetFiltered}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200 transition-colors"
+                                title="Remettre à 0€ les verres visibles"
+                            >
+                                <Trash2 className="w-4 h-4"/>
+                                RAZ SÉLECTION
+                            </button>
+                        </div>
+
+                        {/* FILTRE PHOTOCHROMIQUE */}
+                        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg self-start">
+                            <button 
+                                onClick={() => setFilterPhoto('all')}
+                                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                <ListFilter className="w-3 h-3"/> TOUS
+                            </button>
+                            <button 
+                                onClick={() => setFilterPhoto('white')}
+                                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                <Sun className="w-3 h-3"/> BLANCS
+                            </button>
+                            <button 
+                                onClick={() => setFilterPhoto('photo')}
+                                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                <SunDim className="w-3 h-3"/> PHOTOCHROMIQUES
+                            </button>
+                            <span className="ml-2 text-xs text-slate-400 font-mono">| {filteredRows.length} lignes</span>
+                        </div>
                     </div>
+
                     <div className="flex-1 overflow-auto p-6">
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <table className="min-w-full divide-y divide-slate-100">
@@ -321,7 +387,10 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-slate-800">{row.type}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">{row.design}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap"><span className="px-2 py-1 rounded bg-slate-100 text-xs font-bold text-slate-600">{row.index_mat}</span></td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">{row.coating}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">
+                                                    {row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}
+                                                    {row.coating}
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs text-right text-slate-400 font-mono">~{safeNum(row.avg_purchase).toFixed(0)}€</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right bg-blue-50/30 border-l border-blue-100">
                                                     <input 
