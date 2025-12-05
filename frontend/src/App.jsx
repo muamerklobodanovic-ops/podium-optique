@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.22"; // CORRECTIF : handleLogin rétabli dans PodiumCore
+const APP_VERSION = "5.23"; // CORRECTIF : Déplacement de fetchData (Hoisting fix)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -74,16 +74,14 @@ const safeNum = (val) => { const num = parseFloat(val); return isNaN(num) ? 0 : 
 const safeJSONParse = (key, defaultValue) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : defaultValue; } catch { return defaultValue; } };
 const getLensKey = (l) => `${cleanText(l.type)}_${cleanText(l.design)}_${cleanText(l.index_mat)}_${cleanText(l.coating)}`;
 
-// Fonction de détection Photochromique partagée
 const checkIsPhoto = (item) => {
     const text = cleanText((item.name || "") + " " + (item.material || "") + " " + (item.coating || "") + " " + (item.design || ""));
     return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN");
 };
 
-// --- LOGIQUE DE CALCUL DU PRIX COMPOSANTS ---
 const calculateComponentPrice = (lens, componentPrices) => {
     let price = 0;
-    if (!componentPrices) return 0; // Sécurité
+    if (!componentPrices) return 0; 
 
     const type = cleanText(lens.type);
     const idx = cleanText(lens.index_mat);
@@ -106,7 +104,6 @@ const calculateComponentPrice = (lens, componentPrices) => {
     return price;
 };
 
-// --- BARRIÈRE DE SÉCURITÉ (ERROR BOUNDARY) ---
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -128,7 +125,6 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// --- COMPOSANTS UI ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const [hasError, setHasError] = useState(false);
   const safeBrand = brand || 'unknown';
@@ -556,11 +552,10 @@ const LoginScreen = ({ onLogin }) => {
     );
 };
 
-// --- COMPOSANT AUTONOME (LOGIQUE INTÉGRÉE) ---
 function PodiumCore() {
   const [user, setUser] = useState(() => { try { const s = sessionStorage.getItem("optique_user"); return s ? JSON.parse(s) : null; } catch { return null; } });
 
-  // Handlers de connexion (Définis ici pour être accessibles)
+  // Handlers de connexion
   const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
   const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); };
 
@@ -620,6 +615,20 @@ function PodiumCore() {
   const SYNC_URL = `${baseBackendUrl}/sync`;
   const UPLOAD_URL = `${baseBackendUrl}/upload-catalog`; 
   const SAVE_URL = `${baseBackendUrl}/offers`;
+
+  // --- HOISTING DU FETCHDATA (Correction du ReferenceError) ---
+  const fetchData = () => {
+    setLoading(true); setError(null); 
+    const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
+    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
+    
+    const params = { brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 };
+    if (formData.type) params.type = formData.type;
+
+    axios.get(API_URL, { params })
+      .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
+      .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
+  };
 
   useEffect(() => { if (window.location.hostname.includes("localhost")) return; const pingInterval = setInterval(() => { axios.get(API_URL, { params: { pocketLimit: -1 } }).catch(() => {}); }, 30 * 60 * 1000); return () => clearInterval(pingInterval); }, [API_URL]);
   useEffect(() => { const root = document.documentElement; if (userSettings.themeColor === 'custom') { const rgb = hexToRgb(userSettings.customColor); root.style.setProperty('--theme-primary', userSettings.customColor); } else { root.style.removeProperty('--theme-primary'); } }, [userSettings.themeColor, userSettings.customColor]);
@@ -811,8 +820,6 @@ function PodiumCore() {
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const toggleBrand = (brandId) => { setUserSettings(prev => { const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : []; const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId]; return { ...prev, disabledBrands: newDisabled }; }); };
-  
-  // --- RÉINTÉGRATION DES FONCTIONS MANQUANTES ---
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
   const handleReset = () => {
