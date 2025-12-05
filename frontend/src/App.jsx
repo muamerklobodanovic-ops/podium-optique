@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.16"; // DESIGN : Police Poppins + Logo Login CODIR
+const APP_VERSION = "5.17"; // DESIGN : Police Poppins sur Login
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -473,6 +473,9 @@ const LoginScreen = ({ onLogin }) => {
     };
     return (
         <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-['Poppins']">
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+            `}</style>
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
                 <div className="text-center mb-8">
                     <div className="mb-6 flex justify-center">
