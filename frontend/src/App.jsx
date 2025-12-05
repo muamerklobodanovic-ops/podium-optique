@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.14"; // AJOUT : Filtre Marque dans Configurateur
+const APP_VERSION = "5.15"; // AJOUT : Filtres Latéraux Dynamiques (liés à la Marque)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -123,13 +123,28 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterPhoto, setFilterPhoto] = useState('all'); // 'all', 'white', 'photo'
     const [filterBrand, setFilterBrand] = useState(''); // Filtre Marque (Vide = Tous)
 
-    // 1. Sécurisation et Détection Photochromique & Marque
+    // 1. Sécurisation et Détection Photochromique & Marque & Extraction Dynamique
+    // On calcule d'abord les verres filtrés par marque pour les filtres latéraux
+    const availableAttributes = useMemo(() => {
+        const filteredLenses = filterBrand 
+            ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand))
+            : lenses;
+            
+        return {
+            designs: [...new Set(filteredLenses.map(l => cleanText(l.design)))].sort().filter(Boolean),
+            indices: [...new Set(filteredLenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean),
+            coatings: [...new Set(filteredLenses.map(l => cleanText(l.coating)))].sort().filter(Boolean)
+        };
+    }, [lenses, filterBrand]);
+
+    const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
+
+    // Ensuite, on calcule les combinaisons uniques pour le tableau (qui inclut aussi le filtrage par marque)
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
             const key = getLensKey(l);
             if (!map.has(key)) {
-                // IMPORTANT : On calcule isPhoto et brand ici pour le filtrage
                 map.set(key, {
                     key,
                     type: cleanText(l.type),      
@@ -137,22 +152,17 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                     index_mat: cleanText(l.index_mat),
                     coating: cleanText(l.coating),
                     avg_purchase: l.purchase_price,
-                    isPhoto: checkIsPhoto(l), // Utilise la fonction partagée
-                    brand: cleanText(l.brand) // On stocke la marque
+                    isPhoto: checkIsPhoto(l), 
+                    brand: cleanText(l.brand) 
                 });
             }
         });
         return Array.from(map.values()).sort((a, b) => a.type.localeCompare(b.type) || a.design.localeCompare(b.design));
     }, [lenses]);
-
-    const availableDesigns = [...new Set(lenses.map(l => cleanText(l.design)))].sort().filter(Boolean);
-    const availableIndices = [...new Set(lenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean);
-    const availableCoatings = [...new Set(lenses.map(l => cleanText(l.coating)))].sort().filter(Boolean);
     
-    // Extraction des marques disponibles pour le filtre
+    // Extraction des marques disponibles (toutes les marques, pas seulement celles filtrées)
     const availableBrands = useMemo(() => {
         const brands = new Set(lenses.map(l => cleanText(l.brand)));
-        // On ne garde que les marques qui existent vraiment dans les données
         return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id)));
     }, [lenses]);
 
