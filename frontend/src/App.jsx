@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.29"; // CORRECTIF : PodiumCore Scope Fix (Variable Duplication)
+const APP_VERSION = "5.30"; // CORRECTIF : checkDatabase undefined fix
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -118,6 +118,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// --- UI COMPONENTS ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const [hasError, setHasError] = useState(false);
   const safeBrand = brand || 'unknown';
@@ -806,6 +807,10 @@ function PodiumCore() {
       }
   };
 
+  // -- FONCTIONS DÉFINIES À L'INTÉRIEUR POUR ÊTRE ACCESSIBLES DANS LE JSX --
+  const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
+  const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
+
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
@@ -821,7 +826,6 @@ function PodiumCore() {
       <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Poppins'] uppercase transition-colors duration-300`}>
           <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
           
-          {/* ERROR BOUNDARY ACTIVE POUR LE CONTENU CONNECTÉ */}
           {showPricingConfig && (<PricingConfigurator lenses={lenses} config={userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} }} onSave={handlePricingConfigSave} onClose={() => setShowPricingConfig(false)}/>)}
 
           {/* HEADER & SIDEBAR KEPT SAME AS PREVIOUS VERSION */}
