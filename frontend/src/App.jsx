@@ -533,6 +533,9 @@ const LoginScreen = ({ onLogin }) => {
     };
     return (
         <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-['Poppins']">
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+            `}</style>
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
                 <div className="text-center mb-8">
                     <div className="mb-6 flex justify-center">
@@ -670,38 +673,53 @@ function PodiumCore({ user, onLogout, onReset }) {
        }
 
        if (formData.network === 'HORS_RESEAU') {
+          // --- LOGIQUE DE PRIX DYNAMIQUE SELON LE MODE ---
           if (userSettings.pricingMode === 'per_lens') {
+              // MODE MANUEL "AU VERRE"
               const config = userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} };
+              
               workingList = workingList.filter(lens => {
+                  // 1. Filtrer les exclus (OFF)
                   if ((config.disabledAttributes?.designs || []).includes(lens.design)) return false;
                   if ((config.disabledAttributes?.indices || []).includes(lens.index_mat)) return false;
                   if ((config.disabledAttributes?.coatings || []).includes(lens.coating)) return false;
+                  
+                  // 2. Vérifier si un prix est défini
                   const key = getLensKey(lens);
                   const manualPrice = config.prices[key];
-                  if (!manualPrice || manualPrice <= 0) return false; 
+                  
+                  if (!manualPrice || manualPrice <= 0) return false; // On ne montre pas les verres sans prix
+
+                  // 3. Appliquer le prix
                   const pPrice = parseFloat(lens.purchase_price || 0);
                   lens.sellingPrice = manualPrice + calisizeAddon;
                   lens.margin = lens.sellingPrice - pPrice;
                   return true;
               });
+
           } else {
+              // MODE CLASSIQUE LINEAIRE (Ax + B)
               const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
               workingList = workingList.map(lens => {
                  let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
                  const lensType = cleanText(lens.type || lens.geometry);
+                 
                  if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
                  else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
                  else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
                  else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
                  const pPrice = parseFloat(lens.purchase_price || 0);
+                 
                  let newSelling = (pPrice * rule.x) + rule.b;
                  newSelling += calisizeAddon; 
+    
                  const newMargin = newSelling - pPrice;
                  return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
               });
           }
           workingList.sort((a, b) => b.margin - a.margin);
        } else {
+           // MODE RESEAUX (Inchangé)
            const priceMap = { 'KALIXIA': 'sell_kalixia', 'ITELIS': 'sell_itelis', 'CARTEBLANCHE': 'sell_carteblanche', 'SEVEANE': 'sell_seveane', 'SANTECLAIR': 'sell_santeclair' };
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { 
@@ -712,9 +730,11 @@ function PodiumCore({ user, onLogout, onReset }) {
            workingList = workingList.filter(l => l.sellingPrice > 0);
            workingList.sort((a, b) => b.margin - a.margin);
        }
+
        if (formData.materialIndex && formData.materialIndex !== '') {
            workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
        }
+
        const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
        if (formData.photochromic) { workingList = workingList.filter(l => isPhotoC(l)); } else { workingList = workingList.filter(l => !isPhotoC(l)); }
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
@@ -784,11 +804,16 @@ function PodiumCore({ user, onLogout, onReset }) {
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const toggleBrand = (brandId) => { setUserSettings(prev => { const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : []; const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId]; return { ...prev, disabledBrands: newDisabled }; }); };
+  const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
+  const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
+
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
 
   const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
   const safePricing = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
   const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
   const totalPair = lensPrice * 2;
+  // Calcul total global
   const totalSupp = supplementaryPairs.reduce((acc, p) => acc + (p.lens.sellingPrice * 2), 0);
   const totalRefund = parseFloat(client.reimbursement || 0);
   const remainder = (totalPair + totalSupp) - totalRefund;
