@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.19"; // AJOUT : Gestion Paires Supplémentaires (Alternance/50%)
+const APP_VERSION = "5.19"; // STABLE : Gestion Paires Supplémentaires (Sécurisé)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -80,9 +80,12 @@ const checkIsPhoto = (item) => {
 // --- LOGIQUE DE CALCUL DU PRIX COMPOSANTS ---
 const calculateComponentPrice = (lens, componentPrices) => {
     let price = 0;
+    // Sécurité si componentPrices est mal chargé
+    if (!componentPrices) return 0;
+
     const type = cleanText(lens.type);
     const idx = cleanText(lens.index_mat);
-    const coat = cleanText(lens.coating); // Simplification, idéalement mapping plus fin
+    const coat = cleanText(lens.coating);
 
     // 1. Géométrie
     if (type.includes('PROGRESSIF_INTERIEUR')) price += componentPrices['PROGRESSIF_INTERIEUR'] || 0;
@@ -315,17 +318,28 @@ function App() {
   // NOUVEAU : État pour les paires supplémentaires
   const [supplementaryPairs, setSupplementaryPairs] = useState([]);
 
+  // --- SÉCURISATION DU CHARGEMENT DES SETTINGS (Éviter écran blanc) ---
   const [userSettings, setUserSettings] = useState(() => {
     try { 
         const p = safeJSONParse("optique_user_settings", null); 
-        return p ? { 
+        if (!p) return DEFAULT_SETTINGS;
+        
+        // Deep Merge Safe : On s'assure que toutes les clés existent
+        return { 
             ...DEFAULT_SETTINGS, 
             ...p, 
             pricing: { ...DEFAULT_SETTINGS.pricing, ...(p.pricing || {}) },
             perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(p.perLensConfig || {}) },
-            supplementaryConfig: { ...DEFAULT_SETTINGS.supplementaryConfig, ...(p.supplementaryConfig || {}) }, // Merge config paires supp
+            supplementaryConfig: { 
+                ...DEFAULT_SETTINGS.supplementaryConfig, 
+                ...(p.supplementaryConfig || {}),
+                componentPrices: {
+                    ...DEFAULT_SETTINGS.supplementaryConfig.componentPrices,
+                    ...(p.supplementaryConfig?.componentPrices || {})
+                }
+            }, 
             disabledBrands: Array.isArray(p.disabledBrands) ? p.disabledBrands : [] 
-        } : DEFAULT_SETTINGS; 
+        }; 
     } catch { return DEFAULT_SETTINGS; }
   });
   useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
@@ -389,7 +403,6 @@ function App() {
            } 
        }
 
-       // ... (Calcul Prix Calisize & Modes Prix Vente : INCHANGÉ) ...
        // CALCUL PRIX + CALISIZE
        let calisizeAddon = 0;
        if (formData.calisize) {
@@ -536,20 +549,24 @@ function App() {
           const useSuperBonifie = isMainProg && isSecondPair;
           
           alternanceLenses = alternanceLenses.map(l => {
-              const cost = useSuperBonifie ? (l.purchase_price_super_bonifie || l.purchase_price) : (l.purchase_price_bonifie || l.purchase_price);
+              // Sécurité : fallback sur purchase_price si colonnes manquantes
+              const cost = useSuperBonifie 
+                ? (l.purchase_price_super_bonifie || l.purchase_price || 0) 
+                : (l.purchase_price_bonifie || l.purchase_price || 0);
               
               // Calcul Prix Vente
               let sellPrice = 0;
-              if (userSettings.supplementaryConfig?.mode === 'component') {
+              // Sécurité : vérification si componentPrices existe
+              if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
                   sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
               } else {
-                  // Mode Manuel (Fallback ou Config future)
-                  sellPrice = cost * 2.5; // Default fallback if no manual config
+                  // Mode Manuel ou Fallback
+                  sellPrice = cost * 2.5; 
               }
 
               return {
                   ...l,
-                  costForMargin: cost, // Stocke le coût utilisé pour le calcul de marge
+                  costForMargin: cost,
                   sellingPrice: sellPrice,
                   margin: sellPrice - cost
               };
@@ -585,7 +602,7 @@ function App() {
           supplementaryConfig: {
               ...prev.supplementaryConfig,
               componentPrices: {
-                  ...prev.supplementaryConfig.componentPrices,
+                  ...(prev.supplementaryConfig?.componentPrices || DEFAULT_SETTINGS.supplementaryConfig.componentPrices),
                   [key]: parseFloat(val) || 0
               }
           }
