@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.17"; // DESIGN : Police Poppins sur Login
+const APP_VERSION = "5.18"; // AJOUT : Affichage Live Marges dans Configurateur
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -414,12 +414,18 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                                         <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Index</th>
                                         <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Traitement</th>
                                         <th className="px-6 py-3 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Achat Moy.</th>
-                                        <th className="px-6 py-3 text-right text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 border-l border-blue-100 w-40">PRIX VENTE (€)</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 border-l border-blue-100 w-32">PRIX VENTE</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">Marge €</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">%</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-slate-100">
                                     {filteredRows.map((row) => {
                                         const price = localConfig.prices[row.key] || 0;
+                                        const purchase = safeNum(row.avg_purchase);
+                                        const margin = price - purchase;
+                                        const marginPercent = price > 0 ? (margin / price) * 100 : 0;
+
                                         return (
                                             <tr key={row.key} className="hover:bg-slate-50">
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-slate-800">{row.type}</td>
@@ -429,7 +435,7 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                                                     {row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}
                                                     {row.coating}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-right text-slate-400 font-mono">~{safeNum(row.avg_purchase).toFixed(0)}€</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-right text-slate-400 font-mono">~{purchase.toFixed(0)}€</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right bg-blue-50/30 border-l border-blue-100">
                                                     <input 
                                                         type="number" 
@@ -439,12 +445,18 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                                                         onChange={(e) => updatePrice(row.key, e.target.value)}
                                                     />
                                                 </td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-xs text-right font-bold ${margin > 0 ? 'text-green-600' : 'text-red-400'}`}>
+                                                    {price > 0 ? `${margin.toFixed(2)}€` : '-'}
+                                                </td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-xs text-right font-bold ${marginPercent > 40 ? 'text-green-600' : (marginPercent > 0 ? 'text-orange-500' : 'text-red-400')}`}>
+                                                    {price > 0 ? `${marginPercent.toFixed(0)}%` : '-'}
+                                                </td>
                                             </tr>
                                         )
                                     })}
                                     {filteredRows.length === 0 && (
                                         <tr>
-                                            <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-sm">
+                                            <td colSpan={8} className="px-6 py-12 text-center text-slate-400 text-sm">
                                                 Aucune combinaison trouvée. Vérifiez les filtres globaux ou la recherche.
                                             </td>
                                         </tr>
