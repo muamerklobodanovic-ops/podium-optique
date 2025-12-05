@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.32"; // AJOUT : Structure Tarifaire Dynamique (Scan Catalogue)
+const APP_VERSION = "5.33"; // AJOUT : Paramétrage Tarifs Décomposé (5 Axes)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS = {
     // Configuration Paires Supplémentaires (Structure dynamique)
     supplementaryConfig: {
         mode: 'component', 
-        componentPrices: {}, // Sera rempli par l'utilisateur : { 'UNIFOCAL': 30, '1.60': 10, ... }
+        componentPrices: {}, 
         manualPrices: {}
     },
     pricing: {
@@ -542,6 +542,25 @@ function PodiumCore() {
       .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
+  
+  // Extraction dynamique des attributs pour la configuration
+  const catalogAttributes = useMemo(() => {
+      const attrs = { types: new Set(), designs: new Set(), indices: new Set(), materials: new Set(), coatings: new Set() };
+      lenses.forEach(l => {
+          if(l.type) attrs.types.add(cleanText(l.type));
+          if(l.design) attrs.designs.add(cleanText(l.design));
+          if(l.index_mat) attrs.indices.add(cleanText(l.index_mat));
+          if(l.material) attrs.materials.add(cleanText(l.material));
+          if(l.coating) attrs.coatings.add(cleanText(l.coating));
+      });
+      return {
+          types: [...attrs.types].sort(),
+          designs: [...attrs.designs].sort(),
+          indices: [...attrs.indices].sort(),
+          materials: [...attrs.materials].sort(),
+          coatings: [...attrs.coatings].sort(),
+      };
+  }, [lenses]);
 
   useEffect(() => { if (window.location.hostname.includes("localhost")) return; const pingInterval = setInterval(() => { axios.get(API_URL, { params: { pocketLimit: -1 } }).catch(() => {}); }, 30 * 60 * 1000); return () => clearInterval(pingInterval); }, [API_URL]);
   useEffect(() => { const root = document.documentElement; if (userSettings.themeColor === 'custom') { const rgb = hexToRgb(userSettings.customColor); root.style.setProperty('--theme-primary', userSettings.customColor); } else { root.style.removeProperty('--theme-primary'); } }, [userSettings.themeColor, userSettings.customColor]);
@@ -791,12 +810,6 @@ function PodiumCore() {
   const toggleBrand = (brandId) => { setUserSettings(prev => { const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : []; const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId]; return { ...prev, disabledBrands: newDisabled }; }); };
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
-  
-  // -- FONCTIONS DÉFINIES À L'INTÉRIEUR POUR ÊTRE ACCESSIBLES DANS LE JSX --
-  const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
-  const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
-
-  // Déplacement de handleReset et handlePricingConfigSave ici pour qu'ils soient dans la portée
   const handleReset = () => {
       if(window.confirm("Tout remettre à zéro ?")) {
           sessionStorage.clear();
@@ -807,6 +820,10 @@ function PodiumCore() {
           setSelectedLens(null);
       }
   };
+
+  // -- FONCTIONS DÉFINIES À L'INTÉRIEUR POUR ÊTRE ACCESSIBLES DANS LE JSX --
+  const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
+  const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
 
   const handlePricingConfigSave = (newConfig) => { 
       setUserSettings(prev => ({ ...prev, perLensConfig: newConfig })); 
@@ -862,8 +879,8 @@ function PodiumCore() {
                       {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
                       <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{INDICES.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
                       <div><label className="text-[10px] font-bold opacity-50 mb-2 block">TRAITEMENTS</label><button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-[10px] font-bold rounded border ${formData.coating === '' ? 'text-white border-transparent' : 'border-transparent opacity-60'}`} style={formData.coating === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button><label className={`flex items-center gap-2 p-2 rounded border cursor-pointer mb-2 ${formData.photochromic ? 'bg-yellow-50 border-yellow-300' : 'border-transparent opacity-80'}`}><input type="checkbox" checked={formData.photochromic} onChange={handleChange} name="photochromic" className="accent-yellow-500"/><span className={`text-[10px] font-bold ${formData.photochromic ? 'text-yellow-700' : 'opacity-80'}`}>PHOTOCHROMIQUE</span></label><div className="flex flex-col gap-1">{availableCoatings.length > 0 ? availableCoatings.map(c => (<button key={c} onClick={() => handleCoatingChange(c)} className={`p-2 rounded border text-left text-[10px] font-bold ${formData.coating === c ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}>{c}</button>)) : <div className="text-[10px] opacity-50 italic text-center">Aucun traitement spécifique</div>}</div></div>
-                </div>
-            </aside>
+                  </div>
+              </aside>
 
             {/* RESULTATS */}
             <section className="flex-1 p-4 lg:p-6 overflow-y-auto pb-40">
@@ -976,21 +993,48 @@ function PodiumCore() {
                           </div>
                       </div>
                       {userSettings.supplementaryConfig?.mode === 'component' && (
-                          <div className="grid grid-cols-2 gap-4">
-                              <div><label className="text-[10px] font-bold text-slate-400 block mb-1">PRIX GÉOMÉTRIE (€)</label>
-                                  <div className="space-y-1">
-                                      {['UNIFOCAL', 'PROGRESSIF', 'DEGRESSIF', 'PROGRESSIF_INTERIEUR'].map(k => (
-                                          <div key={k} className="flex justify-between items-center"><span className="text-[10px]">{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-12 text-center border rounded text-xs p-1"/></div>
-                                      ))}
-                                  </div>
-                              </div>
-                              <div><label className="text-[10px] font-bold text-slate-400 block mb-1">SUPPLÉMENTS (€)</label>
-                                  <div className="space-y-1">
-                                      {['1.60', '1.67', 'HMC', 'BLUE', 'PHOTO', 'TEINTE'].map(k => (
-                                          <div key={k} className="flex justify-between items-center"><span className="text-[10px]">{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-12 text-center border rounded text-xs p-1"/></div>
-                                      ))}
-                                  </div>
-                              </div>
+                          <div className="grid grid-cols-5 gap-4">
+                                {/* 5 COLONNES DYNAMIQUES */}
+                                <div className="col-span-1 bg-white p-2 rounded border">
+                                    <label className="text-[9px] font-bold text-slate-400 block mb-2 uppercase border-b pb-1">GÉOMÉTRIE</label>
+                                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                                        {catalogAttributes.types.map(k => (
+                                            <div key={k} className="flex justify-between items-center"><span className="text-[9px] truncate w-16" title={k}>{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-10 text-center border rounded text-[9px] p-1"/></div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="col-span-1 bg-white p-2 rounded border">
+                                    <label className="text-[9px] font-bold text-slate-400 block mb-2 uppercase border-b pb-1">DESIGN</label>
+                                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                                        {catalogAttributes.designs.map(k => (
+                                            <div key={k} className="flex justify-between items-center"><span className="text-[9px] truncate w-16" title={k}>{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-10 text-center border rounded text-[9px] p-1"/></div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="col-span-1 bg-white p-2 rounded border">
+                                    <label className="text-[9px] font-bold text-slate-400 block mb-2 uppercase border-b pb-1">INDICE</label>
+                                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                                        {catalogAttributes.indices.map(k => (
+                                            <div key={k} className="flex justify-between items-center"><span className="text-[9px] truncate w-16" title={k}>{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-10 text-center border rounded text-[9px] p-1"/></div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="col-span-1 bg-white p-2 rounded border">
+                                    <label className="text-[9px] font-bold text-slate-400 block mb-2 uppercase border-b pb-1">MATIÈRE</label>
+                                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                                        {catalogAttributes.materials.map(k => (
+                                            <div key={k} className="flex justify-between items-center"><span className="text-[9px] truncate w-16" title={k}>{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-10 text-center border rounded text-[9px] p-1"/></div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="col-span-1 bg-white p-2 rounded border">
+                                    <label className="text-[9px] font-bold text-slate-400 block mb-2 uppercase border-b pb-1">TRAITEMENT</label>
+                                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                                        {catalogAttributes.coatings.map(k => (
+                                            <div key={k} className="flex justify-between items-center"><span className="text-[9px] truncate w-16" title={k}>{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-10 text-center border rounded text-[9px] p-1"/></div>
+                                        ))}
+                                    </div>
+                                </div>
                           </div>
                       )}
                   </div>
