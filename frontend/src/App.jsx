@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.25"; // CORRECTIF : PodiumCore Autonome (Login Fix)
+const APP_VERSION = "5.26"; // CORRECTIF : Restauration des réglages Ax+B complets
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -62,6 +62,7 @@ const LENS_TYPES = [ { id: '', label: 'TOUS' }, { id: 'UNIFOCAL', label: 'UNIFOC
 const INDICES = ['1.50', '1.58', '1.60', '1.67', '1.74'];
 const COATINGS = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
 
+const hexToRgb = (hex) => { if (!hex || typeof hex !== 'string') return "0 0 0"; const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0"; };
 const cleanText = (text) => { if (text === null || text === undefined) return ""; return String(text).toUpperCase().trim(); };
 const safeNum = (val) => { const num = parseFloat(val); return isNaN(num) ? 0 : num; };
 const safeJSONParse = (key, defaultValue) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : defaultValue; } catch { return defaultValue; } };
@@ -469,14 +470,7 @@ const LoginScreen = ({ onLogin }) => {
     );
 };
 
-// --- COMPOSANT PRINCIPAL AUTONOME ---
-function PodiumCore() {
-  const [user, setUser] = useState(() => { try { const s = sessionStorage.getItem("optique_user"); return s ? JSON.parse(s) : null; } catch { return null; } });
-
-  // Handlers de connexion
-  const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
-  const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); };
-
+function PodiumCore({ user, onLogout, onReset }) {
   const [lenses, setLenses] = useState([]); const [filteredLenses, setFilteredLenses] = useState([]); const [availableDesigns, setAvailableDesigns] = useState([]); const [availableCoatings, setAvailableCoatings] = useState([]);
   const [loading, setLoading] = useState(false); const [error, setError] = useState(null); const [isOnline, setIsOnline] = useState(true); 
   const [showSettings, setShowSettings] = useState(false); const [showMargins, setShowMargins] = useState(false); const [selectedLens, setSelectedLens] = useState(null); const [isSidebarOpen, setIsSidebarOpen] = useState(true); const [comparisonLens, setComparisonLens] = useState(null); const [showHistory, setShowHistory] = useState(false); const [savedOffers, setSavedOffers] = useState([]); 
@@ -533,6 +527,20 @@ function PodiumCore() {
   const SYNC_URL = `${baseBackendUrl}/sync`;
   const UPLOAD_URL = `${baseBackendUrl}/upload-catalog`; 
   const SAVE_URL = `${baseBackendUrl}/offers`;
+
+  // --- HOISTING DU FETCHDATA (Correction du ReferenceError) ---
+  const fetchData = () => {
+    setLoading(true); setError(null); 
+    const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
+    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
+    
+    const params = { brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 };
+    if (formData.type) params.type = formData.type;
+
+    axios.get(API_URL, { params })
+      .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
+      .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
+  };
 
   useEffect(() => { if (window.location.hostname.includes("localhost")) return; const pingInterval = setInterval(() => { axios.get(API_URL, { params: { pocketLimit: -1 } }).catch(() => {}); }, 30 * 60 * 1000); return () => clearInterval(pingInterval); }, [API_URL]);
   useEffect(() => { const root = document.documentElement; if (userSettings.themeColor === 'custom') { const rgb = hexToRgb(userSettings.customColor); root.style.setProperty('--theme-primary', userSettings.customColor); } else { root.style.removeProperty('--theme-primary'); } }, [userSettings.themeColor, userSettings.customColor]);
@@ -668,100 +676,39 @@ function PodiumCore() {
     } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
   }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.pricingMode, userSettings.perLensConfig]);
 
-  const fetchData = () => {
-    setLoading(true); setError(null); 
-    const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
-    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
-    
-    const params = { brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 };
-    if (formData.type) params.type = formData.type;
-
-    axios.get(API_URL, { params })
-      .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
-      .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
-  };
-
-  const handleReset = () => {
-      if(window.confirm("Tout remettre à zéro ?")) {
-          sessionStorage.clear();
-          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
-          setSecondPairPrice(0);
-          setSupplementaryPairs([]); // Reset des paires supp
-          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false });
-          setSelectedLens(null);
-      }
-  };
-
-  const handlePricingConfigSave = (newConfig) => {
-      setUserSettings(prev => ({ ...prev, perLensConfig: newConfig }));
-      setShowPricingConfig(false);
-  };
-
-  // --- GESTION PAIRES SUPPLÉMENTAIRES ---
   const handleAddSupplementaryPair = (type) => {
-      // type = 'discount' (-50%) ou 'alternance'
       const newId = Date.now();
-      
       if (type === 'discount') {
-          // Logique -50% : On clone le verre sélectionné
           if (!selectedLens) return alert("Veuillez d'abord sélectionner une première paire.");
           setSupplementaryPairs(prev => [...prev, {
               id: newId,
               type: 'discount',
-              lens: { ...selectedLens, sellingPrice: selectedLens.sellingPrice * 0.5 }, // Prix réduit
+              lens: { ...selectedLens, sellingPrice: selectedLens.sellingPrice * 0.5 },
               description: "Offre -50% Identique"
           }]);
       } else {
-          // Logique Alternance : On va chercher les verres de la gamme ALTERNANCE
-          // Critère 1 : Filtrer par type (Progressif ou Unifocal selon 1ere paire)
           const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
           const targetType = isMainProg ? 'PROGRESSIF' : 'UNIFOCAL';
-          
           let alternanceLenses = lenses.filter(l => cleanText(l.brand) === 'ALTERNANCE' && cleanText(l.type).includes(targetType));
-          
-          // Critère 2 : Déterminer le coût (Super Bonifié vs Bonifié)
-          // Règle : Si 1ere paire = Prog -> 2ème paire = Super Bonifié, 3ème+ = Bonifié
-          // Si 1ere paire = Uni -> Toutes paires supp = Bonifié
           const isSecondPair = supplementaryPairs.length === 0;
           const useSuperBonifie = isMainProg && isSecondPair;
           
           alternanceLenses = alternanceLenses.map(l => {
-              // Sécurité : fallback sur purchase_price si colonnes manquantes
               const cost = useSuperBonifie 
                 ? (l.purchase_price_super_bonifie || l.purchase_price || 0) 
                 : (l.purchase_price_bonifie || l.purchase_price || 0);
-              
-              // Calcul Prix Vente
               let sellPrice = 0;
-              // Sécurité : vérification si componentPrices existe
               if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
                   sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
               } else {
-                  // Mode Manuel ou Fallback
                   sellPrice = cost * 2.5; 
               }
-
-              return {
-                  ...l,
-                  costForMargin: cost,
-                  sellingPrice: sellPrice,
-                  margin: sellPrice - cost
-              };
+              return { ...l, costForMargin: cost, sellingPrice: sellPrice, margin: sellPrice - cost };
           });
-
-          // Tri par marge décroissante (Optimisation)
           alternanceLenses.sort((a, b) => b.margin - a.margin);
-
-          // On prend le meilleur verre (le premier de la liste triée) ou un placeholder si vide
           const bestOption = alternanceLenses.length > 0 ? alternanceLenses[0] : null;
-
           if (bestOption) {
-              setSupplementaryPairs(prev => [...prev, {
-                  id: newId,
-                  type: 'alternance',
-                  lens: bestOption,
-                  description: `Offre Alternance (${useSuperBonifie ? 'Super Bonifié' : 'Bonifié'})`
-              }]);
+              setSupplementaryPairs(prev => [...prev, { id: newId, type: 'alternance', lens: bestOption, description: `Offre Alternance (${useSuperBonifie ? 'Super Bonifié' : 'Bonifié'})` }]);
           } else {
               alert("Aucun verre Alternance correspondant trouvé dans le catalogue.");
           }
@@ -793,7 +740,6 @@ function PodiumCore() {
       const mainPairPrice = selectedLens.sellingPrice * 2;
       // Calcul total paires supp
       const suppTotal = supplementaryPairs.reduce((acc, pair) => acc + (pair.lens.sellingPrice * 2), 0);
-      
       const totalGlobal = mainPairPrice + suppTotal;
       const remainder = totalGlobal - parseFloat(client.reimbursement || 0);
 
@@ -828,28 +774,19 @@ function PodiumCore() {
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
   const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
 
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
-
-  const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
+  // --- RESTAURATION DU RÔLE ADMIN ---
   const safePricing = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
-  const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
-  const totalPair = lensPrice * 2;
-  // Calcul total global
-  const totalSupp = supplementaryPairs.reduce((acc, p) => acc + (p.lens.sellingPrice * 2), 0);
-  const totalRefund = parseFloat(client.reimbursement || 0);
-  const remainder = (totalPair + totalSupp) - totalRefund;
+  // ...
 
   return (
       <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Poppins'] uppercase transition-colors duration-300`}>
           <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
           
-          {/* ERROR BOUNDARY ACTIVE POUR LE CONTENU CONNECTÉ */}
           {showPricingConfig && (<PricingConfigurator lenses={lenses} config={userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} }} onSave={handlePricingConfigSave} onClose={() => setShowPricingConfig(false)}/>)}
 
-          {/* HEADER & SIDEBAR KEPT SAME AS PREVIOUS VERSION */}
           <div className="bg-slate-900 text-white px-4 lg:px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
               <div className="flex items-center gap-3"><button onClick={toggleSidebar} className="lg:hidden p-1 rounded hover:bg-slate-700"><Menu className="w-5 h-5"/></button>{currentSettings.shopLogo ? (<img src={currentSettings.shopLogo} alt="Logo" className="h-8 w-auto object-contain rounded bg-white p-0.5"/>) : (<div className="h-8 w-8 bg-slate-700 rounded flex items-center justify-center"><Store className="w-4 h-4"/></div>)}<span>{currentSettings.shopName}</span></div>
-              <div className="flex items-center gap-4"><button onClick={handleReset} className="flex items-center gap-1 text-red-400 hover:text-red-300" title="RAZ"><RotateCcw className="w-4 h-4"/> <span className="hidden sm:inline">RAZ</span></button><button onClick={handleLogout} className="flex items-center gap-1 text-red-400 hover:text-red-300"><LogOut className="w-4 h-4"/> <span className="hidden sm:inline">QUITTER</span></button></div>
+              <div className="flex items-center gap-4"><button onClick={handleReset} className="flex items-center gap-1 text-red-400 hover:text-red-300" title="RAZ"><RotateCcw className="w-4 h-4"/> <span className="hidden sm:inline">RAZ</span></button><button onClick={onLogout} className="flex items-center gap-1 text-red-400 hover:text-red-300"><LogOut className="w-4 h-4"/> <span className="hidden sm:inline">QUITTER</span></button></div>
           </div>
           <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-4 lg:px-6 py-4 shadow-sm z-40`}>
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -967,7 +904,7 @@ function PodiumCore() {
             <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
               <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
                   <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
-                  {/* ADMIN */}
+                  {/* ADMIN - Restored */}
                   {user?.role === 'admin' && (
                     <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 mb-6">
                         <h3 className="text-xs font-bold text-orange-700 mb-3 flex items-center gap-2"><Lock className="w-3 h-3"/> ADMINISTRATION</h3>
@@ -1010,33 +947,31 @@ function PodiumCore() {
                       )}
                   </div>
 
-                  {/* PRIX MARCHÉ LIBRE (Reste inchangé) */}
-                    <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE (1ère Paire)</h4>
-                      {/* SÉLECTEUR DE MODE */}
-                      <div className="mb-6 flex gap-4 p-1 bg-slate-100 rounded-xl">
-                          <button 
-                              onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'linear' }))}
-                              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'linear' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}
-                          >
-                              FORMULE (Ax + B)
-                          </button>
-                          <button 
-                              onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'per_lens' }))}
-                              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'per_lens' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}
-                          >
-                              MANUEL (AU VERRE)
-                          </button>
-                      </div>
-                      {/* ... Contenu mode lineaire/manuel existant ... */}
-                      {userSettings.pricingMode === 'linear' ? (
-                          <div className="grid grid-cols-1 gap-4">
+                  {/* PRIX MARCHÉ LIBRE - RESTORED FULL LIST */}
+                   <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE (1ère Paire)</h4>
+                     <div className="mb-6 flex gap-4 p-1 bg-slate-100 rounded-xl">
+                         <button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'linear' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'linear' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>FORMULE (Ax + B)</button>
+                         <button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'per_lens' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'per_lens' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>MANUEL (AU VERRE)</button>
+                     </div>
+                     {userSettings.pricingMode === 'linear' ? (
+                         <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-4">
+                            <div className="flex items-center justify-between bg-indigo-50 p-2 rounded border border-indigo-100"><span className="text-xs font-bold text-indigo-700">SUPPLÉMENT CALISIZE (€)</span><input type="number" step="1" value={safePricing.calisize?.price ?? 10} onChange={(e) => handlePriceRuleChange('calisize', 'price', e.target.value)} className="w-16 p-1 border rounded text-center text-xs font-bold text-indigo-700"/></div>
                             <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
                             <div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                          </div>
-                      ) : (
-                          <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center"><button onClick={() => setShowPricingConfig(true)} className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs">OUVRIR LE CONFIGURATEUR</button></div>
-                      )}
-                    </div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                         </div>
+                     ) : (
+                         <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 text-center animate-in fade-in slide-in-from-right-4">
+                             <ListFilter className="w-10 h-10 text-blue-500 mx-auto mb-3"/>
+                             <h3 className="font-bold text-blue-900 mb-2">Configuration Manuelle</h3>
+                             <p className="text-xs text-blue-700 mb-6">Définissez vos prix de vente et la disponibilité des verres ligne par ligne.</p>
+                             <button onClick={() => setShowPricingConfig(true)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"><Settings className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR</button>
+                         </div>
+                     )}
+                   </div>
                   <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
               </div>
             </div>
