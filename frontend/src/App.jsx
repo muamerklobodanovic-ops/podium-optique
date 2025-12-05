@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.10"; // AJOUT : Mode Tarification "Au Verre" (Manuel)
+const APP_VERSION = "5.11"; // CORRECTIF : Crash Configurateur (Valeurs nulles)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -19,12 +19,10 @@ const DEFAULT_SETTINGS = {
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
     disabledBrands: [],
-    // NOUVEAU : Mode de tarification
-    pricingMode: 'linear', // 'linear' (Ax+B) ou 'per_lens' (manuel)
-    // NOUVEAU : Configuration manuelle
+    pricingMode: 'linear', 
     perLensConfig: {
-        disabledAttributes: { designs: [], indices: [], coatings: [] }, // Ce qui est OFF globalement
-        prices: {} // Clé unique -> Prix de vente
+        disabledAttributes: { designs: [], indices: [], coatings: [] }, 
+        prices: {} 
     },
     pricing: {
         uniStock: { x: 2.5, b: 20 },   
@@ -37,14 +35,8 @@ const DEFAULT_SETTINGS = {
     }
 };
 
-// Tarifs fixes Réseaux pour le Calisize
 const CALISIZE_NETWORK_PRICES = {
-    'KALIXIA': 12,
-    'CARTEBLANCHE': 20,
-    'ITELIS': 10,
-    'SEVEANE': 10,
-    'SANTECLAIR': 10,
-    'HORS_RESEAU': 0 // Utilise le paramètre settings
+    'KALIXIA': 12, 'CARTEBLANCHE': 20, 'ITELIS': 10, 'SEVEANE': 10, 'SANTECLAIR': 10, 'HORS_RESEAU': 0 
 };
 
 const DEMO_LENSES = [
@@ -52,27 +44,16 @@ const DEMO_LENSES = [
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
 ];
 
-// --- LISTES STATIQUES ---
 const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
 const NETWORKS = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
-const LENS_TYPES = [ 
-    { id: '', label: 'TOUS' }, 
-    { id: 'UNIFOCAL', label: 'UNIFOCAL' }, 
-    { id: 'PROGRESSIF', label: 'PROGRESSIF' }, 
-    { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, 
-    { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, 
-    { id: "PROGRESSIF_INTERIEUR", label: "PROG. INTÉRIEUR" } 
-];
+const LENS_TYPES = [ { id: '', label: 'TOUS' }, { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF_INTERIEUR", label: "PROG. INTÉRIEUR" } ];
 const INDICES = ['1.50', '1.58', '1.60', '1.67', '1.74'];
 const COATINGS = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
 
-// --- OUTILS ---
 const hexToRgb = (hex) => { if (!hex || typeof hex !== 'string') return "0 0 0"; const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0"; };
 const cleanText = (text) => { if (text === null || text === undefined) return ""; return String(text).toUpperCase().trim(); };
 const safeNum = (val) => { const num = parseFloat(val); return isNaN(num) ? 0 : num; };
 const safeJSONParse = (key, defaultValue) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : defaultValue; } catch { return defaultValue; } };
-
-// Génère une clé unique pour grouper les verres dans le configurateur
 const getLensKey = (l) => `${cleanText(l.type)}_${cleanText(l.design)}_${cleanText(l.index_mat)}_${cleanText(l.coating)}`;
 
 // --- COMPOSANTS UI ---
@@ -131,43 +112,54 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   );
 };
 
-// --- NOUVEAU COMPOSANT : CONFIGURATEUR TARIFAIRE ---
+// --- CORRECTIF : CONFIGURATEUR TARIFAIRE ROBUSTE ---
 const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
-    // Extraction des combinaisons uniques pour le tableau
+    // 1. Sécurisation : On nettoie les données AVANT de les mettre dans le Map
+    // Cela empêche le crash lors du tri si 'type' ou 'design' est null
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
             const key = getLensKey(l);
             if (!map.has(key)) {
+                // IMPORTANT : On utilise cleanText ici pour être sûr que ce sont des strings
                 map.set(key, {
                     key,
-                    type: l.type,
-                    design: l.design,
-                    index_mat: l.index_mat,
-                    coating: l.coating,
-                    avg_purchase: l.purchase_price // Prix indicatif
+                    type: cleanText(l.type),      
+                    design: cleanText(l.design),
+                    index_mat: cleanText(l.index_mat),
+                    coating: cleanText(l.coating),
+                    avg_purchase: l.purchase_price
                 });
             }
         });
+        // Le tri est maintenant sûr car on compare des strings nettoyées
         return Array.from(map.values()).sort((a, b) => a.type.localeCompare(b.type) || a.design.localeCompare(b.design));
     }, [lenses]);
 
-    // Extraction pour les filtres globaux
-    const availableDesigns = [...new Set(lenses.map(l => l.design))].sort();
-    const availableIndices = [...new Set(lenses.map(l => l.index_mat))].sort();
-    const availableCoatings = [...new Set(lenses.map(l => l.coating))].sort();
+    const availableDesigns = [...new Set(lenses.map(l => cleanText(l.design)))].sort().filter(Boolean);
+    const availableIndices = [...new Set(lenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean);
+    const availableCoatings = [...new Set(lenses.map(l => cleanText(l.coating)))].sort().filter(Boolean);
 
-    // État local pour modifications avant sauvegarde
-    const [localConfig, setLocalConfig] = useState(JSON.parse(JSON.stringify(config)));
+    // 2. Sécurisation : Valeurs par défaut pour éviter le crash si la config est partielle
+    const [localConfig, setLocalConfig] = useState(() => {
+        const safeConfig = JSON.parse(JSON.stringify(config || {}));
+        if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = { designs: [], indices: [], coatings: [] };
+        if (!safeConfig.prices) safeConfig.prices = {};
+        // Double sécurité sur les tableaux
+        if (!safeConfig.disabledAttributes.designs) safeConfig.disabledAttributes.designs = [];
+        if (!safeConfig.disabledAttributes.indices) safeConfig.disabledAttributes.indices = [];
+        if (!safeConfig.disabledAttributes.coatings) safeConfig.disabledAttributes.coatings = [];
+        return safeConfig;
+    });
 
     const toggleAttribute = (type, value) => {
         const current = localConfig.disabledAttributes[type] || [];
         const isCurrentlyDisabled = current.includes(value);
         let updated;
         if (isCurrentlyDisabled) {
-            updated = current.filter(v => v !== value); // Réactiver
+            updated = current.filter(v => v !== value); 
         } else {
-            updated = [...current, value]; // Désactiver
+            updated = [...current, value]; 
         }
         setLocalConfig(prev => ({
             ...prev,
@@ -182,21 +174,19 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
         }));
     };
 
-    // Filtre pour le tableau affiché
     const [filterText, setFilterText] = useState("");
 
     const filteredRows = uniqueCombinations.filter(row => {
-        // Appliquer filtres globaux
-        if (localConfig.disabledAttributes.designs.includes(row.design)) return false;
-        if (localConfig.disabledAttributes.indices.includes(row.index_mat)) return false;
-        if (localConfig.disabledAttributes.coatings.includes(row.coating)) return false;
-        // Filtre texte
+        // Sécurité lors de l'accès aux tableaux (|| [])
+        if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
+        if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
+        if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
+        
         return (row.type + row.design + row.coating).toLowerCase().includes(filterText.toLowerCase());
     });
 
     return (
         <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-sans">
-            {/* Header */}
             <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
                 <div>
                     <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -212,13 +202,12 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
             </div>
 
             <div className="flex-1 overflow-hidden flex">
-                {/* Sidebar Filtres Globaux */}
                 <aside className="w-80 bg-white border-r overflow-y-auto p-6 space-y-8">
                     <div>
                         <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">Disponibilité Indices</h3>
                         <div className="flex flex-wrap gap-2">
                             {availableIndices.map(idx => {
-                                const isDisabled = localConfig.disabledAttributes.indices.includes(idx);
+                                const isDisabled = (localConfig.disabledAttributes.indices || []).includes(idx);
                                 return (
                                     <button 
                                         key={idx}
@@ -236,7 +225,7 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                         <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">Disponibilité Designs</h3>
                         <div className="flex flex-col gap-2">
                             {availableDesigns.map(d => {
-                                const isDisabled = localConfig.disabledAttributes.designs.includes(d);
+                                const isDisabled = (localConfig.disabledAttributes.designs || []).includes(d);
                                 return (
                                     <button 
                                         key={d}
@@ -254,7 +243,7 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                         <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">Disponibilité Traitements</h3>
                         <div className="flex flex-col gap-2">
                             {availableCoatings.map(c => {
-                                const isDisabled = localConfig.disabledAttributes.coatings.includes(c);
+                                const isDisabled = (localConfig.disabledAttributes.coatings || []).includes(c);
                                 return (
                                     <button 
                                         key={c}
@@ -270,7 +259,6 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                     </div>
                 </aside>
 
-                {/* Tableau principal */}
                 <main className="flex-1 flex flex-col bg-slate-50">
                     <div className="p-4 border-b bg-white flex items-center gap-4">
                         <Search className="w-5 h-5 text-slate-400"/>
@@ -471,9 +459,9 @@ function App() {
               
               workingList = workingList.filter(lens => {
                   // 1. Filtrer les exclus (OFF)
-                  if (config.disabledAttributes.designs.includes(lens.design)) return false;
-                  if (config.disabledAttributes.indices.includes(lens.index_mat)) return false;
-                  if (config.disabledAttributes.coatings.includes(lens.coating)) return false;
+                  if ((config.disabledAttributes.designs || []).includes(lens.design)) return false;
+                  if ((config.disabledAttributes.indices || []).includes(lens.index_mat)) return false;
+                  if ((config.disabledAttributes.coatings || []).includes(lens.coating)) return false;
                   
                   // 2. Vérifier si un prix est défini
                   const key = getLensKey(lens);
