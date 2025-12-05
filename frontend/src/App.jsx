@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.15"; // AJOUT : Filtres Latéraux Dynamiques (liés à la Marque)
+const APP_VERSION = "5.16"; // DESIGN : Police Poppins + Logo Login CODIR
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -124,7 +124,6 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterBrand, setFilterBrand] = useState(''); // Filtre Marque (Vide = Tous)
 
     // 1. Sécurisation et Détection Photochromique & Marque & Extraction Dynamique
-    // On calcule d'abord les verres filtrés par marque pour les filtres latéraux
     const availableAttributes = useMemo(() => {
         const filteredLenses = filterBrand 
             ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand))
@@ -139,7 +138,6 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
 
     const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
 
-    // Ensuite, on calcule les combinaisons uniques pour le tableau (qui inclut aussi le filtrage par marque)
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
@@ -160,7 +158,6 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
         return Array.from(map.values()).sort((a, b) => a.type.localeCompare(b.type) || a.design.localeCompare(b.design));
     }, [lenses]);
     
-    // Extraction des marques disponibles (toutes les marques, pas seulement celles filtrées)
     const availableBrands = useMemo(() => {
         const brands = new Set(lenses.map(l => cleanText(l.brand)));
         return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id)));
@@ -247,7 +244,7 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-sans">
+        <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-['Poppins']">
             <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
                 <div>
                     <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -475,9 +472,15 @@ const LoginScreen = ({ onLogin }) => {
             .catch(err => { setError(err.response?.data?.detail || "Erreur de connexion"); setLoading(false); });
     };
     return (
-        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-['Poppins']">
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
-                <div className="text-center mb-8"><div className="inline-flex p-4 bg-blue-50 rounded-full mb-4 text-blue-600"><Store className="w-8 h-8"/></div><h1 className="text-2xl font-bold text-slate-800">Podium Optique</h1><p className="text-sm text-slate-400 mt-2">Identification requise</p></div>
+                <div className="text-center mb-8">
+                    <div className="mb-6 flex justify-center">
+                        <img src="/logos/codir.png" alt="Podium Optique" className="h-16 w-auto object-contain" />
+                    </div>
+                    <h1 className="text-2xl font-bold text-slate-800">Podium Optique</h1>
+                    <p className="text-sm text-slate-400 mt-2">Identification requise</p>
+                </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div><label className="block text-xs font-bold text-slate-500 mb-1">IDENTIFIANT</label><input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 ring-blue-100 outline-none transition-all" placeholder="Votre identifiant" required /></div>
                     <div><label className="block text-xs font-bold text-slate-500 mb-1">MOT DE PASSE</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 ring-blue-100 outline-none transition-all" placeholder="••••••••" required /></div>
@@ -776,7 +779,11 @@ function App() {
   const remainder = (totalPair + secondPairPrice) - totalRefund;
 
   return (
-    <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Arial'] uppercase transition-colors duration-300`}>
+    <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Poppins'] uppercase transition-colors duration-300`}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+      `}</style>
+      
       {/* MODALE PLEIN ÉCRAN CONFIGURATEUR */}
       {showPricingConfig && (
           <PricingConfigurator 
