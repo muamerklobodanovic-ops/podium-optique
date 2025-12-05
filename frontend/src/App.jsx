@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.24"; // RETOUR : Section Admin (Import Catalogues/Clients)
+const APP_VERSION = "5.24"; // CORRECTIF : Structure JSX réparée
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -79,6 +79,7 @@ const checkIsPhoto = (item) => {
     return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN");
 };
 
+// --- LOGIQUE DE CALCUL DU PRIX COMPOSANTS ---
 const calculateComponentPrice = (lens, componentPrices) => {
     let price = 0;
     if (!componentPrices) return 0; 
@@ -104,6 +105,7 @@ const calculateComponentPrice = (lens, componentPrices) => {
     return price;
 };
 
+// --- BARRIÈRE DE SÉCURITÉ (ERROR BOUNDARY) ---
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -125,6 +127,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// --- COMPOSANTS UI ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const [hasError, setHasError] = useState(false);
   const safeBrand = brand || 'unknown';
@@ -610,6 +613,20 @@ function PodiumCore({ user, onLogout, onReset }) {
   const UPLOAD_URL = `${baseBackendUrl}/upload-catalog`; 
   const SAVE_URL = `${baseBackendUrl}/offers`;
 
+  // --- HOISTING DU FETCHDATA (Correction du ReferenceError) ---
+  const fetchData = () => {
+    setLoading(true); setError(null); 
+    const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
+    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
+    
+    const params = { brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 };
+    if (formData.type) params.type = formData.type;
+
+    axios.get(API_URL, { params })
+      .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
+      .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
+  };
+
   useEffect(() => { if (window.location.hostname.includes("localhost")) return; const pingInterval = setInterval(() => { axios.get(API_URL, { params: { pocketLimit: -1 } }).catch(() => {}); }, 30 * 60 * 1000); return () => clearInterval(pingInterval); }, [API_URL]);
   useEffect(() => { const root = document.documentElement; if (userSettings.themeColor === 'custom') { const rgb = hexToRgb(userSettings.customColor); root.style.setProperty('--theme-primary', userSettings.customColor); } else { root.style.removeProperty('--theme-primary'); } }, [userSettings.themeColor, userSettings.customColor]);
 
@@ -744,154 +761,51 @@ function PodiumCore({ user, onLogout, onReset }) {
     } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
   }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.pricingMode, userSettings.perLensConfig]);
 
-  const fetchData = () => {
-    setLoading(true); setError(null); 
-    const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
-    if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
-    
-    const params = { brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 };
-    if (formData.type) params.type = formData.type;
-
-    axios.get(API_URL, { params })
-      .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
-      .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
-  };
-
-  const handleReset = () => {
-      if(window.confirm("Tout remettre à zéro ?")) {
-          sessionStorage.clear();
-          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
-          setSecondPairPrice(0);
-          setSupplementaryPairs([]); // Reset des paires supp
-          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false });
-          setSelectedLens(null);
-      }
-  };
-
-  const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
-  const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); };
-  
-  const handlePricingConfigSave = (newConfig) => {
-      setUserSettings(prev => ({ ...prev, perLensConfig: newConfig }));
-      setShowPricingConfig(false);
-  };
-
-  // --- GESTION PAIRES SUPPLÉMENTAIRES ---
   const handleAddSupplementaryPair = (type) => {
-      // type = 'discount' (-50%) ou 'alternance'
       const newId = Date.now();
-      
       if (type === 'discount') {
-          // Logique -50% : On clone le verre sélectionné
           if (!selectedLens) return alert("Veuillez d'abord sélectionner une première paire.");
           setSupplementaryPairs(prev => [...prev, {
               id: newId,
               type: 'discount',
-              lens: { ...selectedLens, sellingPrice: selectedLens.sellingPrice * 0.5 }, // Prix réduit
+              lens: { ...selectedLens, sellingPrice: selectedLens.sellingPrice * 0.5 },
               description: "Offre -50% Identique"
           }]);
       } else {
-          // Logique Alternance : On va chercher les verres de la gamme ALTERNANCE
-          // Critère 1 : Filtrer par type (Progressif ou Unifocal selon 1ere paire)
           const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
           const targetType = isMainProg ? 'PROGRESSIF' : 'UNIFOCAL';
-          
           let alternanceLenses = lenses.filter(l => cleanText(l.brand) === 'ALTERNANCE' && cleanText(l.type).includes(targetType));
-          
-          // Critère 2 : Déterminer le coût (Super Bonifié vs Bonifié)
-          // Règle : Si 1ere paire = Prog -> 2ème paire = Super Bonifié, 3ème+ = Bonifié
-          // Si 1ere paire = Uni -> Toutes paires supp = Bonifié
           const isSecondPair = supplementaryPairs.length === 0;
           const useSuperBonifie = isMainProg && isSecondPair;
           
           alternanceLenses = alternanceLenses.map(l => {
-              // Sécurité : fallback sur purchase_price si colonnes manquantes
               const cost = useSuperBonifie 
                 ? (l.purchase_price_super_bonifie || l.purchase_price || 0) 
                 : (l.purchase_price_bonifie || l.purchase_price || 0);
-              
-              // Calcul Prix Vente
               let sellPrice = 0;
-              // Sécurité : vérification si componentPrices existe
               if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
                   sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
               } else {
-                  // Mode Manuel ou Fallback
                   sellPrice = cost * 2.5; 
               }
-
-              return {
-                  ...l,
-                  costForMargin: cost,
-                  sellingPrice: sellPrice,
-                  margin: sellPrice - cost
-              };
+              return { ...l, costForMargin: cost, sellingPrice: sellPrice, margin: sellPrice - cost };
           });
-
-          // Tri par marge décroissante (Optimisation)
           alternanceLenses.sort((a, b) => b.margin - a.margin);
-
-          // On prend le meilleur verre (le premier de la liste triée) ou un placeholder si vide
           const bestOption = alternanceLenses.length > 0 ? alternanceLenses[0] : null;
-
           if (bestOption) {
-              setSupplementaryPairs(prev => [...prev, {
-                  id: newId,
-                  type: 'alternance',
-                  lens: bestOption,
-                  description: `Offre Alternance (${useSuperBonifie ? 'Super Bonifié' : 'Bonifié'})`
-              }]);
+              setSupplementaryPairs(prev => [...prev, { id: newId, type: 'alternance', lens: bestOption, description: `Offre Alternance (${useSuperBonifie ? 'Super Bonifié' : 'Bonifié'})` }]);
           } else {
               alert("Aucun verre Alternance correspondant trouvé dans le catalogue.");
           }
       }
   };
-
-  const removeSupplementaryPair = (id) => {
-      setSupplementaryPairs(prev => prev.filter(p => p.id !== id));
-  };
-
-  // Mise à jour Setting Supp
-  const updateComponentPrice = (key, val) => {
-      setUserSettings(prev => ({
-          ...prev,
-          supplementaryConfig: {
-              ...prev.supplementaryConfig,
-              componentPrices: {
-                  ...(prev.supplementaryConfig?.componentPrices || DEFAULT_SETTINGS.supplementaryConfig.componentPrices),
-                  [key]: parseFloat(val) || 0
-              }
-          }
-      }));
-  };
-
-  const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
-  const saveOffer = () => {
-      if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
-      
-      const mainPairPrice = selectedLens.sellingPrice * 2;
-      // Calcul total paires supp
-      const suppTotal = supplementaryPairs.reduce((acc, pair) => acc + (pair.lens.sellingPrice * 2), 0);
-      
-      const totalGlobal = mainPairPrice + suppTotal;
-      const remainder = totalGlobal - parseFloat(client.reimbursement || 0);
-
-      const lensWithCorrection = { ...selectedLens, correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } };
-      
-      const payload = { 
-          client: client, 
-          lens: lensWithCorrection, 
-          supplementaryPairs: supplementaryPairs, // Sauvegarde des paires supp
-          finance: { reimbursement: client.reimbursement, total: totalGlobal, remainder: remainder } 
-      };
-      axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
-  };
-  const deleteOffer = (id) => {
-      if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) {
-          axios.delete(`${SAVE_URL}/${id}`).then(() => { alert("Dossier supprimé."); fetchHistory(); }).catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); });
-      }
-  };
-  // ... (Upload functions kept identical) ...
+  const removeSupplementaryPair = (id) => { setSupplementaryPairs(prev => prev.filter(p => p.id !== id)); };
+  const updateComponentPrice = (key, val) => { setUserSettings(prev => ({ ...prev, supplementaryConfig: { ...prev.supplementaryConfig, componentPrices: { ...(prev.supplementaryConfig?.componentPrices || DEFAULT_SETTINGS.supplementaryConfig.componentPrices), [key]: parseFloat(val) || 0 } } })); };
+  const handlePricingConfigSave = (newConfig) => { setUserSettings(prev => ({ ...prev, perLensConfig: newConfig })); setShowPricingConfig(false); };
+  const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
+  const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
+  const saveOffer = () => { if (!selectedLens || !client.name) return alert("Nom client obligatoire !"); const mainPairPrice = selectedLens.sellingPrice * 2; const suppTotal = supplementaryPairs.reduce((acc, pair) => acc + (pair.lens.sellingPrice * 2), 0); const totalGlobal = mainPairPrice + suppTotal; const remainder = totalGlobal - parseFloat(client.reimbursement || 0); const lensWithCorrection = { ...selectedLens, correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } }; const payload = { client: client, lens: lensWithCorrection, supplementaryPairs: supplementaryPairs, finance: { reimbursement: client.reimbursement, total: totalGlobal, remainder: remainder } }; axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur")); };
+  const deleteOffer = (id) => { if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) { axios.delete(`${SAVE_URL}/${id}`).then(() => { alert("Dossier supprimé."); fetchHistory(); }).catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); }); } };
   const triggerFileUpload = () => { if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)"); setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile); axios.post(UPLOAD_URL, data, { onUploadProgress: (e) => { setUploadProgress(Math.round((e.loaded * 100) / e.total)); } }).then(res => { alert(`✅ Succès ! ${res.data.count} verres importés.`); fetchData(); }).catch(err => { console.error("Upload Error:", err); const msg = err.response?.data?.detail || err.message; alert(`❌ Erreur upload : ${msg}`); }).finally(() => { setSyncLoading(false); setUploadProgress(0); }); };
   const triggerUserUpload = () => { if (!userFile) return alert("Sélectionner un fichier Excel"); setSyncLoading(true); const data = new FormData(); data.append('file', userFile); axios.post(`${baseBackendUrl}/upload-users`, data).then(res => alert(`✅ ${res.data.count} utilisateurs importés`)).catch(err => { const msg = err.response?.data?.detail || err.message; alert(`Erreur upload utilisateurs: ${msg}`); }).finally(() => setSyncLoading(false)); };
   const handleLogoUpload = (e, target = 'shop') => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); } };
@@ -905,6 +819,16 @@ function PodiumCore({ user, onLogout, onReset }) {
   const toggleBrand = (brandId) => { setUserSettings(prev => { const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : []; const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId]; return { ...prev, disabledBrands: newDisabled }; }); };
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
+  const handleReset = () => {
+      if(window.confirm("Tout remettre à zéro ?")) {
+          sessionStorage.clear();
+          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
+          setSecondPairPrice(0);
+          setSupplementaryPairs([]); 
+          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false });
+          setSelectedLens(null);
+      }
+  };
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
@@ -922,7 +846,7 @@ function PodiumCore({ user, onLogout, onReset }) {
           <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
           
           {/* ERROR BOUNDARY ACTIVE POUR LE CONTENU CONNECTÉ */}
-          <ErrorBoundary>
+          {/* Supprimé le ErrorBoundary interne ici car il est redondant avec celui de App et peut causer des problèmes de syntaxe si mal fermé */}
             {showPricingConfig && (<PricingConfigurator lenses={lenses} config={userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} }} onSave={handlePricingConfigSave} onClose={() => setShowPricingConfig(false)}/>)}
 
             {/* HEADER & SIDEBAR KEPT SAME AS PREVIOUS VERSION */}
@@ -1046,6 +970,15 @@ function PodiumCore({ user, onLogout, onReset }) {
               <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
                 <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
                     <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
+                    {/* ADMIN */}
+                    {user?.role === 'admin' && (
+                      <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 mb-6">
+                          <h3 className="text-xs font-bold text-orange-700 mb-3 flex items-center gap-2"><Lock className="w-3 h-3"/> ADMINISTRATION</h3>
+                          <div className="mb-4"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER UTILISATEURS</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUserFile(e.target.files[0])} className="flex-1 text-xs bg-white"/><button onClick={triggerUserUpload} disabled={syncLoading} className="bg-orange-600 text-white px-4 py-2 rounded text-xs font-bold">{syncLoading ? "..." : "ENVOYER"}</button></div></div>
+                          <div className="mb-4"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER CATALOGUE VERRES</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUploadFile(e.target.files[0])} className="flex-1 text-xs bg-white"/><button onClick={triggerFileUpload} disabled={syncLoading} className="bg-orange-600 text-white px-4 py-2 rounded text-xs font-bold">{syncLoading ? "..." : "ENVOYER"}</button></div></div>
+                          <div className="flex justify-between items-center"><span className="text-xs">État Base de Données</span><button onClick={checkDatabase} className="bg-white border border-orange-300 px-3 py-1 rounded text-xs font-bold text-orange-700">VÉRIFIER</button></div>
+                      </div>
+                    )}
                     {/* ... (Sections Admin, Marque, Identité, Apparence inchangées) ... */}
                     <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(b.id)} className={`px-3 py-2 rounded-lg text-xs font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-blue-600 text-white border-blue-600'}`}>{isDisabled ? <Square className="w-3 h-3 inline mr-1"/> : <CheckSquare className="w-3 h-3 inline mr-1"/>}{b.label}</button>); })}</div></div>
                     <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div></div></div>
@@ -1114,35 +1047,35 @@ function PodiumCore({ user, onLogout, onReset }) {
             
             {/* ... (Autres Modales Historique etc. inchangées) ... */}
             {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
-            <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
-              <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
-                  <div>
-                      <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
-                      <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
-                      {/* AFFICHAGE CORRECTION */}
-                      {(offer.correction || (offer.lens && offer.lens.correction_data)) && (
-                          <div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono">
-                              <span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span>
-                              <span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span>
-                              <span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span>
-                          </div>
-                      )}
-                  </div>
+          <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+            <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+              <div className="flex items-center gap-4">
+                <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+                <div>
+                    <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
+                    <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
+                    {/* AFFICHAGE CORRECTION */}
+                    {(offer.correction || (offer.lens && offer.lens.correction_data)) && (
+                        <div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono">
+                            <span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span>
+                            <span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span>
+                            <span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span>
+                        </div>
+                    )}
                 </div>
-                <div className="text-right">
-                    <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
-                    <div className="font-bold text-slate-800">{offer.lens?.name}</div>
-                    <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
-                  <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button>
-                </div>
-              </div>))}</div></div></div>)}
-      </div>
-    );
+              </div>
+              <div className="text-right">
+                  <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
+                  <div className="font-bold text-slate-800">{offer.lens?.name}</div>
+                  <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+                <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button>
+              </div>
+            </div>))}</div></div></div>)}
+    </div>
+  );
 }
 
 // --- COMPOSANT RACINE ---
