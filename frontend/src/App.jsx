@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.13"; // AJOUT : RAZ Prix & Filtre Photochromique
+const APP_VERSION = "5.14"; // AJOUT : Filtre Marque dans Configurateur
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -121,14 +121,15 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
 // --- CORRECTIF : CONFIGURATEUR TARIFAIRE ROBUSTE ---
 const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterPhoto, setFilterPhoto] = useState('all'); // 'all', 'white', 'photo'
+    const [filterBrand, setFilterBrand] = useState(''); // Filtre Marque (Vide = Tous)
 
-    // 1. Sécurisation et Détection Photochromique
+    // 1. Sécurisation et Détection Photochromique & Marque
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
             const key = getLensKey(l);
             if (!map.has(key)) {
-                // IMPORTANT : On calcule isPhoto ici pour le filtrage
+                // IMPORTANT : On calcule isPhoto et brand ici pour le filtrage
                 map.set(key, {
                     key,
                     type: cleanText(l.type),      
@@ -136,7 +137,8 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                     index_mat: cleanText(l.index_mat),
                     coating: cleanText(l.coating),
                     avg_purchase: l.purchase_price,
-                    isPhoto: checkIsPhoto(l) // Utilise la fonction partagée
+                    isPhoto: checkIsPhoto(l), // Utilise la fonction partagée
+                    brand: cleanText(l.brand) // On stocke la marque
                 });
             }
         });
@@ -146,6 +148,13 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const availableDesigns = [...new Set(lenses.map(l => cleanText(l.design)))].sort().filter(Boolean);
     const availableIndices = [...new Set(lenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean);
     const availableCoatings = [...new Set(lenses.map(l => cleanText(l.coating)))].sort().filter(Boolean);
+    
+    // Extraction des marques disponibles pour le filtre
+    const availableBrands = useMemo(() => {
+        const brands = new Set(lenses.map(l => cleanText(l.brand)));
+        // On ne garde que les marques qui existent vraiment dans les données
+        return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id)));
+    }, [lenses]);
 
     // 2. Sécurisation : Valeurs par défaut
     const [localConfig, setLocalConfig] = useState(() => {
@@ -198,6 +207,9 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
         if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
         if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
         
+        // Filtre Marque (Nouveau)
+        if (filterBrand && filterBrand !== '' && row.brand !== cleanText(filterBrand)) return false;
+
         // Filtre Photochromique
         if (filterPhoto === 'white' && row.isPhoto) return false;
         if (filterPhoto === 'photo' && !row.isPhoto) return false;
@@ -342,27 +354,46 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                             </button>
                         </div>
 
-                        {/* FILTRE PHOTOCHROMIQUE */}
-                        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg self-start">
-                            <button 
-                                onClick={() => setFilterPhoto('all')}
-                                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                <ListFilter className="w-3 h-3"/> TOUS
-                            </button>
-                            <button 
-                                onClick={() => setFilterPhoto('white')}
-                                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                <Sun className="w-3 h-3"/> BLANCS
-                            </button>
-                            <button 
-                                onClick={() => setFilterPhoto('photo')}
-                                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                <SunDim className="w-3 h-3"/> PHOTOCHROMIQUES
-                            </button>
-                            <span className="ml-2 text-xs text-slate-400 font-mono">| {filteredRows.length} lignes</span>
+                        {/* FILTRES SECONDAIRES (MARQUE + PHOTOCHROMIQUE) */}
+                        <div className="flex flex-wrap items-center gap-4">
+                            {/* SÉLECTEUR DE MARQUE */}
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                                <div className="px-2 text-xs font-bold text-slate-400 flex items-center gap-1">
+                                    <Briefcase className="w-3 h-3"/> MARQUE
+                                </div>
+                                {availableBrands.map(b => (
+                                    <button 
+                                        key={b.id}
+                                        onClick={() => setFilterBrand(b.id)}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterBrand === b.id ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        {b.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* FILTRE PHOTOCHROMIQUE */}
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                                <button 
+                                    onClick={() => setFilterPhoto('all')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <ListFilter className="w-3 h-3"/> TOUS
+                                </button>
+                                <button 
+                                    onClick={() => setFilterPhoto('white')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <Sun className="w-3 h-3"/> BLANCS
+                                </button>
+                                <button 
+                                    onClick={() => setFilterPhoto('photo')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <SunDim className="w-3 h-3"/> PHOTOCHROMIQUES
+                                </button>
+                            </div>
+                            <span className="ml-auto text-xs text-slate-400 font-mono font-bold bg-slate-50 px-2 py-1 rounded border border-slate-100">{filteredRows.length} lignes</span>
                         </div>
                     </div>
 
