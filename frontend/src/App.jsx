@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, PlusCircle, MinusCircle, PackagePlus
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.19"; // STABLE : Gestion Paires Supplémentaires (Sécurisé)
+const APP_VERSION = "5.18"; // AJOUT : Affichage Live Marges dans Configurateur
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -17,24 +17,12 @@ const DEFAULT_SETTINGS = {
     themeColor: "blue", 
     bgColor: "bg-slate-50",
     customColor: "#2563eb",
-    brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "", ALTERNANCE: "" },
+    brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
     disabledBrands: [],
     pricingMode: 'linear', 
-    perLensConfig: { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} },
-    // NOUVEAU : Configuration Paires Supplémentaires
-    supplementaryConfig: {
-        mode: 'component', // 'component' ou 'manual'
-        componentPrices: {
-            // Géométries
-            'UNIFOCAL': 30, 'PROGRESSIF': 80, 'DEGRESSIF': 60, 'MULTIFOCAL': 70, 'PROGRESSIF_INTERIEUR': 70,
-            // Indices
-            '1.50': 0, '1.58': 10, '1.59': 10, '1.60': 20, '1.67': 40, '1.74': 80,
-            // Traitements
-            'HMC': 0, 'HMC+': 10, 'BLUE': 20, 'PHOTO': 40,
-            // Options
-            'TEINTE': 20
-        },
-        manualPrices: {} // Si mode manuel
+    perLensConfig: {
+        disabledAttributes: { designs: [], indices: [], coatings: [] }, 
+        prices: {} 
     },
     pricing: {
         uniStock: { x: 2.5, b: 20 },   
@@ -51,16 +39,12 @@ const CALISIZE_NETWORK_PRICES = {
     'KALIXIA': 12, 'CARTEBLANCHE': 20, 'ITELIS': 10, 'SEVEANE': 10, 'SANTECLAIR': 10, 'HORS_RESEAU': 0 
 };
 
-// Mise à jour des données de démo avec des verres ALTERNANCE et tarifs bonifiés
 const DEMO_LENSES = [
   { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
-  // Verres Alternance pour démo
-  { id: 201, name: "ALT PROGRESSIF 1.5", brand: "ALTERNANCE", commercial_code: "ALT-P15", type: "PROGRESSIF", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 35, purchase_price_bonifie: 20, purchase_price_super_bonifie: 10, commercial_flow: "FAB" },
-  { id: 202, name: "ALT UNIFOCAL 1.6", brand: "ALTERNANCE", commercial_code: "ALT-U16", type: "UNIFOCAL", index_mat: "1.60", design: "ECO", coating: "HMC", purchase_price: 12, purchase_price_bonifie: 6, purchase_price_super_bonifie: 6, commercial_flow: "STOCK" },
 ];
 
-const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' }, { id: 'ALTERNANCE', label: 'ALTERNANCE' } ];
+const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
 const NETWORKS = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
 const LENS_TYPES = [ { id: '', label: 'TOUS' }, { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF_INTERIEUR", label: "PROG. INTÉRIEUR" } ];
 const INDICES = ['1.50', '1.58', '1.60', '1.67', '1.74'];
@@ -72,41 +56,10 @@ const safeNum = (val) => { const num = parseFloat(val); return isNaN(num) ? 0 : 
 const safeJSONParse = (key, defaultValue) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : defaultValue; } catch { return defaultValue; } };
 const getLensKey = (l) => `${cleanText(l.type)}_${cleanText(l.design)}_${cleanText(l.index_mat)}_${cleanText(l.coating)}`;
 
+// Fonction de détection Photochromique partagée
 const checkIsPhoto = (item) => {
     const text = cleanText((item.name || "") + " " + (item.material || "") + " " + (item.coating || "") + " " + (item.design || ""));
     return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN");
-};
-
-// --- LOGIQUE DE CALCUL DU PRIX COMPOSANTS ---
-const calculateComponentPrice = (lens, componentPrices) => {
-    let price = 0;
-    // Sécurité si componentPrices est mal chargé
-    if (!componentPrices) return 0;
-
-    const type = cleanText(lens.type);
-    const idx = cleanText(lens.index_mat);
-    const coat = cleanText(lens.coating);
-
-    // 1. Géométrie
-    if (type.includes('PROGRESSIF_INTERIEUR')) price += componentPrices['PROGRESSIF_INTERIEUR'] || 0;
-    else if (type.includes('PROGRESSIF')) price += componentPrices['PROGRESSIF'] || 0;
-    else if (type.includes('DEGRESSIF')) price += componentPrices['DEGRESSIF'] || 0;
-    else if (type.includes('MULTIFOCAL')) price += componentPrices['MULTIFOCAL'] || 0;
-    else price += componentPrices['UNIFOCAL'] || 0;
-
-    // 2. Indice
-    Object.keys(componentPrices).forEach(key => {
-        if (key.includes('.') && idx.includes(key)) price += componentPrices[key];
-    });
-
-    // 3. Traitement (Detection basique)
-    if (coat.includes('HMC')) price += componentPrices['HMC'] || 0;
-    if (coat.includes('BLUE') || coat.includes('PROTECT')) price += componentPrices['BLUE'] || 0;
-    
-    // 4. Photochromique
-    if (checkIsPhoto(lens)) price += componentPrices['PHOTO'] || 0;
-
-    return price;
 };
 
 // --- COMPOSANTS UI ---
@@ -165,6 +118,359 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   );
 };
 
+// --- CORRECTIF : CONFIGURATEUR TARIFAIRE ROBUSTE ---
+const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
+    const [filterPhoto, setFilterPhoto] = useState('all'); // 'all', 'white', 'photo'
+    const [filterBrand, setFilterBrand] = useState(''); // Filtre Marque (Vide = Tous)
+
+    // 1. Sécurisation et Détection Photochromique & Marque & Extraction Dynamique
+    const availableAttributes = useMemo(() => {
+        const filteredLenses = filterBrand 
+            ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand))
+            : lenses;
+            
+        return {
+            designs: [...new Set(filteredLenses.map(l => cleanText(l.design)))].sort().filter(Boolean),
+            indices: [...new Set(filteredLenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean),
+            coatings: [...new Set(filteredLenses.map(l => cleanText(l.coating)))].sort().filter(Boolean)
+        };
+    }, [lenses, filterBrand]);
+
+    const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
+
+    const uniqueCombinations = useMemo(() => {
+        const map = new Map();
+        lenses.forEach(l => {
+            const key = getLensKey(l);
+            if (!map.has(key)) {
+                map.set(key, {
+                    key,
+                    type: cleanText(l.type),      
+                    design: cleanText(l.design),
+                    index_mat: cleanText(l.index_mat),
+                    coating: cleanText(l.coating),
+                    avg_purchase: l.purchase_price,
+                    isPhoto: checkIsPhoto(l), 
+                    brand: cleanText(l.brand) 
+                });
+            }
+        });
+        return Array.from(map.values()).sort((a, b) => a.type.localeCompare(b.type) || a.design.localeCompare(b.design));
+    }, [lenses]);
+    
+    const availableBrands = useMemo(() => {
+        const brands = new Set(lenses.map(l => cleanText(l.brand)));
+        return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id)));
+    }, [lenses]);
+
+    // 2. Sécurisation : Valeurs par défaut
+    const [localConfig, setLocalConfig] = useState(() => {
+        const safeConfig = JSON.parse(JSON.stringify(config || {}));
+        if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = { designs: [], indices: [], coatings: [] };
+        if (!safeConfig.prices) safeConfig.prices = {};
+        if (!safeConfig.disabledAttributes.designs) safeConfig.disabledAttributes.designs = [];
+        if (!safeConfig.disabledAttributes.indices) safeConfig.disabledAttributes.indices = [];
+        if (!safeConfig.disabledAttributes.coatings) safeConfig.disabledAttributes.coatings = [];
+        return safeConfig;
+    });
+
+    const toggleAttribute = (type, value) => {
+        const current = localConfig.disabledAttributes[type] || [];
+        const isCurrentlyDisabled = current.includes(value);
+        let updated;
+        if (isCurrentlyDisabled) {
+            updated = current.filter(v => v !== value); 
+        } else {
+            updated = [...current, value]; 
+        }
+        setLocalConfig(prev => ({
+            ...prev,
+            disabledAttributes: { ...prev.disabledAttributes, [type]: updated }
+        }));
+    };
+
+    const setAllAttributes = (type, enableAll, allValues) => {
+        setLocalConfig(prev => ({
+            ...prev,
+            disabledAttributes: {
+                ...prev.disabledAttributes,
+                [type]: enableAll ? [] : [...allValues] // Vide = Tous actifs
+            }
+        }));
+    };
+
+    const updatePrice = (key, value) => {
+        setLocalConfig(prev => ({
+            ...prev,
+            prices: { ...prev.prices, [key]: parseFloat(value) || 0 }
+        }));
+    };
+
+    const [filterText, setFilterText] = useState("");
+
+    const filteredRows = uniqueCombinations.filter(row => {
+        // Filtres globaux (Sidebar)
+        if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
+        if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
+        if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
+        
+        // Filtre Marque (Nouveau)
+        if (filterBrand && filterBrand !== '' && row.brand !== cleanText(filterBrand)) return false;
+
+        // Filtre Photochromique
+        if (filterPhoto === 'white' && row.isPhoto) return false;
+        if (filterPhoto === 'photo' && !row.isPhoto) return false;
+
+        // Filtre Recherche
+        return (row.type + row.design + row.coating).toLowerCase().includes(filterText.toLowerCase());
+    });
+
+    // --- LOGIQUE DE REMISE À ZÉRO SÉCURISÉE ---
+    const handleResetFiltered = () => {
+        if (filteredRows.length === 0) return alert("Aucun verre affiché à réinitialiser.");
+        
+        // Validation 1 : Alerte simple
+        if (window.confirm(`⚠️ ATTENTION : Vous allez remettre à 0€ les ${filteredRows.length} lignes actuellement affichées.\n\nCette action affecte uniquement la sélection visible (Filtres + Recherche).\n\nVoulez-vous continuer ?`)) {
+            // Validation 2 : Confirmation explicite
+            if (window.confirm("🔴 DOUBLE CONFIRMATION REQUISE\n\nÊtes-vous ABSOLUMENT sûr de vouloir supprimer ces tarifs ?\nCette action est irréversible.")) {
+                const newPrices = { ...localConfig.prices };
+                filteredRows.forEach(row => {
+                    newPrices[row.key] = 0;
+                });
+                setLocalConfig(prev => ({ ...prev, prices: newPrices }));
+                // Pas d'alerte de succès pour fluidité, ou optionnel
+            }
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-['Poppins']">
+            <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
+                <div>
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Calculator className="w-6 h-6 text-blue-600"/>
+                        CONFIGURATEUR TARIFAIRE
+                    </h2>
+                    <p className="text-sm text-slate-500">Mode Manuel "Au Verre"</p>
+                </div>
+                <div className="flex gap-4">
+                    <button onClick={onClose} className="px-6 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100">ANNULER</button>
+                    <button onClick={() => onSave(localConfig)} className="px-6 py-2 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200">ENREGISTRER & FERMER</button>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-hidden flex">
+                <aside className="w-80 bg-white border-r overflow-y-auto p-6 space-y-8">
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Indices</h3>
+                            <div className="flex gap-1">
+                                <button onClick={() => setAllAttributes('indices', true, availableIndices)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                                <button onClick={() => setAllAttributes('indices', false, availableIndices)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {availableIndices.map(idx => {
+                                const isDisabled = (localConfig.disabledAttributes.indices || []).includes(idx);
+                                return (
+                                    <button 
+                                        key={idx}
+                                        onClick={() => toggleAttribute('indices', idx)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isDisabled ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-green-100 text-green-700 border-green-200'}`}
+                                    >
+                                        {isDisabled ? <ToggleLeft className="w-4 h-4 inline mr-1"/> : <ToggleRight className="w-4 h-4 inline mr-1"/>}
+                                        {idx}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Designs</h3>
+                            <div className="flex gap-1">
+                                <button onClick={() => setAllAttributes('designs', true, availableDesigns)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                                <button onClick={() => setAllAttributes('designs', false, availableDesigns)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            {availableDesigns.map(d => {
+                                const isDisabled = (localConfig.disabledAttributes.designs || []).includes(d);
+                                return (
+                                    <button 
+                                        key={d}
+                                        onClick={() => toggleAttribute('designs', d)}
+                                        className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all text-left flex justify-between items-center ${isDisabled ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}
+                                    >
+                                        <span>{d}</span>
+                                        {isDisabled ? <ToggleLeft className="w-4 h-4"/> : <ToggleRight className="w-4 h-4"/>}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Traitements</h3>
+                            <div className="flex gap-1">
+                                <button onClick={() => setAllAttributes('coatings', true, availableCoatings)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                                <button onClick={() => setAllAttributes('coatings', false, availableCoatings)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            {availableCoatings.map(c => {
+                                const isDisabled = (localConfig.disabledAttributes.coatings || []).includes(c);
+                                return (
+                                    <button 
+                                        key={c}
+                                        onClick={() => toggleAttribute('coatings', c)}
+                                        className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all text-left flex justify-between items-center ${isDisabled ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}
+                                    >
+                                        <span>{c}</span>
+                                        {isDisabled ? <ToggleLeft className="w-4 h-4"/> : <ToggleRight className="w-4 h-4"/>}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </aside>
+
+                <main className="flex-1 flex flex-col bg-slate-50">
+                    <div className="p-4 border-b bg-white flex flex-col gap-4">
+                        <div className="flex items-center gap-4">
+                            {/* RECHERCHE */}
+                            <div className="flex-1 relative">
+                                <Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/>
+                                <input 
+                                    type="text" 
+                                    placeholder="Filtrer le tableau (ex: UNIFOCAL 1.6)" 
+                                    className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none text-sm font-bold text-slate-700 focus:ring-2 ring-blue-100"
+                                    value={filterText}
+                                    onChange={(e) => setFilterText(e.target.value)}
+                                />
+                            </div>
+                            
+                            {/* BOUTON RAZ AVEC SÉCURITÉ */}
+                            <button 
+                                onClick={handleResetFiltered}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200 transition-colors"
+                                title="Remettre à 0€ les verres visibles"
+                            >
+                                <Trash2 className="w-4 h-4"/>
+                                RAZ SÉLECTION
+                            </button>
+                        </div>
+
+                        {/* FILTRES SECONDAIRES (MARQUE + PHOTOCHROMIQUE) */}
+                        <div className="flex flex-wrap items-center gap-4">
+                            {/* SÉLECTEUR DE MARQUE */}
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                                <div className="px-2 text-xs font-bold text-slate-400 flex items-center gap-1">
+                                    <Briefcase className="w-3 h-3"/> MARQUE
+                                </div>
+                                {availableBrands.map(b => (
+                                    <button 
+                                        key={b.id}
+                                        onClick={() => setFilterBrand(b.id)}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterBrand === b.id ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        {b.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* FILTRE PHOTOCHROMIQUE */}
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                                <button 
+                                    onClick={() => setFilterPhoto('all')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <ListFilter className="w-3 h-3"/> TOUS
+                                </button>
+                                <button 
+                                    onClick={() => setFilterPhoto('white')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <Sun className="w-3 h-3"/> BLANCS
+                                </button>
+                                <button 
+                                    onClick={() => setFilterPhoto('photo')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <SunDim className="w-3 h-3"/> PHOTOCHROMIQUES
+                                </button>
+                            </div>
+                            <span className="ml-auto text-xs text-slate-400 font-mono font-bold bg-slate-50 px-2 py-1 rounded border border-slate-100">{filteredRows.length} lignes</span>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-auto p-6">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <table className="min-w-full divide-y divide-slate-100">
+                                <thead className="bg-slate-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Design</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Index</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Traitement</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Achat Moy.</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 border-l border-blue-100 w-32">PRIX VENTE</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">Marge €</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-slate-100">
+                                    {filteredRows.map((row) => {
+                                        const price = localConfig.prices[row.key] || 0;
+                                        const purchase = safeNum(row.avg_purchase);
+                                        const margin = price - purchase;
+                                        const marginPercent = price > 0 ? (margin / price) * 100 : 0;
+
+                                        return (
+                                            <tr key={row.key} className="hover:bg-slate-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-slate-800">{row.type}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">{row.design}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap"><span className="px-2 py-1 rounded bg-slate-100 text-xs font-bold text-slate-600">{row.index_mat}</span></td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">
+                                                    {row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}
+                                                    {row.coating}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-right text-slate-400 font-mono">~{purchase.toFixed(0)}€</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right bg-blue-50/30 border-l border-blue-100">
+                                                    <input 
+                                                        type="number" 
+                                                        className={`w-full text-right font-bold bg-transparent outline-none border-b-2 focus:border-blue-500 transition-colors ${price > 0 ? 'text-blue-700 border-blue-200' : 'text-slate-300 border-slate-200'}`}
+                                                        placeholder="0"
+                                                        value={price === 0 ? '' : price}
+                                                        onChange={(e) => updatePrice(row.key, e.target.value)}
+                                                    />
+                                                </td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-xs text-right font-bold ${margin > 0 ? 'text-green-600' : 'text-red-400'}`}>
+                                                    {price > 0 ? `${margin.toFixed(2)}€` : '-'}
+                                                </td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-xs text-right font-bold ${marginPercent > 40 ? 'text-green-600' : (marginPercent > 0 ? 'text-orange-500' : 'text-red-400')}`}>
+                                                    {price > 0 ? `${marginPercent.toFixed(0)}%` : '-'}
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                    {filteredRows.length === 0 && (
+                                        <tr>
+                                            <td colSpan={8} className="px-6 py-12 text-center text-slate-400 text-sm">
+                                                Aucune combinaison trouvée. Vérifiez les filtres globaux ou la recherche.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    );
+};
+
 // --- AUTH COMPONENTS ---
 const LoginScreen = ({ onLogin }) => {
     const [username, setUsername] = useState("");
@@ -202,104 +508,6 @@ const LoginScreen = ({ onLogin }) => {
     );
 };
 
-const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
-    // ... (Code du configurateur existant conservé pour gain de place - non modifié pour les paires principales)
-    // Pour l'implémentation complète, je réutilise le même code que V5.18
-    const [filterPhoto, setFilterPhoto] = useState('all');
-    const [filterBrand, setFilterBrand] = useState('');
-    const availableAttributes = useMemo(() => {
-        const filteredLenses = filterBrand ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand)) : lenses;
-        return {
-            designs: [...new Set(filteredLenses.map(l => cleanText(l.design)))].sort().filter(Boolean),
-            indices: [...new Set(filteredLenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean),
-            coatings: [...new Set(filteredLenses.map(l => cleanText(l.coating)))].sort().filter(Boolean)
-        };
-    }, [lenses, filterBrand]);
-    const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
-    const uniqueCombinations = useMemo(() => {
-        const map = new Map();
-        lenses.forEach(l => {
-            const key = getLensKey(l);
-            if (!map.has(key)) {
-                map.set(key, { key, type: cleanText(l.type), design: cleanText(l.design), index_mat: cleanText(l.index_mat), coating: cleanText(l.coating), avg_purchase: l.purchase_price, isPhoto: checkIsPhoto(l), brand: cleanText(l.brand) });
-            }
-        });
-        return Array.from(map.values()).sort((a, b) => a.type.localeCompare(b.type) || a.design.localeCompare(b.design));
-    }, [lenses]);
-    const availableBrands = useMemo(() => { const brands = new Set(lenses.map(l => cleanText(l.brand))); return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id))); }, [lenses]);
-    const [localConfig, setLocalConfig] = useState(() => {
-        const safeConfig = JSON.parse(JSON.stringify(config || {}));
-        if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = { designs: [], indices: [], coatings: [] };
-        if (!safeConfig.prices) safeConfig.prices = {};
-        if (!safeConfig.disabledAttributes.designs) safeConfig.disabledAttributes.designs = [];
-        if (!safeConfig.disabledAttributes.indices) safeConfig.disabledAttributes.indices = [];
-        if (!safeConfig.disabledAttributes.coatings) safeConfig.disabledAttributes.coatings = [];
-        return safeConfig;
-    });
-    const toggleAttribute = (type, value) => {
-        const current = localConfig.disabledAttributes[type] || [];
-        const isCurrentlyDisabled = current.includes(value);
-        let updated;
-        if (isCurrentlyDisabled) { updated = current.filter(v => v !== value); } else { updated = [...current, value]; }
-        setLocalConfig(prev => ({ ...prev, disabledAttributes: { ...prev.disabledAttributes, [type]: updated } }));
-    };
-    const setAllAttributes = (type, enableAll, allValues) => {
-        setLocalConfig(prev => ({ ...prev, disabledAttributes: { ...prev.disabledAttributes, [type]: enableAll ? [] : [...allValues] } }));
-    };
-    const updatePrice = (key, value) => {
-        setLocalConfig(prev => ({ ...prev, prices: { ...prev.prices, [key]: parseFloat(value) || 0 } }));
-    };
-    const [filterText, setFilterText] = useState("");
-    const filteredRows = uniqueCombinations.filter(row => {
-        if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
-        if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
-        if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
-        if (filterBrand && filterBrand !== '' && row.brand !== cleanText(filterBrand)) return false;
-        if (filterPhoto === 'white' && row.isPhoto) return false;
-        if (filterPhoto === 'photo' && !row.isPhoto) return false;
-        return (row.type + row.design + row.coating).toLowerCase().includes(filterText.toLowerCase());
-    });
-    const handleResetFiltered = () => {
-        if (filteredRows.length === 0) return alert("Aucun verre affiché à réinitialiser.");
-        if (window.confirm(`⚠️ ATTENTION : Vous allez remettre à 0€ les ${filteredRows.length} lignes actuellement affichées.\n\nCette action affecte uniquement la sélection visible (Filtres + Recherche).\n\nVoulez-vous continuer ?`)) {
-            if (window.confirm("🔴 DOUBLE CONFIRMATION REQUISE\n\nÊtes-vous ABSOLUMENT sûr de vouloir supprimer ces tarifs ?\nCette action est irréversible.")) {
-                const newPrices = { ...localConfig.prices };
-                filteredRows.forEach(row => { newPrices[row.key] = 0; });
-                setLocalConfig(prev => ({ ...prev, prices: newPrices }));
-            }
-        }
-    };
-    return (
-        <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-['Poppins']">
-            <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
-                <div><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Calculator className="w-6 h-6 text-blue-600"/>CONFIGURATEUR TARIFAIRE</h2><p className="text-sm text-slate-500">Mode Manuel "Au Verre"</p></div>
-                <div className="flex gap-4"><button onClick={onClose} className="px-6 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100">ANNULER</button><button onClick={() => onSave(localConfig)} className="px-6 py-2 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200">ENREGISTRER & FERMER</button></div>
-            </div>
-            <div className="flex-1 overflow-hidden flex">
-                <aside className="w-80 bg-white border-r overflow-y-auto p-6 space-y-8">
-                    <div><div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Indices</h3><div className="flex gap-1"><button onClick={() => setAllAttributes('indices', true, availableIndices)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button><button onClick={() => setAllAttributes('indices', false, availableIndices)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button></div></div><div className="flex flex-wrap gap-2">{availableIndices.map(idx => { const isDisabled = (localConfig.disabledAttributes.indices || []).includes(idx); return (<button key={idx} onClick={() => toggleAttribute('indices', idx)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isDisabled ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-green-100 text-green-700 border-green-200'}`}>{isDisabled ? <ToggleLeft className="w-4 h-4 inline mr-1"/> : <ToggleRight className="w-4 h-4 inline mr-1"/>}{idx}</button>) })}</div></div>
-                    <div><div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Designs</h3><div className="flex gap-1"><button onClick={() => setAllAttributes('designs', true, availableDesigns)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button><button onClick={() => setAllAttributes('designs', false, availableDesigns)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button></div></div><div className="flex flex-col gap-2">{availableDesigns.map(d => { const isDisabled = (localConfig.disabledAttributes.designs || []).includes(d); return (<button key={d} onClick={() => toggleAttribute('designs', d)} className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all text-left flex justify-between items-center ${isDisabled ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}><span>{d}</span>{isDisabled ? <ToggleLeft className="w-4 h-4"/> : <ToggleRight className="w-4 h-4"/>}</button>) })}</div></div>
-                    <div><div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Traitements</h3><div className="flex gap-1"><button onClick={() => setAllAttributes('coatings', true, availableCoatings)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button><button onClick={() => setAllAttributes('coatings', false, availableCoatings)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button></div></div><div className="flex flex-col gap-2">{availableCoatings.map(c => { const isDisabled = (localConfig.disabledAttributes.coatings || []).includes(c); return (<button key={c} onClick={() => toggleAttribute('coatings', c)} className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all text-left flex justify-between items-center ${isDisabled ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}><span>{c}</span>{isDisabled ? <ToggleLeft className="w-4 h-4"/> : <ToggleRight className="w-4 h-4"/>}</button>) })}</div></div>
-                </aside>
-                <main className="flex-1 flex flex-col bg-slate-50">
-                    <div className="p-4 border-b bg-white flex flex-col gap-4">
-                        <div className="flex items-center gap-4"><div className="flex-1 relative"><Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/><input type="text" placeholder="Filtrer le tableau (ex: UNIFOCAL 1.6)" className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none text-sm font-bold text-slate-700 focus:ring-2 ring-blue-100" value={filterText} onChange={(e) => setFilterText(e.target.value)}/></div><button onClick={handleResetFiltered} className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200 transition-colors" title="Remettre à 0€ les verres visibles"><Trash2 className="w-4 h-4"/>RAZ SÉLECTION</button></div>
-                        <div className="flex flex-wrap items-center gap-4"><div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><div className="px-2 text-xs font-bold text-slate-400 flex items-center gap-1"><Briefcase className="w-3 h-3"/> MARQUE</div>{availableBrands.map(b => (<button key={b.id} onClick={() => setFilterBrand(b.id)} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterBrand === b.id ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>{b.label}</button>))}</div><div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><button onClick={() => setFilterPhoto('all')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}><ListFilter className="w-3 h-3"/> TOUS</button><button onClick={() => setFilterPhoto('white')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}><Sun className="w-3 h-3"/> BLANCS</button><button onClick={() => setFilterPhoto('photo')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}><SunDim className="w-3 h-3"/> PHOTOCHROMIQUES</button></div><span className="ml-auto text-xs text-slate-400 font-mono font-bold bg-slate-50 px-2 py-1 rounded border border-slate-100">{filteredRows.length} lignes</span></div>
-                    </div>
-                    <div className="flex-1 overflow-auto p-6">
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <table className="min-w-full divide-y divide-slate-100">
-                                <thead className="bg-slate-50"><tr><th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th><th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Design</th><th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Index</th><th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Traitement</th><th className="px-6 py-3 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Achat Moy.</th><th className="px-6 py-3 text-right text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 border-l border-blue-100 w-32">PRIX VENTE</th><th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">Marge €</th><th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">%</th></tr></thead>
-                                <tbody className="bg-white divide-y divide-slate-100">{filteredRows.map((row) => { const price = localConfig.prices[row.key] || 0; const purchase = safeNum(row.avg_purchase); const margin = price - purchase; const marginPercent = price > 0 ? (margin / price) * 100 : 0; return (<tr key={row.key} className="hover:bg-slate-50"><td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-slate-800">{row.type}</td><td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">{row.design}</td><td className="px-6 py-4 whitespace-nowrap"><span className="px-2 py-1 rounded bg-slate-100 text-xs font-bold text-slate-600">{row.index_mat}</span></td><td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">{row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}{row.coating}</td><td className="px-6 py-4 whitespace-nowrap text-xs text-right text-slate-400 font-mono">~{purchase.toFixed(0)}€</td><td className="px-6 py-4 whitespace-nowrap text-right bg-blue-50/30 border-l border-blue-100"><input type="number" className={`w-full text-right font-bold bg-transparent outline-none border-b-2 focus:border-blue-500 transition-colors ${price > 0 ? 'text-blue-700 border-blue-200' : 'text-slate-300 border-slate-200'}`} placeholder="0" value={price === 0 ? '' : price} onChange={(e) => updatePrice(row.key, e.target.value)}/></td><td className={`px-6 py-4 whitespace-nowrap text-xs text-right font-bold ${margin > 0 ? 'text-green-600' : 'text-red-400'}`}>{price > 0 ? `${margin.toFixed(2)}€` : '-'}</td><td className={`px-6 py-4 whitespace-nowrap text-xs text-right font-bold ${marginPercent > 40 ? 'text-green-600' : (marginPercent > 0 ? 'text-orange-500' : 'text-red-400')}`}>{price > 0 ? `${marginPercent.toFixed(0)}%` : '-'}</td></tr>) })} {filteredRows.length === 0 && (<tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400 text-sm">Aucune combinaison trouvée. Vérifiez les filtres globaux ou la recherche.</td></tr>)}</tbody>
-                            </table>
-                        </div>
-                    </div>
-                </main>
-            </div>
-        </div>
-    );
-};
-
 // --- APP PRINCIPALE ---
 function App() {
   const [user, setUser] = useState(() => { try { const s = sessionStorage.getItem("optique_user"); return s ? JSON.parse(s) : null; } catch { return null; } });
@@ -310,36 +518,22 @@ function App() {
   const [showSettings, setShowSettings] = useState(false); const [showMargins, setShowMargins] = useState(false); const [selectedLens, setSelectedLens] = useState(null); const [isSidebarOpen, setIsSidebarOpen] = useState(true); const [comparisonLens, setComparisonLens] = useState(null); const [showHistory, setShowHistory] = useState(false); const [savedOffers, setSavedOffers] = useState([]); 
   const [syncLoading, setSyncLoading] = useState(false); const [syncStatus, setSyncStatus] = useState(null); const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
   const [stats, setStats] = useState({ total: 0, filtered: 0 });
-  const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 }); 
+  const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 }); const [secondPairPrice, setSecondPairPrice] = useState(0);
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
   const [userFile, setUserFile] = useState(null);
-  const [showPricingConfig, setShowPricingConfig] = useState(false); 
-  
-  // NOUVEAU : État pour les paires supplémentaires
-  const [supplementaryPairs, setSupplementaryPairs] = useState([]);
+  const [showPricingConfig, setShowPricingConfig] = useState(false); // État pour la modale plein écran
 
-  // --- SÉCURISATION DU CHARGEMENT DES SETTINGS (Éviter écran blanc) ---
   const [userSettings, setUserSettings] = useState(() => {
     try { 
         const p = safeJSONParse("optique_user_settings", null); 
-        if (!p) return DEFAULT_SETTINGS;
-        
-        // Deep Merge Safe : On s'assure que toutes les clés existent
-        return { 
+        // Fusion profonde pour garantir la présence des nouvelles clés
+        return p ? { 
             ...DEFAULT_SETTINGS, 
             ...p, 
             pricing: { ...DEFAULT_SETTINGS.pricing, ...(p.pricing || {}) },
             perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(p.perLensConfig || {}) },
-            supplementaryConfig: { 
-                ...DEFAULT_SETTINGS.supplementaryConfig, 
-                ...(p.supplementaryConfig || {}),
-                componentPrices: {
-                    ...DEFAULT_SETTINGS.supplementaryConfig.componentPrices,
-                    ...(p.supplementaryConfig?.componentPrices || {})
-                }
-            }, 
             disabledBrands: Array.isArray(p.disabledBrands) ? p.disabledBrands : [] 
-        }; 
+        } : DEFAULT_SETTINGS; 
     } catch { return DEFAULT_SETTINGS; }
   });
   useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
@@ -363,6 +557,7 @@ function App() {
 
   useEffect(() => { fetchData(); }, [formData.brand, formData.network, formData.type]); 
   useEffect(() => { sessionStorage.setItem("optique_client", JSON.stringify(client)); }, [client]);
+  useEffect(() => { sessionStorage.setItem("optique_second_pair", secondPairPrice); }, [secondPairPrice]);
   useEffect(() => { sessionStorage.setItem("optique_form_data", JSON.stringify(formData)); }, [formData]);
 
   const getFilteredBrandsList = () => {
@@ -506,7 +701,7 @@ function App() {
       if(window.confirm("Tout remettre à zéro ?")) {
           sessionStorage.clear();
           setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
-          setSupplementaryPairs([]); // RAZ Paires Supp
+          setSecondPairPrice(0);
           setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false });
           setSelectedLens(null);
       }
@@ -520,114 +715,13 @@ function App() {
       setShowPricingConfig(false);
   };
 
-  // --- GESTION PAIRES SUPPLÉMENTAIRES ---
-  const handleAddSupplementaryPair = (type) => {
-      // type = 'discount' (-50%) ou 'alternance'
-      const newId = Date.now();
-      
-      if (type === 'discount') {
-          // Logique -50% : On clone le verre sélectionné
-          if (!selectedLens) return alert("Veuillez d'abord sélectionner une première paire.");
-          setSupplementaryPairs(prev => [...prev, {
-              id: newId,
-              type: 'discount',
-              lens: { ...selectedLens, sellingPrice: selectedLens.sellingPrice * 0.5 }, // Prix réduit
-              description: "Offre -50% Identique"
-          }]);
-      } else {
-          // Logique Alternance : On va chercher les verres de la gamme ALTERNANCE
-          // Critère 1 : Filtrer par type (Progressif ou Unifocal selon 1ere paire)
-          const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
-          const targetType = isMainProg ? 'PROGRESSIF' : 'UNIFOCAL';
-          
-          let alternanceLenses = lenses.filter(l => cleanText(l.brand) === 'ALTERNANCE' && cleanText(l.type).includes(targetType));
-          
-          // Critère 2 : Déterminer le coût (Super Bonifié vs Bonifié)
-          // Règle : Si 1ere paire = Prog -> 2ème paire = Super Bonifié, 3ème+ = Bonifié
-          // Si 1ere paire = Uni -> Toutes paires supp = Bonifié
-          const isSecondPair = supplementaryPairs.length === 0;
-          const useSuperBonifie = isMainProg && isSecondPair;
-          
-          alternanceLenses = alternanceLenses.map(l => {
-              // Sécurité : fallback sur purchase_price si colonnes manquantes
-              const cost = useSuperBonifie 
-                ? (l.purchase_price_super_bonifie || l.purchase_price || 0) 
-                : (l.purchase_price_bonifie || l.purchase_price || 0);
-              
-              // Calcul Prix Vente
-              let sellPrice = 0;
-              // Sécurité : vérification si componentPrices existe
-              if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
-                  sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
-              } else {
-                  // Mode Manuel ou Fallback
-                  sellPrice = cost * 2.5; 
-              }
-
-              return {
-                  ...l,
-                  costForMargin: cost,
-                  sellingPrice: sellPrice,
-                  margin: sellPrice - cost
-              };
-          });
-
-          // Tri par marge décroissante (Optimisation)
-          alternanceLenses.sort((a, b) => b.margin - a.margin);
-
-          // On prend le meilleur verre (le premier de la liste triée) ou un placeholder si vide
-          const bestOption = alternanceLenses.length > 0 ? alternanceLenses[0] : null;
-
-          if (bestOption) {
-              setSupplementaryPairs(prev => [...prev, {
-                  id: newId,
-                  type: 'alternance',
-                  lens: bestOption,
-                  description: `Offre Alternance (${useSuperBonifie ? 'Super Bonifié' : 'Bonifié'})`
-              }]);
-          } else {
-              alert("Aucun verre Alternance correspondant trouvé dans le catalogue.");
-          }
-      }
-  };
-
-  const removeSupplementaryPair = (id) => {
-      setSupplementaryPairs(prev => prev.filter(p => p.id !== id));
-  };
-
-  // Mise à jour Setting Supp
-  const updateComponentPrice = (key, val) => {
-      setUserSettings(prev => ({
-          ...prev,
-          supplementaryConfig: {
-              ...prev.supplementaryConfig,
-              componentPrices: {
-                  ...(prev.supplementaryConfig?.componentPrices || DEFAULT_SETTINGS.supplementaryConfig.componentPrices),
-                  [key]: parseFloat(val) || 0
-              }
-          }
-      }));
-  };
-
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
-      
-      const mainPairPrice = selectedLens.sellingPrice * 2;
-      // Calcul total paires supp
-      const suppTotal = supplementaryPairs.reduce((acc, pair) => acc + (pair.lens.sellingPrice * 2), 0);
-      
-      const totalGlobal = mainPairPrice + suppTotal;
-      const remainder = totalGlobal - parseFloat(client.reimbursement || 0);
-
+      const totalPair = selectedLens.sellingPrice * 2;
+      const remainder = (totalPair + secondPairPrice) - client.reimbursement;
       const lensWithCorrection = { ...selectedLens, correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } };
-      
-      const payload = { 
-          client: client, 
-          lens: lensWithCorrection, 
-          supplementaryPairs: supplementaryPairs, // Sauvegarde des paires supp
-          finance: { reimbursement: client.reimbursement, total: totalGlobal, remainder: remainder } 
-      };
+      const payload = { client: client, lens: lensWithCorrection, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
       axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
   };
   const deleteOffer = (id) => {
@@ -635,19 +729,60 @@ function App() {
           axios.delete(`${SAVE_URL}/${id}`).then(() => { alert("Dossier supprimé."); fetchHistory(); }).catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); });
       }
   };
-  // ... (Upload functions kept identical) ...
-  const triggerFileUpload = () => { if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)"); setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile); axios.post(UPLOAD_URL, data, { onUploadProgress: (e) => { setUploadProgress(Math.round((e.loaded * 100) / e.total)); } }).then(res => { alert(`✅ Succès ! ${res.data.count} verres importés.`); fetchData(); }).catch(err => { console.error("Upload Error:", err); const msg = err.response?.data?.detail || err.message; alert(`❌ Erreur upload : ${msg}`); }).finally(() => { setSyncLoading(false); setUploadProgress(0); }); };
-  const triggerUserUpload = () => { if (!userFile) return alert("Sélectionner un fichier Excel"); setSyncLoading(true); const data = new FormData(); data.append('file', userFile); axios.post(`${baseBackendUrl}/upload-users`, data).then(res => alert(`✅ ${res.data.count} utilisateurs importés`)).catch(err => { const msg = err.response?.data?.detail || err.message; alert(`Erreur upload utilisateurs: ${msg}`); }).finally(() => setSyncLoading(false)); };
+  const triggerFileUpload = () => {
+      if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)");
+      setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile);
+      axios.post(UPLOAD_URL, data, { onUploadProgress: (e) => { setUploadProgress(Math.round((e.loaded * 100) / e.total)); } })
+      .then(res => { alert(`✅ Succès ! ${res.data.count} verres importés.`); fetchData(); })
+      .catch(err => {
+          console.error("Upload Error:", err);
+          const msg = err.response?.data?.detail || err.message;
+          alert(`❌ Erreur upload : ${msg}`);
+      })
+      .finally(() => { setSyncLoading(false); setUploadProgress(0); });
+  };
+  const triggerUserUpload = () => {
+      if (!userFile) return alert("Sélectionner un fichier Excel");
+      setSyncLoading(true); const data = new FormData(); data.append('file', userFile);
+      axios.post(`${baseBackendUrl}/upload-users`, data)
+          .then(res => alert(`✅ ${res.data.count} utilisateurs importés`))
+          .catch(err => {
+              const msg = err.response?.data?.detail || err.message;
+              alert(`Erreur upload utilisateurs: ${msg}`);
+          })
+          .finally(() => setSyncLoading(false));
+  };
+  const handleUrlChange = (value) => { setServerUrl(value); localStorage.setItem("optique_server_url", value); };
+  const handleSheetsUrlChange = (value) => { setSheetsUrl(value); localStorage.setItem("optique_sheets_url", value); };
+  const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
+  const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
   const handleLogoUpload = (e, target = 'shop') => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); } };
   const handleSettingChange = (section, field, value) => { if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); } };
-  const handlePriceRuleChange = (category, field, value) => { setUserSettings(prev => { const pricing = { ...(prev.pricing || {}) }; if (category === 'calisize') { pricing.calisize = { price: parseFloat(value) || 0 }; } else { pricing[category] = { ...pricing[category], [field]: parseFloat(value) || 0 }; } return { ...prev, pricing }; }); };
+  const handlePriceRuleChange = (category, field, value) => { 
+      setUserSettings(prev => {
+        const pricing = { ...(prev.pricing || {}) };
+        if (category === 'calisize') {
+            pricing.calisize = { price: parseFloat(value) || 0 };
+        } else {
+            pricing[category] = { ...pricing[category], [field]: parseFloat(value) || 0 };
+        }
+        return { ...prev, pricing };
+      });
+  };
   const handleTypeChange = (newType) => { setFormData(prev => ({ ...prev, type: newType, design: '', coating: '' })); };
   const handleDesignChange = (newDesign) => { setFormData(prev => ({ ...prev, design: newDesign })); };
   const handleCoatingChange = (newCoating) => { setFormData(prev => ({ ...prev, coating: newCoating })); };
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-  const toggleBrand = (brandId) => { setUserSettings(prev => { const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : []; const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId]; return { ...prev, disabledBrands: newDisabled }; }); };
+  const toggleBrand = (brandId) => {
+      setUserSettings(prev => {
+          const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : [];
+          const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId];
+          return { ...prev, disabledBrands: newDisabled };
+      });
+  };
   const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
+  const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
@@ -655,20 +790,31 @@ function App() {
   const safePricing = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
   const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
   const totalPair = lensPrice * 2;
-  // Calcul total global
-  const totalSupp = supplementaryPairs.reduce((acc, p) => acc + (p.lens.sellingPrice * 2), 0);
   const totalRefund = parseFloat(client.reimbursement || 0);
-  const remainder = (totalPair + totalSupp) - totalRefund;
+  const remainder = (totalPair + secondPairPrice) - totalRefund;
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Poppins'] uppercase transition-colors duration-300`}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+      `}</style>
       
-      {showPricingConfig && (<PricingConfigurator lenses={lenses} config={userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} }} onSave={handlePricingConfigSave} onClose={() => setShowPricingConfig(false)}/>)}
+      {/* MODALE PLEIN ÉCRAN CONFIGURATEUR */}
+      {showPricingConfig && (
+          <PricingConfigurator 
+              lenses={lenses}
+              config={userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} }}
+              onSave={handlePricingConfigSave}
+              onClose={() => setShowPricingConfig(false)}
+          />
+      )}
 
-      {/* HEADER & SIDEBAR KEPT SAME AS PREVIOUS VERSION */}
       <div className="bg-slate-900 text-white px-4 lg:px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
-          <div className="flex items-center gap-3"><button onClick={toggleSidebar} className="lg:hidden p-1 rounded hover:bg-slate-700"><Menu className="w-5 h-5"/></button>{currentSettings.shopLogo ? (<img src={currentSettings.shopLogo} alt="Logo" className="h-8 w-auto object-contain rounded bg-white p-0.5"/>) : (<div className="h-8 w-8 bg-slate-700 rounded flex items-center justify-center"><Store className="w-4 h-4"/></div>)}<span>{currentSettings.shopName}</span></div>
+          <div className="flex items-center gap-3">
+              <button onClick={toggleSidebar} className="lg:hidden p-1 rounded hover:bg-slate-700"><Menu className="w-5 h-5"/></button>
+              {currentSettings.shopLogo ? (<img src={currentSettings.shopLogo} alt="Logo" className="h-8 w-auto object-contain rounded bg-white p-0.5"/>) : (<div className="h-8 w-8 bg-slate-700 rounded flex items-center justify-center"><Store className="w-4 h-4"/></div>)}
+              <span>{currentSettings.shopName}</span>
+          </div>
           <div className="flex items-center gap-4"><button onClick={handleReset} className="flex items-center gap-1 text-red-400 hover:text-red-300" title="RAZ"><RotateCcw className="w-4 h-4"/> <span className="hidden sm:inline">RAZ</span></button><button onClick={handleLogout} className="flex items-center gap-1 text-red-400 hover:text-red-300"><LogOut className="w-4 h-4"/> <span className="hidden sm:inline">QUITTER</span></button></div>
       </div>
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-4 lg:px-6 py-4 shadow-sm z-40`}>
@@ -687,12 +833,25 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative z-0">
+        {/* SIDEBAR */}
         <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-50 transition-transform duration-300 w-80 fixed inset-y-0 left-0 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-6 space-y-6 pb-32 pt-20 lg:pt-6">
                 <div className="lg:hidden flex justify-end mb-4"><button onClick={toggleSidebar}><X className="w-6 h-6"/></button></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
-                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label><div className="grid grid-cols-1 gap-2 mb-2"><div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">SPH</span><div className="relative flex-1"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">CYL</span><div className="relative flex-1"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div></div><div className={`flex items-center gap-2 transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><span className="text-[10px] font-bold w-6 opacity-50 text-right">ADD</span><div className="relative flex-1"><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div></div>
+                
+                {/* CORRECTION */}
+                <div>
+                    <label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label>
+                    <div className="grid grid-cols-1 gap-2 mb-2">
+                        <div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">SPH</span><div className="relative flex-1"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
+                        <div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">CYL</span><div className="relative flex-1"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
+                    </div>
+                    <div className={`flex items-center gap-2 transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><span className="text-[10px] font-bold w-6 opacity-50 text-right">ADD</span><div className="relative flex-1"><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
+                </div>
+                
+                {/* CALISIZE */}
                 <div className="mb-4"><button onClick={() => setFormData(prev => ({ ...prev, calisize: !prev.calisize }))} className={`w-full py-3 rounded-xl flex items-center justify-between px-4 border transition-all ${formData.calisize ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}><span className="text-xs font-bold flex items-center gap-2"><ScanLine className="w-4 h-4"/> OPTION PRÉCAL (CALISIZE)</span>{formData.calisize ? <CheckCircle className="w-4 h-4"/> : <div className="w-4 h-4 border-2 border-slate-300 rounded-full"></div>}</button></div>
+
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{LENS_TYPES.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{INDICES.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
@@ -710,6 +869,7 @@ function App() {
                     </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {/* RESTRICTION AUX 3 PREMIERS RÉSULTATS */}
                     {filteredLenses.slice(0, 3).map((lens, index) => (<LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} onSelect={setSelectedLens} isSelected={selectedLens && selectedLens.id === lens.id} />))}
                 </div>
                 {filteredLenses.length === 0 && !loading && <div className="text-center py-20 opacity-50 text-sm font-bold">AUCUN VERRE TROUVÉ</div>}
@@ -717,112 +877,54 @@ function App() {
         </section>
       </div>
 
-      {/* FOOTER DEVIS AMÉLIORÉ */}
+      {/* FOOTER DEVIS */}
       {selectedLens && (
-          <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800 max-h-[40vh] overflow-y-auto">
-              <div className="max-w-7xl mx-auto">
-                  {/* Ligne principale */}
-                  <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
-                      <div className="flex items-center gap-4">
-                        <div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div>
-                        <div>
-                            <div className="text-[10px] font-bold text-slate-400 mt-1">RÉFÉRENCE COMMANDE (1ère Paire)</div>
-                            <div className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all" onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }}>{selectedLens.commercial_code || "N/A"}</div>
-                            <div className="font-bold text-slate-800 text-sm leading-tight mt-1">{selectedLens.name}</div>
+          <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800">
+              <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div>
+                    <div>
+                        <div className="text-[10px] font-bold text-slate-400 mt-1">RÉFÉRENCE DE COMMANDE</div>
+                        <div 
+                          className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all"
+                          onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }}
+                          title="Cliquer pour copier"
+                        >
+                          {selectedLens.commercial_code || "N/A"}
                         </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-8 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100">
-                          <div className="text-center"><div className="text-[9px] font-bold text-slate-400">UNITAIRE</div><div className="font-bold text-lg text-slate-700">{parseFloat(selectedLens.sellingPrice).toFixed(2)} €</div></div>
-                          <div className="text-slate-300 text-xl">x 2</div>
-                          <div className="text-center"><div className="text-[9px] font-bold text-blue-600">TOTAL 1ère PAIRE</div><div className="font-bold text-2xl text-blue-700">{totalPair.toFixed(2)} €</div></div>
-                      </div>
-
-                      {/* GESTION PAIRES SUPPLÉMENTAIRES */}
-                      <div className="flex flex-col gap-2">
-                          <div className="flex items-center gap-2">
-                              <button onClick={() => handleAddSupplementaryPair('discount')} className="px-3 py-2 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 rounded-lg text-xs font-bold border border-yellow-200 transition-colors flex items-center gap-1">
-                                  <PlusCircle className="w-3 h-3"/> PAIRE -50%
-                              </button>
-                              <button onClick={() => handleAddSupplementaryPair('alternance')} className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold border border-purple-200 transition-colors flex items-center gap-1">
-                                  <PackagePlus className="w-3 h-3"/> OFFRE ALTERNANCE
-                              </button>
-                          </div>
-                      </div>
-
-                      <div className="flex flex-col items-end">
-                          <div className="text-[10px] font-bold text-slate-400">RESTE À CHARGE CLIENT</div>
-                          <div className={`text-3xl font-black ${remainder > 0 ? 'text-slate-800' : 'text-green-600'}`}>{remainder.toFixed(2)} €</div>
-                      </div>
-                      <button onClick={saveOffer} className="ml-4 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-green-200 transition-all"><CheckCircle className="w-5 h-5"/> VALIDER</button>
+                        <div className="font-bold text-slate-800 text-sm leading-tight mt-1">{selectedLens.name}</div>
+                    </div>
                   </div>
-
-                  {/* Liste des Paires Supplémentaires */}
-                  {supplementaryPairs.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 gap-2">
-                          {supplementaryPairs.map((pair, idx) => (
-                              <div key={pair.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-lg border border-gray-200 text-xs">
-                                  <div className="flex items-center gap-3">
-                                      <span className="font-bold text-slate-400">#{idx + 2}</span>
-                                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${pair.type === 'discount' ? 'bg-yellow-100 text-yellow-700' : 'bg-purple-100 text-purple-700'}`}>{pair.description}</span>
-                                      <span className="font-bold text-slate-700">{pair.lens.name}</span>
-                                  </div>
-                                  <div className="flex items-center gap-4">
-                                      <div className="text-right">
-                                          <span className="text-slate-400 mr-2">Prix Paire :</span>
-                                          <span className="font-bold text-slate-800">{(pair.lens.sellingPrice * 2).toFixed(2)} €</span>
-                                      </div>
-                                      <button onClick={() => removeSupplementaryPair(pair.id)} className="text-red-400 hover:text-red-600"><MinusCircle className="w-4 h-4"/></button>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-                  )}
+                  <div className="flex items-center gap-8 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100"><div className="text-center"><div className="text-[9px] font-bold text-slate-400">UNITAIRE</div><div className="font-bold text-lg text-slate-700">{parseFloat(selectedLens.sellingPrice).toFixed(2)} €</div></div><div className="text-slate-300 text-xl">x 2</div><div className="text-center"><div className="text-[9px] font-bold text-blue-600">TOTAL PAIRE</div><div className="font-bold text-2xl text-blue-700">{totalPair.toFixed(2)} €</div></div></div>
+                  <div className="flex items-center gap-4"><div className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-xl border border-orange-100"><Coins className="w-4 h-4 text-orange-500"/><div className="flex flex-col"><span className="text-[8px] font-bold text-orange-400">2ÈME PAIRE</span><input type="number" value={secondPairPrice} onChange={(e) => setSecondPairPrice(safeNum(e.target.value))} onFocus={(e) => e.target.select()} className="w-16 bg-transparent font-bold text-orange-700 outline-none text-sm" placeholder="0" min="0"/></div></div><div className="flex flex-col items-end"><div className="text-[10px] font-bold text-slate-400">RESTE À CHARGE CLIENT</div><div className={`text-3xl font-black ${remainder > 0 ? 'text-slate-800' : 'text-green-600'}`}>{remainder.toFixed(2)} €</div></div><button onClick={saveOffer} className="ml-4 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-green-200 transition-all"><CheckCircle className="w-5 h-5"/> VALIDER L'OFFRE</button></div>
               </div>
           </div>
       )}
 
-      {/* MODALE SETTINGS (Avec Section Paires Supp) */}
+      {/* MODALE SETTINGS (Avec Upload User + Excel) */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}>
            <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
               <h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>
-              {/* ... (Sections Admin, Marque, Identité, Apparence inchangées) ... */}
-              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(b.id)} className={`px-3 py-2 rounded-lg text-xs font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-blue-600 text-white border-blue-600'}`}>{isDisabled ? <Square className="w-3 h-3 inline mr-1"/> : <CheckSquare className="w-3 h-3 inline mr-1"/>}{b.label}</button>); })}</div></div>
-              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div></div></div>
               
-              {/* CONFIGURATION PAIRES SUPPLÉMENTAIRES */}
-              <div className="mb-8 p-4 bg-purple-50 rounded-xl border border-purple-100">
-                  <h4 className="text-xs font-bold text-purple-700 mb-4 flex items-center gap-2"><PackagePlus className="w-4 h-4"/> OFFRE PAIRES SUPPLÉMENTAIRES</h4>
-                  <div className="mb-4">
-                      <label className="text-xs font-bold text-slate-500 mb-2 block">MODE DE CALCUL (GAMME ALTERNANCE)</label>
-                      <div className="flex gap-2">
-                          <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'component'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'component' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>PAR COMPOSANT</button>
-                          <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'manual'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'manual' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>MANUEL (GRILLE)</button>
-                      </div>
-                  </div>
-                  {userSettings.supplementaryConfig?.mode === 'component' && (
-                      <div className="grid grid-cols-2 gap-4">
-                          <div><label className="text-[10px] font-bold text-slate-400 block mb-1">PRIX GÉOMÉTRIE (€)</label>
-                              <div className="space-y-1">
-                                  {['UNIFOCAL', 'PROGRESSIF', 'DEGRESSIF', 'PROGRESSIF_INTERIEUR'].map(k => (
-                                      <div key={k} className="flex justify-between items-center"><span className="text-[10px]">{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-12 text-center border rounded text-xs p-1"/></div>
-                                  ))}
-                              </div>
-                          </div>
-                          <div><label className="text-[10px] font-bold text-slate-400 block mb-1">SUPPLÉMENTS (€)</label>
-                              <div className="space-y-1">
-                                  {['1.60', '1.67', 'HMC', 'BLUE', 'PHOTO', 'TEINTE'].map(k => (
-                                      <div key={k} className="flex justify-between items-center"><span className="text-[10px]">{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-12 text-center border rounded text-xs p-1"/></div>
-                                  ))}
-                              </div>
-                          </div>
-                      </div>
-                  )}
-              </div>
-
-              {/* PRIX MARCHÉ LIBRE (Reste inchangé) */}
-               <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE (1ère Paire)</h4>
+              {/* ADMIN */}
+              {user?.role === 'admin' && (
+                <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 mb-6">
+                    <h3 className="text-xs font-bold text-orange-700 mb-3 flex items-center gap-2"><Lock className="w-3 h-3"/> ADMINISTRATION</h3>
+                    <div className="mb-4"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER UTILISATEURS</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUserFile(e.target.files[0])} className="flex-1 text-xs bg-white"/><button onClick={triggerUserUpload} disabled={syncLoading} className="bg-orange-600 text-white px-4 py-2 rounded text-xs font-bold">{syncLoading ? "..." : "ENVOYER"}</button></div></div>
+                    <div className="mb-4"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER CATALOGUE VERRES</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUploadFile(e.target.files[0])} className="flex-1 text-xs bg-white"/><button onClick={triggerFileUpload} disabled={syncLoading} className="bg-orange-600 text-white px-4 py-2 rounded text-xs font-bold">{syncLoading ? "..." : "ENVOYER"}</button></div></div>
+                    <div className="flex justify-between items-center"><span className="text-xs">État Base de Données</span><button onClick={checkDatabase} className="bg-white border border-orange-300 px-3 py-1 rounded text-xs font-bold text-orange-700">VÉRIFIER</button></div>
+                </div>
+              )}
+              
+              {/* MARQUES VISIBLES */}
+              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(b.id)} className={`px-3 py-2 rounded-lg text-xs font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-blue-600 text-white border-blue-600'}`}>{isDisabled ? <Square className="w-3 h-3 inline mr-1"/> : <CheckSquare className="w-3 h-3 inline mr-1"/>}{b.label}</button>); })}</div></div>
+              {/* SETTINGS COMMUNS */}
+              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div>
+              <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div>
+              
+              {/* PRIX MARCHÉ LIBRE */}
+               <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4>
                  {/* SÉLECTEUR DE MODE */}
                  <div className="mb-6 flex gap-4 p-1 bg-slate-100 rounded-xl">
                      <button 
@@ -838,22 +940,66 @@ function App() {
                          MANUEL (AU VERRE)
                      </button>
                  </div>
-                 {/* ... Contenu mode lineaire/manuel existant ... */}
+
+                 {/* CONTENU SELON LE MODE */}
                  {userSettings.pricingMode === 'linear' ? (
-                     <div className="grid grid-cols-1 gap-4">
+                     <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-4">
+                        <div className="flex items-center justify-between bg-indigo-50 p-2 rounded border border-indigo-100"><span className="text-xs font-bold text-indigo-700">SUPPLÉMENT CALISIZE (€)</span><input type="number" step="1" value={safePricing.calisize?.price ?? 10} onChange={(e) => handlePriceRuleChange('calisize', 'price', e.target.value)} className="w-16 p-1 border rounded text-center text-xs font-bold text-indigo-700"/></div>
                         <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                        <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
                         <div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                        <div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                        <div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                        <div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
                      </div>
                  ) : (
-                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center"><button onClick={() => setShowPricingConfig(true)} className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs">OUVRIR LE CONFIGURATEUR</button></div>
+                     <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 text-center animate-in fade-in slide-in-from-right-4">
+                         <ListFilter className="w-10 h-10 text-blue-500 mx-auto mb-3"/>
+                         <h3 className="font-bold text-blue-900 mb-2">Configuration Manuelle</h3>
+                         <p className="text-xs text-blue-700 mb-6">Définissez vos prix de vente et la disponibilité des verres ligne par ligne.</p>
+                         <button 
+                             onClick={() => setShowPricingConfig(true)}
+                             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
+                         >
+                             <Settings className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR
+                         </button>
+                     </div>
                  )}
                </div>
               <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
            </div>
         </div>
       )}
-      
-      {/* ... (Autres Modales Historique etc. inchangées) ... */}
+
+      {/* MODALE HISTORIQUE (AFFICHE LA CORRECTION) */}
+      {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+      <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+        <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+            <div>
+                <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
+                <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
+                {/* AFFICHAGE CORRECTION */}
+                {(offer.correction || (offer.lens && offer.lens.correction_data)) && (
+                    <div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono">
+                        <span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span>
+                        <span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span>
+                        <span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span>
+                    </div>
+                )}
+            </div>
+          </div>
+          <div className="text-right">
+              <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
+              <div className="font-bold text-slate-800">{offer.lens?.name}</div>
+              <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
+          </div>
+          <div className="flex items-center gap-2">
+             <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+             <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button>
+          </div>
+        </div>))}</div></div></div>)}
     </div>
   );
 }
