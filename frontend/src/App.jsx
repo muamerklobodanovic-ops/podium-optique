@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.35"; // AJOUT : Filtre Marque Alternance dans le Configurateur Dédié
+const APP_VERSION = "5.36"; // MODIF : Suppression colonne Géométrie dans Config Alternance
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -311,7 +311,7 @@ const AlternanceConfigurator = ({ attributes, currentPrices, onSave, onClose }) 
     };
 
     const sections = [
-        { title: "GÉOMÉTRIE", data: attributes.types, color: "text-blue-600", bg: "bg-blue-50" },
+        // GÉOMÉTRIE SUPPRIMÉE ICI
         { title: "DESIGN", data: attributes.designs, color: "text-indigo-600", bg: "bg-indigo-50" },
         { title: "INDICE", data: attributes.indices, color: "text-green-600", bg: "bg-green-50" },
         { title: "MATIÈRE", data: attributes.materials, color: "text-orange-600", bg: "bg-orange-50" },
@@ -338,7 +338,7 @@ const AlternanceConfigurator = ({ attributes, currentPrices, onSave, onClose }) 
             </div>
 
             <div className="flex-1 overflow-auto p-8">
-                <div className="grid grid-cols-5 gap-6 h-full">
+                <div className="grid grid-cols-4 gap-6 h-full">
                     {sections.map((section) => (
                         <div key={section.title} className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full">
                             <div className={`px-4 py-3 border-b border-slate-100 font-bold text-xs ${section.color} ${section.bg} flex justify-between items-center`}>
@@ -949,14 +949,24 @@ function PodiumCore() {
                   {/* CONFIGURATION PAIRES SUPPLÉMENTAIRES */}
                   <div className="mb-8 p-4 bg-purple-50 rounded-xl border border-purple-100">
                       <h4 className="text-xs font-bold text-purple-700 mb-4 flex items-center gap-2"><PackagePlus className="w-4 h-4"/> OFFRE PAIRES SUPPLÉMENTAIRES</h4>
-                      <p className="text-[10px] text-purple-600 mb-4">Configurez ici les prix de vente pour la gamme ALTERNANCE (Paires supplémentaires).</p>
-                      
-                      <button 
-                          onClick={() => setShowAlternanceConfig(true)}
-                          className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-200 transition-all flex items-center justify-center gap-2"
-                      >
-                          <Settings className="w-4 h-4"/> CONFIGURER LA STRUCTURE TARIFAIRE (ALTERNANCE)
-                      </button>
+                      <div className="mb-4">
+                          <label className="text-xs font-bold text-slate-500 mb-2 block">MODE DE CALCUL (GAMME ALTERNANCE)</label>
+                          <div className="flex gap-2">
+                              <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'component'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'component' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>PAR COMPOSANT</button>
+                              <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'manual'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'manual' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>MANUEL (GRILLE)</button>
+                          </div>
+                      </div>
+                      {userSettings.supplementaryConfig?.mode === 'component' && (
+                           <div className="text-center">
+                               <p className="text-xs text-slate-500 mb-4">Configurez les prix de chaque composant (Matière, Indice, etc.) pour calculer le prix de vente final.</p>
+                               <button 
+                                  onClick={() => setShowAlternanceConfig(true)}
+                                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-200 transition-all flex items-center justify-center gap-2"
+                               >
+                                  <Component className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR DE COMPOSANTS
+                               </button>
+                           </div>
+                      )}
                   </div>
 
                   {/* PRIX MARCHÉ LIBRE (Reste inchangé) */}
