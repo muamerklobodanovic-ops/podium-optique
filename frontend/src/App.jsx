@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, PlusCircle, MinusCircle, PackagePlus, Component, MousePointerClick
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, PlusCircle, MinusCircle, PackagePlus
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.52"; // VERSION COMPLETE (Sans abréviations)
+const APP_VERSION = "5.31"; // STABILITÉ : Regroupement des Handlers (Fix ReferenceError)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS = {
     disabledBrands: [],
     pricingMode: 'linear', 
     perLensConfig: {
-        disabledAttributes: { designs: [], indices: [], coatings: [], types: [], materials: [] }, 
+        disabledAttributes: { designs: [], indices: [], coatings: [] }, 
         prices: {} 
     },
     supplementaryConfig: {
@@ -50,10 +50,10 @@ const CALISIZE_NETWORK_PRICES = {
 };
 
 const DEMO_LENSES = [
-  { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", material: "ORG", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
-  { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", material: "ORG", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
-  { id: 201, name: "ALT PROGRESSIF 1.5", brand: "ALTERNANCE", commercial_code: "ALT-P15", type: "PROGRESSIF", index_mat: "1.50", material: "ORG", design: "ECO", coating: "HMC", purchase_price: 35, purchase_price_bonifie: 20, purchase_price_super_bonifie: 10, commercial_flow: "FAB" },
-  { id: 202, name: "ALT UNIFOCAL 1.6", brand: "ALTERNANCE", commercial_code: "ALT-U16", type: "UNIFOCAL", index_mat: "1.60", material: "MR8", design: "ECO", coating: "HMC", purchase_price: 12, purchase_price_bonifie: 6, purchase_price_super_bonifie: 6, commercial_flow: "STOCK" },
+  { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
+  { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
+  { id: 201, name: "ALT PROGRESSIF 1.5", brand: "ALTERNANCE", commercial_code: "ALT-P15", type: "PROGRESSIF", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 35, purchase_price_bonifie: 20, purchase_price_super_bonifie: 10, commercial_flow: "FAB" },
+  { id: 202, name: "ALT UNIFOCAL 1.6", brand: "ALTERNANCE", commercial_code: "ALT-U16", type: "UNIFOCAL", index_mat: "1.60", design: "ECO", coating: "HMC", purchase_price: 12, purchase_price_bonifie: 6, purchase_price_super_bonifie: 6, commercial_flow: "STOCK" },
 ];
 
 const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' }, { id: 'ALTERNANCE', label: 'ALTERNANCE' } ];
@@ -76,21 +76,24 @@ const checkIsPhoto = (item) => {
 const calculateComponentPrice = (lens, componentPrices) => {
     let price = 0;
     if (!componentPrices) return 0; 
+    const type = cleanText(lens.type);
+    const idx = cleanText(lens.index_mat);
+    const coat = cleanText(lens.coating);
 
-    const keysToSum = [
-        cleanText(lens.type),
-        cleanText(lens.design),
-        cleanText(lens.index_mat),
-        cleanText(lens.material),
-        cleanText(lens.coating)
-    ];
-    if (checkIsPhoto(lens)) keysToSum.push('PHOTOCHROMIQUE');
+    if (type.includes('PROGRESSIF_INTERIEUR')) price += componentPrices['PROGRESSIF_INTERIEUR'] || 0;
+    else if (type.includes('PROGRESSIF')) price += componentPrices['PROGRESSIF'] || 0;
+    else if (type.includes('DEGRESSIF')) price += componentPrices['DEGRESSIF'] || 0;
+    else if (type.includes('MULTIFOCAL')) price += componentPrices['MULTIFOCAL'] || 0;
+    else price += componentPrices['UNIFOCAL'] || 0;
 
-    keysToSum.forEach(key => {
-        if (componentPrices[key]) {
-            price += componentPrices[key];
-        }
+    Object.keys(componentPrices).forEach(key => {
+        if (key.includes('.') && idx.includes(key)) price += componentPrices[key];
     });
+
+    if (coat.includes('HMC')) price += componentPrices['HMC'] || 0;
+    if (coat.includes('BLUE') || coat.includes('PROTECT')) price += componentPrices['BLUE'] || 0;
+    if (checkIsPhoto(lens)) price += componentPrices['PHOTO'] || 0;
+
     return price;
 };
 
@@ -115,7 +118,6 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// --- UI COMPONENTS ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const [hasError, setHasError] = useState(false);
   const safeBrand = brand || 'unknown';
@@ -139,7 +141,7 @@ const NetworkLogo = ({ network, isSelected, onClick }) => {
   );
 };
 
-const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected, onCompare, isReference = false, onClick }) => {
+const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected, onCompare, isReference = false }) => {
   if (!lens) return null;
   const podiumStyles = [{ border: "border-yellow-400 ring-4 ring-yellow-50 shadow-xl shadow-yellow-100", badge: "bg-yellow-400 text-white border-yellow-500", icon: <Trophy className="w-5 h-5 text-white" />, label: "MEILLEUR CHOIX" }, { border: `border-slate-200 shadow-lg ${currentTheme.shadow || ''}`, badge: `${currentTheme.light || 'bg-gray-100'} ${currentTheme.textDark || 'text-gray-800'} ${currentTheme.border || 'border-gray-200'}`, icon: <Shield className={`w-5 h-5 ${currentTheme.text || 'text-gray-600'}`} />, label: "OFFRE OPTIMISÉE" }, { border: "border-slate-200 shadow-lg", badge: "bg-slate-100 text-slate-600 border-slate-200", icon: <Star className="w-5 h-5 text-orange-400" />, label: "PREMIUM" }];
   let activeStyle = podiumStyles[index !== undefined && index < 3 ? index : 1];
@@ -151,16 +153,8 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   const mVal = safeNum(lens.margin);
   const displayMargin = (sPrice > 0) ? ((mVal / sPrice) * 100).toFixed(0) : "0";
   
-  const handleClick = () => {
-      if (onClick) {
-          onClick(lens);
-      } else if (onSelect) {
-          onSelect(lens);
-      }
-  };
-
   return (
-    <div onClick={handleClick} className={`group bg-white rounded-3xl border-2 p-6 flex flex-col relative cursor-pointer transition-all duration-300 ${activeStyle.border} ${!isSelected && !isReference ? 'hover:-translate-y-2' : ''}`}>
+    <div onClick={() => onSelect && onSelect(lens)} className={`group bg-white rounded-3xl border-2 p-6 flex flex-col relative cursor-pointer transition-all duration-300 ${activeStyle.border} ${!isSelected && !isReference ? 'hover:-translate-y-2' : ''}`}>
         <div className="absolute top-5 right-5 z-10"><span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold border shadow-sm ${activeStyle.badge}`}>{activeStyle.icon || (isSelected ? <CheckCircle className="w-4 h-4"/> : null)} {activeStyle.label}</span></div>
         <div className="pt-8 border-b border-slate-50 pb-6 mb-6">
           <p className="text-[10px] font-mono text-slate-400 mb-2 tracking-widest uppercase">{lens.commercial_code || "REF-UNK"}</p>
@@ -179,27 +173,24 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   );
 };
 
-// --- CONFIGURATEUR 1ERE PAIRE (MARCHÉ LIBRE) ---
 const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterPhoto, setFilterPhoto] = useState('all'); 
     const [filterBrand, setFilterBrand] = useState('');
 
-    // 1. Extraction Dynamique pour les filtres de gauche
     const availableAttributes = useMemo(() => {
         const filteredLenses = filterBrand 
             ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand))
             : lenses;
             
         return {
-            types: [...new Set(filteredLenses.map(l => cleanText(l.type)))].sort().filter(Boolean),
             designs: [...new Set(filteredLenses.map(l => cleanText(l.design)))].sort().filter(Boolean),
             indices: [...new Set(filteredLenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean),
-            materials: [...new Set(filteredLenses.map(l => cleanText(l.material)))].sort().filter(Boolean),
             coatings: [...new Set(filteredLenses.map(l => cleanText(l.coating)))].sort().filter(Boolean)
         };
     }, [lenses, filterBrand]);
 
-    // 2. Calcul des combinaisons uniques pour le tableau
+    const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
+
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
@@ -210,7 +201,6 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                     type: cleanText(l.type),      
                     design: cleanText(l.design),
                     index_mat: cleanText(l.index_mat),
-                    material: cleanText(l.material), // Ajout Matière
                     coating: cleanText(l.coating),
                     avg_purchase: l.purchase_price,
                     isPhoto: checkIsPhoto(l), 
@@ -227,14 +217,12 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     }, [lenses]);
 
     const [localConfig, setLocalConfig] = useState(() => {
-        // Deep Copy + Defaults
         const safeConfig = JSON.parse(JSON.stringify(config || {}));
-        if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = {};
-        // Ensure all arrays exist
-        ['types', 'designs', 'indices', 'materials', 'coatings'].forEach(k => {
-            if (!safeConfig.disabledAttributes[k]) safeConfig.disabledAttributes[k] = [];
-        });
+        if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = { designs: [], indices: [], coatings: [] };
         if (!safeConfig.prices) safeConfig.prices = {};
+        if (!safeConfig.disabledAttributes.designs) safeConfig.disabledAttributes.designs = [];
+        if (!safeConfig.disabledAttributes.indices) safeConfig.disabledAttributes.indices = [];
+        if (!safeConfig.disabledAttributes.coatings) safeConfig.disabledAttributes.coatings = [];
         return safeConfig;
     });
 
@@ -273,186 +261,177 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterText, setFilterText] = useState("");
 
     const filteredRows = uniqueCombinations.filter(row => {
-        // Vérifie les filtres d'exclusion (Sidebar)
-        if ((localConfig.disabledAttributes.types || []).includes(row.type)) return false;
         if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
         if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
-        if ((localConfig.disabledAttributes.materials || []).includes(row.material)) return false;
         if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
         
-        // Filtres Top Bar
         if (filterBrand && filterBrand !== '' && row.brand !== cleanText(filterBrand)) return false;
+
         if (filterPhoto === 'white' && row.isPhoto) return false;
         if (filterPhoto === 'photo' && !row.isPhoto) return false;
 
-        // Recherche texte
-        return (row.type + row.design + row.coating + row.material).toLowerCase().includes(filterText.toLowerCase());
+        return (row.type + row.design + row.coating).toLowerCase().includes(filterText.toLowerCase());
     });
 
     const handleResetFiltered = () => {
         if (filteredRows.length === 0) return alert("Aucun verre affiché à réinitialiser.");
-        if (window.confirm(`⚠️ ATTENTION : Remise à 0€ des ${filteredRows.length} lignes affichées ?`)) {
-            if (window.confirm("🔴 DOUBLE CONFIRMATION : Action irréversible.")) {
+        if (window.confirm(`⚠️ ATTENTION : Vous allez remettre à 0€ les ${filteredRows.length} lignes actuellement affichées.\n\nCette action affecte uniquement la sélection visible (Filtres + Recherche).\n\nVoulez-vous continuer ?`)) {
+            if (window.confirm("🔴 DOUBLE CONFIRMATION REQUISE\n\nÊtes-vous ABSOLUMENT sûr de vouloir supprimer ces tarifs ?\nCette action est irréversible.")) {
                 const newPrices = { ...localConfig.prices };
-                filteredRows.forEach(row => { newPrices[row.key] = 0; });
+                filteredRows.forEach(row => {
+                    newPrices[row.key] = 0;
+                });
                 setLocalConfig(prev => ({ ...prev, prices: newPrices }));
             }
         }
     };
 
-    const FilterSection = ({ title, type, items }) => (
-        <div className="mb-6">
-            <div className="flex justify-between items-center mb-2">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</h3>
-                <div className="flex gap-1">
-                    <button onClick={() => setAllAttributes(type, true, items)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
-                    <button onClick={() => setAllAttributes(type, false, items)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
-                </div>
-            </div>
-            <div className="flex flex-col gap-1">
-                {items.map(item => {
-                    const isDisabled = (localConfig.disabledAttributes[type] || []).includes(item);
-                    return (
-                        <button key={item} onClick={() => toggleAttribute(type, item)} className={`px-2 py-1.5 rounded text-xs font-bold border text-left flex justify-between items-center ${isDisabled ? 'bg-slate-50 text-slate-400 border-slate-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
-                            <span className="truncate pr-2">{item}</span>
-                            {isDisabled ? <ToggleLeft className="w-4 h-4 shrink-0"/> : <ToggleRight className="w-4 h-4 shrink-0"/>}
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
-    );
-
     return (
         <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-['Poppins']">
-            <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm"><div><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Calculator className="w-6 h-6 text-blue-600"/>CONFIGURATEUR (Paires Principales)</h2></div><div className="flex gap-4"><button onClick={onClose} className="px-6 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100">ANNULER</button><button onClick={() => onSave(localConfig)} className="px-6 py-2 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200">ENREGISTRER</button></div></div>
+            <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
+                <div>
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Calculator className="w-6 h-6 text-blue-600"/>
+                        CONFIGURATEUR TARIFAIRE
+                    </h2>
+                    <p className="text-sm text-slate-500">Mode Manuel "Au Verre"</p>
+                </div>
+                <div className="flex gap-4">
+                    <button onClick={onClose} className="px-6 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100">ANNULER</button>
+                    <button onClick={() => onSave(localConfig)} className="px-6 py-2 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200">ENREGISTRER & FERMER</button>
+                </div>
+            </div>
+
             <div className="flex-1 overflow-hidden flex">
-                 <aside className="w-64 bg-white border-r overflow-y-auto p-4 shrink-0">
-                     <FilterSection title="GÉOMÉTRIE" type="types" items={availableAttributes.types} />
-                     <FilterSection title="DESIGN" type="designs" items={availableAttributes.designs} />
-                     <FilterSection title="INDICE" type="indices" items={availableAttributes.indices} />
-                     <FilterSection title="MATIÈRE" type="materials" items={availableAttributes.materials} />
-                     <FilterSection title="TRAITEMENT" type="coatings" items={availableAttributes.coatings} />
-                 </aside>
-                 <main className="flex-1 flex flex-col bg-slate-50">
+                <aside className="w-80 bg-white border-r overflow-y-auto p-6 space-y-8">
+                    {/* FILTRES LATERAUX */}
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Indices</h3>
+                            <div className="flex gap-1">
+                                <button onClick={() => setAllAttributes('indices', true, availableIndices)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                                <button onClick={() => setAllAttributes('indices', false, availableIndices)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {availableIndices.map(idx => {
+                                const isDisabled = (localConfig.disabledAttributes.indices || []).includes(idx);
+                                return (
+                                    <button key={idx} onClick={() => toggleAttribute('indices', idx)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isDisabled ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-green-100 text-green-700 border-green-200'}`}>
+                                        {isDisabled ? <ToggleLeft className="w-4 h-4 inline mr-1"/> : <ToggleRight className="w-4 h-4 inline mr-1"/>}
+                                        {idx}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Designs</h3>
+                            <div className="flex gap-1">
+                                <button onClick={() => setAllAttributes('designs', true, availableDesigns)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                                <button onClick={() => setAllAttributes('designs', false, availableDesigns)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            {availableDesigns.map(d => {
+                                const isDisabled = (localConfig.disabledAttributes.designs || []).includes(d);
+                                return (
+                                    <button key={d} onClick={() => toggleAttribute('designs', d)} className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all text-left flex justify-between items-center ${isDisabled ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                        <span>{d}</span>
+                                        {isDisabled ? <ToggleLeft className="w-4 h-4"/> : <ToggleRight className="w-4 h-4"/>}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité Traitements</h3>
+                            <div className="flex gap-1">
+                                <button onClick={() => setAllAttributes('coatings', true, availableCoatings)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                                <button onClick={() => setAllAttributes('coatings', false, availableCoatings)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            {availableCoatings.map(c => {
+                                const isDisabled = (localConfig.disabledAttributes.coatings || []).includes(c);
+                                return (
+                                    <button key={c} onClick={() => toggleAttribute('coatings', c)} className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all text-left flex justify-between items-center ${isDisabled ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                                        <span>{c}</span>
+                                        {isDisabled ? <ToggleLeft className="w-4 h-4"/> : <ToggleRight className="w-4 h-4"/>}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </aside>
+
+                <main className="flex-1 flex flex-col bg-slate-50">
                     <div className="p-4 border-b bg-white flex flex-col gap-4">
-                        <div className="flex items-center gap-4"><div className="flex-1 relative"><Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/><input type="text" placeholder="Recherche..." className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none text-sm font-bold text-slate-700 focus:ring-2 ring-blue-100" value={filterText} onChange={(e) => setFilterText(e.target.value)}/></div><button onClick={handleResetFiltered} className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200 transition-colors"><Trash2 className="w-4 h-4"/> RAZ SÉLECTION</button></div>
+                        <div className="flex items-center gap-4">
+                            <div className="flex-1 relative">
+                                <Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/>
+                                <input type="text" placeholder="Filtrer le tableau (ex: UNIFOCAL 1.6)" className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none text-sm font-bold text-slate-700 focus:ring-2 ring-blue-100" value={filterText} onChange={(e) => setFilterText(e.target.value)}/>
+                            </div>
+                            <button onClick={handleResetFiltered} className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200 transition-colors" title="Remettre à 0€ les verres visibles"><Trash2 className="w-4 h-4"/> RAZ SÉLECTION</button>
+                        </div>
                         <div className="flex flex-wrap items-center gap-4">
-                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><div className="px-2 text-xs font-bold text-slate-400 flex items-center gap-1"><Briefcase className="w-3 h-3"/> MARQUE</div>{availableBrands.map(b => (<button key={b.id} onClick={() => setFilterBrand(b.id)} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterBrand === b.id ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>{b.label}</button>))}</div>
-                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><button onClick={() => setFilterPhoto('all')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}><ListFilter className="w-3 h-3"/> TOUS</button><button onClick={() => setFilterPhoto('white')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}><Sun className="w-3 h-3"/> BLANCS</button><button onClick={() => setFilterPhoto('photo')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}><SunDim className="w-3 h-3"/> PHOTO</button></div>
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                                <div className="px-2 text-xs font-bold text-slate-400 flex items-center gap-1"><Briefcase className="w-3 h-3"/> MARQUE</div>
+                                {availableBrands.map(b => (<button key={b.id} onClick={() => setFilterBrand(b.id)} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterBrand === b.id ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>{b.label}</button>))}
+                            </div>
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                                <button onClick={() => setFilterPhoto('all')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}><ListFilter className="w-3 h-3"/> TOUS</button>
+                                <button onClick={() => setFilterPhoto('white')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}><Sun className="w-3 h-3"/> BLANCS</button>
+                                <button onClick={() => setFilterPhoto('photo')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}><SunDim className="w-3 h-3"/> PHOTOCHROMIQUES</button>
+                            </div>
                             <span className="ml-auto text-xs text-slate-400 font-mono font-bold bg-slate-50 px-2 py-1 rounded border border-slate-100">{filteredRows.length} lignes</span>
                         </div>
                     </div>
                     <div className="flex-1 overflow-auto p-6">
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <table className="min-w-full divide-y divide-slate-100">
-                                <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">TYPE</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">DESIGN</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">MAT</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">IND</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">TRAIT</th><th className="px-4 py-3 text-right text-xs font-bold text-slate-400">ACHAT</th><th className="px-4 py-3 text-right text-xs font-bold text-blue-600 w-32 border-l border-blue-100">VENTE</th><th className="px-4 py-3 text-right text-xs font-bold text-green-600 w-24 bg-green-50/50">MARGE €</th><th className="px-4 py-3 text-right text-xs font-bold text-green-600 w-16 bg-green-50/50">%</th></tr></thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {filteredRows.map(row => {
+                                <thead className="bg-slate-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Design</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Index</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Traitement</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Achat Moy.</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 border-l border-blue-100 w-32">PRIX VENTE</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">Marge €</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-slate-100">
+                                    {filteredRows.map((row) => {
                                         const price = localConfig.prices[row.key] || 0;
                                         const purchase = safeNum(row.avg_purchase);
                                         const margin = price - purchase;
                                         const marginPercent = price > 0 ? (margin / price) * 100 : 0;
+
                                         return (
                                             <tr key={row.key} className="hover:bg-slate-50">
-                                                <td className="px-4 py-3 text-xs font-bold text-slate-700">{row.type}</td>
-                                                <td className="px-4 py-3 text-xs text-slate-600">{row.design}</td>
-                                                <td className="px-4 py-3 text-xs text-slate-600">{row.material}</td>
-                                                <td className="px-4 py-3 text-xs font-bold text-slate-800 bg-slate-100 rounded text-center">{row.index_mat}</td>
-                                                <td className="px-4 py-3 text-xs text-slate-600">{row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}{row.coating}</td>
-                                                <td className="px-4 py-3 text-xs text-right text-slate-400 font-mono">{purchase.toFixed(0)}€</td>
-                                                <td className="px-4 py-3 text-right border-l border-blue-100 bg-blue-50/30"><input type="number" step="0.5" className={`w-full text-right font-bold bg-transparent outline-none border-b-2 focus:border-blue-500 transition-colors ${price > 0 ? 'text-blue-700 border-blue-200' : 'text-slate-300 border-slate-200'}`} placeholder="0" value={price === 0 ? '' : price} onChange={(e) => updatePrice(row.key, e.target.value)}/></td>
-                                                <td className={`px-4 py-3 text-xs text-right font-bold ${margin > 0 ? 'text-green-600' : 'text-red-400'}`}>{price > 0 ? `${margin.toFixed(2)}` : '-'}</td>
-                                                <td className={`px-4 py-3 text-xs text-right font-bold ${marginPercent > 40 ? 'text-green-600' : (marginPercent > 0 ? 'text-orange-500' : 'text-red-400')}`}>{price > 0 ? `${marginPercent.toFixed(0)}%` : '-'}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-slate-800">{row.type}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">{row.design}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap"><span className="px-2 py-1 rounded bg-slate-100 text-xs font-bold text-slate-600">{row.index_mat}</span></td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">{row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}{row.coating}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-right text-slate-400 font-mono">~{purchase.toFixed(0)}€</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right bg-blue-50/30 border-l border-blue-100"><input type="number" className={`w-full text-right font-bold bg-transparent outline-none border-b-2 focus:border-blue-500 transition-colors ${price > 0 ? 'text-blue-700 border-blue-200' : 'text-slate-300 border-slate-200'}`} placeholder="0" value={price === 0 ? '' : price} onChange={(e) => updatePrice(row.key, e.target.value)}/></td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-xs text-right font-bold ${margin > 0 ? 'text-green-600' : 'text-red-400'}`}>{price > 0 ? `${margin.toFixed(2)}€` : '-'}</td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-xs text-right font-bold ${marginPercent > 40 ? 'text-green-600' : (marginPercent > 0 ? 'text-orange-500' : 'text-red-400')}`}>{price > 0 ? `${marginPercent.toFixed(0)}%` : '-'}</td>
                                             </tr>
-                                        );
+                                        )
                                     })}
+                                    {filteredRows.length === 0 && (
+                                        <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400 text-sm">Aucune combinaison trouvée. Vérifiez les filtres globaux ou la recherche.</td></tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                 </main>
-            </div>
-        </div>
-    );
-};
-
-// --- NOUVEAU COMPOSANT : CONFIGURATEUR ALTERNANCE (5 AXES) ---
-const AlternanceConfigurator = ({ attributes, currentPrices, onSave, onClose }) => {
-    const [localPrices, setLocalPrices] = useState({ ...currentPrices });
-
-    const updatePrice = (key, value) => {
-        setLocalPrices(prev => ({ ...prev, [key]: parseFloat(value) || 0 }));
-    };
-
-    const sections = [
-        // GÉOMÉTRIE SUPPRIMÉE ICI
-        { title: "DESIGN", data: attributes.designs, color: "text-indigo-600", bg: "bg-indigo-50" },
-        { title: "INDICE", data: attributes.indices, color: "text-green-600", bg: "bg-green-50" },
-        { title: "MATIÈRE", data: attributes.materials, color: "text-orange-600", bg: "bg-orange-50" },
-        { title: "TRAITEMENT", data: attributes.coatings, color: "text-purple-600", bg: "bg-purple-50" },
-    ];
-
-    return (
-        <div className="fixed inset-0 z-[210] bg-gray-50 flex flex-col font-['Poppins'] animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-md z-10">
-                <div>
-                    <div className="flex items-center gap-2 text-purple-600 mb-1">
-                        <PackagePlus className="w-6 h-6" />
-                        <span className="text-xs font-bold bg-purple-100 px-2 py-0.5 rounded">GAMME ALTERNANCE UNIQUEMENT</span>
-                    </div>
-                    <h2 className="text-2xl font-bold text-slate-800">Structure Tarifaire par Composant</h2>
-                    <p className="text-sm text-slate-500">Définissez le prix de chaque brique. Le prix final sera la somme des composants.</p>
-                </div>
-                <div className="flex gap-4">
-                    <button onClick={onClose} className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors">ANNULER</button>
-                    <button onClick={() => onSave(localPrices)} className="px-8 py-3 rounded-xl font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-lg shadow-purple-200 transition-all flex items-center gap-2">
-                        <Save className="w-4 h-4"/> ENREGISTRER
-                    </button>
-                </div>
-            </div>
-
-            <div className="flex-1 overflow-auto p-8">
-                <div className="grid grid-cols-4 gap-6 h-full">
-                    {sections.map((section) => (
-                        <div key={section.title} className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full">
-                            <div className={`px-4 py-3 border-b border-slate-100 font-bold text-xs ${section.color} ${section.bg} flex justify-between items-center`}>
-                                {section.title}
-                                <span className="opacity-50">{section.data.length} éléments</span>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                                {section.data.map(item => (
-                                    <div key={item} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg group transition-colors">
-                                        <span className="text-xs font-bold text-slate-700 truncate pr-2" title={item}>{item}</span>
-                                        <div className="flex items-center gap-1">
-                                            <input 
-                                                type="number" 
-                                                step="0.5"
-                                                className="w-16 text-right text-sm font-bold border border-slate-200 rounded-md px-2 py-1 focus:ring-2 ring-purple-100 outline-none text-slate-800 group-hover:border-purple-200"
-                                                placeholder="0"
-                                                value={localPrices[item] || ''}
-                                                onChange={(e) => updatePrice(item, e.target.value)}
-                                            />
-                                            <span className="text-[10px] text-slate-400 font-bold">€</span>
-                                        </div>
-                                    </div>
-                                ))}
-                                {section.title === 'TRAITEMENT' && (
-                                    <div className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg border-t border-dashed mt-2">
-                                        <div className="flex items-center gap-1 text-purple-600">
-                                            <SunDim className="w-3 h-3"/>
-                                            <span className="text-xs font-bold truncate">PHOTOCHROMIQUE</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <input type="number" step="0.5" className="w-16 text-right text-sm font-bold border border-slate-200 rounded-md px-2 py-1 focus:ring-2 ring-purple-100 outline-none text-slate-800" value={localPrices['PHOTO'] || ''} onChange={(e) => updatePrice('PHOTO', e.target.value)} />
-                                            <span className="text-[10px] text-slate-400 font-bold">€</span>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                </main>
             </div>
         </div>
     );
@@ -497,6 +476,96 @@ function PodiumCore() {
   const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
   const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); };
 
+  // --- TOUTES LES FONCTIONS D'ACTION REMONTÉES ICI POUR ÉVITER LES ERREURS DE RÉFÉRENCE ---
+  const checkDatabase = () => { 
+      // Simulation ou appel API réel si nécessaire, ici simple log pour éviter crash
+      console.log("Vérification base de données...");
+      // Si vous aviez une logique axios, remettez-la ici :
+      // axios.get(API_URL).then(...)
+  };
+  const testConnection = () => { console.log("Test connexion..."); };
+  
+  const handleReset = () => {
+      if(window.confirm("Tout remettre à zéro ?")) {
+          sessionStorage.clear();
+          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
+          setSecondPairPrice(0);
+          setSupplementaryPairs([]); 
+          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false });
+          setSelectedLens(null);
+      }
+  };
+
+  const handleAddSupplementaryPair = (type) => {
+      const newId = Date.now();
+      if (type === 'discount') {
+          if (!selectedLens) return alert("Veuillez d'abord sélectionner une première paire.");
+          setSupplementaryPairs(prev => [...prev, {
+              id: newId,
+              type: 'discount',
+              lens: { ...selectedLens, sellingPrice: selectedLens.sellingPrice * 0.5 },
+              description: "Offre -50% Identique"
+          }]);
+      } else {
+          const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
+          const targetType = isMainProg ? 'PROGRESSIF' : 'UNIFOCAL';
+          let alternanceLenses = lenses.filter(l => cleanText(l.brand) === 'ALTERNANCE' && cleanText(l.type).includes(targetType));
+          const isSecondPair = supplementaryPairs.length === 0;
+          const useSuperBonifie = isMainProg && isSecondPair;
+          
+          alternanceLenses = alternanceLenses.map(l => {
+              const cost = useSuperBonifie 
+                ? (l.purchase_price_super_bonifie || l.purchase_price || 0) 
+                : (l.purchase_price_bonifie || l.purchase_price || 0);
+              let sellPrice = 0;
+              if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
+                  sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
+              } else {
+                  sellPrice = cost * 2.5; 
+              }
+              return { ...l, costForMargin: cost, sellingPrice: sellPrice, margin: sellPrice - cost };
+          });
+          alternanceLenses.sort((a, b) => b.margin - a.margin);
+          const bestOption = alternanceLenses.length > 0 ? alternanceLenses[0] : null;
+          if (bestOption) {
+              setSupplementaryPairs(prev => [...prev, { id: newId, type: 'alternance', lens: bestOption, description: `Offre Alternance (${useSuperBonifie ? 'Super Bonifié' : 'Bonifié'})` }]);
+          } else {
+              alert("Aucun verre Alternance correspondant trouvé dans le catalogue.");
+          }
+      }
+  };
+
+  const removeSupplementaryPair = (id) => { setSupplementaryPairs(prev => prev.filter(p => p.id !== id)); };
+  
+  const updateComponentPrice = (key, val) => { 
+      setUserSettings(prev => ({ 
+          ...prev, 
+          supplementaryConfig: { 
+              ...prev.supplementaryConfig, 
+              componentPrices: { 
+                  ...(prev.supplementaryConfig?.componentPrices || DEFAULT_SETTINGS.supplementaryConfig.componentPrices), 
+                  [key]: parseFloat(val) || 0 
+              } 
+          } 
+      })); 
+  };
+  
+  const handlePricingConfigSave = (newConfig) => { setUserSettings(prev => ({ ...prev, perLensConfig: newConfig })); setShowPricingConfig(false); };
+  
+  const saveOffer = () => { 
+      if (!selectedLens || !client.name) return alert("Nom client obligatoire !"); 
+      const mainPairPrice = selectedLens.sellingPrice * 2; 
+      const suppTotal = supplementaryPairs.reduce((acc, pair) => acc + (pair.lens.sellingPrice * 2), 0); 
+      const totalGlobal = mainPairPrice + suppTotal; 
+      const remainder = totalGlobal - parseFloat(client.reimbursement || 0); 
+      const lensWithCorrection = { ...selectedLens, correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } }; 
+      const payload = { client: client, lens: lensWithCorrection, supplementaryPairs: supplementaryPairs, finance: { reimbursement: client.reimbursement, total: totalGlobal, remainder: remainder } }; 
+      axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur")); 
+  };
+  
+  const deleteOffer = (id) => { if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) { axios.delete(`${SAVE_URL}/${id}`).then(() => { alert("Dossier supprimé."); fetchHistory(); }).catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); }); } };
+  
+  // --- ETATS ---
   const [lenses, setLenses] = useState([]); const [filteredLenses, setFilteredLenses] = useState([]); const [availableDesigns, setAvailableDesigns] = useState([]); const [availableCoatings, setAvailableCoatings] = useState([]);
   const [loading, setLoading] = useState(false); const [error, setError] = useState(null); const [isOnline, setIsOnline] = useState(true); 
   const [showSettings, setShowSettings] = useState(false); const [showMargins, setShowMargins] = useState(false); const [selectedLens, setSelectedLens] = useState(null); const [isSidebarOpen, setIsSidebarOpen] = useState(true); const [comparisonLens, setComparisonLens] = useState(null); const [showHistory, setShowHistory] = useState(false); const [savedOffers, setSavedOffers] = useState([]); 
@@ -506,10 +575,8 @@ function PodiumCore() {
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
   const [userFile, setUserFile] = useState(null);
   const [showPricingConfig, setShowPricingConfig] = useState(false); 
-  const [showAlternanceConfig, setShowAlternanceConfig] = useState(false); 
   
   const [supplementaryPairs, setSupplementaryPairs] = useState([]);
-  const [isSelectingAlternance, setIsSelectingAlternance] = useState(false);
 
   // SÉCURISATION : Initialisation robuste de userSettings
   const [userSettings, setUserSettings] = useState(() => {
@@ -568,29 +635,6 @@ function PodiumCore() {
       .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
-  
-  // Extraction dynamique des attributs SPECIFIQUES À ALTERNANCE pour la configuration
-  const alternanceAttributes = useMemo(() => {
-      const attrs = { types: new Set(), designs: new Set(), indices: new Set(), materials: new Set(), coatings: new Set() };
-      
-      // FILTRE : Uniquement la marque ALTERNANCE
-      const alternanceLenses = lenses.filter(l => cleanText(l.brand) === 'ALTERNANCE');
-
-      alternanceLenses.forEach(l => {
-          if(l.type) attrs.types.add(cleanText(l.type));
-          if(l.design) attrs.designs.add(cleanText(l.design));
-          if(l.index_mat) attrs.indices.add(cleanText(l.index_mat));
-          if(l.material) attrs.materials.add(cleanText(l.material));
-          if(l.coating) attrs.coatings.add(cleanText(l.coating));
-      });
-      return {
-          types: [...attrs.types].sort(),
-          designs: [...attrs.designs].sort(),
-          indices: [...attrs.indices].sort(),
-          materials: [...attrs.materials].sort(),
-          coatings: [...attrs.coatings].sort(),
-      };
-  }, [lenses]);
 
   useEffect(() => { if (window.location.hostname.includes("localhost")) return; const pingInterval = setInterval(() => { axios.get(API_URL, { params: { pocketLimit: -1 } }).catch(() => {}); }, 30 * 60 * 1000); return () => clearInterval(pingInterval); }, [API_URL]);
   useEffect(() => { const root = document.documentElement; if (userSettings.themeColor === 'custom') { const rgb = hexToRgb(userSettings.customColor); root.style.setProperty('--theme-primary', userSettings.customColor); } else { root.style.removeProperty('--theme-primary'); } }, [userSettings.themeColor, userSettings.customColor]);
@@ -617,78 +661,30 @@ function PodiumCore() {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
        let workingList = safeLenses.map(l => { return {...l}; }); 
-       let finalLenses = [];
 
-       // ---------------------------------------------------------
-       // CAPSULE 1 : MODE SÉLECTION ALTERNANCE (Totalement isolé)
-       // ---------------------------------------------------------
-       if (isSelectingAlternance) {
-           // 1. Filtre Marque strict (IGNORE formData)
-           workingList = workingList.filter(l => cleanText(l.brand) === 'ALTERNANCE');
-           
-           // 2. Filtre Compatibilité Type (IGNORE formData.type, se base sur la 1ère paire)
-           const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
-           if (isMainProg) {
-               // Si Prog, on veut Prog OU Unifocal
-               workingList = workingList.filter(l => cleanText(l.type).includes('PROGRESSIF') || cleanText(l.type).includes('UNIFOCAL'));
-           } else {
-               // Si Uni, on veut QUE Unifocal
-               workingList = workingList.filter(l => cleanText(l.type).includes('UNIFOCAL'));
-           }
-
-           // 3. Calcul Prix Spécifique (Mode Composant ou Forfait)
-           const isSecondPair = supplementaryPairs.length === 0;
-           const useSuperBonifie = isMainProg && isSecondPair;
-
-           workingList = workingList.map(l => {
-                const cost = useSuperBonifie 
-                  ? (l.purchase_price_super_bonifie || l.purchase_price || 0) 
-                  : (l.purchase_price_bonifie || l.purchase_price || 0);
-                
-                let sellPrice = 0;
-                if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
-                    sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
-                } else {
-                    // Mode Manuel ou Fallback
-                    sellPrice = cost * 2.5; 
-                }
-                return { ...l, sellingPrice: sellPrice, margin: sellPrice - cost };
-           });
-           
-           // Tri
-           workingList.sort((a, b) => b.margin - a.margin);
-           finalLenses = workingList;
-
+       if (formData.brand && formData.brand !== '') { 
+           workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
-           // ---------------------------------------------------------
-           // CAPSULE 2 : MODE STANDARD (1ère Paire via Sidebar)
-           // ---------------------------------------------------------
-           
-           // 1. Filtres Sidebar
-           if (formData.brand && formData.brand !== '') { 
-               workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
-           } else {
-               if (formData.network === 'SANTECLAIR') { workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand))); } 
-               else if (formData.network !== 'HORS_RESEAU') { workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand))); }
-               if (Array.isArray(userSettings.disabledBrands) && userSettings.disabledBrands.length > 0) {
-                   workingList = workingList.filter(l => !userSettings.disabledBrands.includes(cleanText(l.brand)));
-               }
+           if (formData.network === 'SANTECLAIR') { workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand))); } 
+           else if (formData.network !== 'HORS_RESEAU') { workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand))); }
+           if (Array.isArray(userSettings.disabledBrands) && userSettings.disabledBrands.length > 0) {
+               workingList = workingList.filter(l => !userSettings.disabledBrands.includes(cleanText(l.brand)));
            }
-    
-           // 2. Filtre Type
-           if (formData.type) { 
-               const targetType = cleanText(formData.type); 
-               if (targetType === 'PROGRESSIF_INTERIEUR') {
-                   workingList = workingList.filter(l => { 
-                        const type = cleanText(l.type || l.geometry); 
-                        return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
-                   });
+       }
+
+       if (formData.type) { 
+           const targetType = cleanText(formData.type); 
+           if (targetType === 'PROGRESSIF_INTERIEUR') {
+               workingList = workingList.filter(l => { 
+                    const type = cleanText(l.type || l.geometry); 
+                    return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
+               });
            } else { 
                workingList = workingList.filter(l => cleanText(l.type || l.geometry) === targetType); 
            } 
        }
 
-       // 3. Calcul Prix Standard
+       // CALCUL PRIX + CALISIZE
        let calisizeAddon = 0;
        if (formData.calisize) {
            if (formData.network === 'HORS_RESEAU') {
@@ -699,42 +695,53 @@ function PodiumCore() {
        }
 
        if (formData.network === 'HORS_RESEAU') {
-           if (userSettings.pricingMode === 'per_lens') {
-               const config = userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} };
-               workingList = workingList.filter(lens => {
-                   if ((config.disabledAttributes?.designs || []).includes(lens.design)) return false;
-                   if ((config.disabledAttributes?.indices || []).includes(lens.index_mat)) return false;
-                   if ((config.disabledAttributes?.coatings || []).includes(lens.coating)) return false;
-                   if ((config.disabledAttributes?.types || []).includes(lens.type)) return false;
-                   if ((config.disabledAttributes?.materials || []).includes(lens.material)) return false;
-                   
-                   const key = getLensKey(lens);
-                   const manualPrice = config.prices[key];
-                   if (!manualPrice || manualPrice <= 0) return false; 
+          // --- LOGIQUE DE PRIX DYNAMIQUE SELON LE MODE ---
+          if (userSettings.pricingMode === 'per_lens') {
+              // MODE MANUEL "AU VERRE"
+              const config = userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} };
+              
+              workingList = workingList.filter(lens => {
+                  // 1. Filtrer les exclus (OFF)
+                  if ((config.disabledAttributes?.designs || []).includes(lens.design)) return false;
+                  if ((config.disabledAttributes?.indices || []).includes(lens.index_mat)) return false;
+                  if ((config.disabledAttributes?.coatings || []).includes(lens.coating)) return false;
+                  
+                  // 2. Vérifier si un prix est défini
+                  const key = getLensKey(lens);
+                  const manualPrice = config.prices[key];
+                  
+                  if (!manualPrice || manualPrice <= 0) return false; // On ne montre pas les verres sans prix
 
-                   const pPrice = parseFloat(lens.purchase_price || 0);
-                   lens.sellingPrice = manualPrice + calisizeAddon;
-                   lens.margin = lens.sellingPrice - pPrice;
-                   return true;
-               });
-           } else {
-               const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
-               workingList = workingList.map(lens => {
-                   let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
-                   const lensType = cleanText(lens.type || lens.geometry);
-                   if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
-                   else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
-                   else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
-                   else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
-                   const pPrice = parseFloat(lens.purchase_price || 0);
-                   let newSelling = (pPrice * rule.x) + rule.b;
-                   newSelling += calisizeAddon; 
-                   const newMargin = newSelling - pPrice;
-                   return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
-               });
-           }
-           workingList.sort((a, b) => b.margin - a.margin);
+                  // 3. Appliquer le prix
+                  const pPrice = parseFloat(lens.purchase_price || 0);
+                  lens.sellingPrice = manualPrice + calisizeAddon;
+                  lens.margin = lens.sellingPrice - pPrice;
+                  return true;
+              });
+
+          } else {
+              // MODE CLASSIQUE LINEAIRE (Ax + B)
+              const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
+              workingList = workingList.map(lens => {
+                 let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
+                 const lensType = cleanText(lens.type || lens.geometry);
+                 
+                 if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
+                 else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
+                 else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
+                 else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
+                 const pPrice = parseFloat(lens.purchase_price || 0);
+                 
+                 let newSelling = (pPrice * rule.x) + rule.b;
+                 newSelling += calisizeAddon; 
+    
+                 const newMargin = newSelling - pPrice;
+                 return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
+              });
+          }
+          workingList.sort((a, b) => b.margin - a.margin);
        } else {
+           // MODE RESEAUX (Inchangé)
            const priceMap = { 'KALIXIA': 'sell_kalixia', 'ITELIS': 'sell_itelis', 'CARTEBLANCHE': 'sell_carteblanche', 'SEVEANE': 'sell_seveane', 'SANTECLAIR': 'sell_santeclair' };
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { 
@@ -746,124 +753,23 @@ function PodiumCore() {
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
-       // 4. Filtres Attributs (Indice, Traitement...) UNIQUEMENT EN MODE STANDARD
        if (formData.materialIndex && formData.materialIndex !== '') {
            workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
        }
 
        const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
-       
        if (formData.photochromic) { workingList = workingList.filter(l => isPhotoC(l)); } else { workingList = workingList.filter(l => !isPhotoC(l)); }
+       const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
+       setAvailableCoatings(coatings);
        if (formData.coating && formData.coating !== '') { workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating)); }
        if (formData.myopiaControl) { workingList = workingList.filter(l => cleanText(l.name).includes("MIYO")); }
-       if (formData.design && formData.design !== '') { workingList = workingList.filter(l => cleanText(l.design) === cleanText(formData.design)); }
-       
-       finalLenses = workingList;
-       } // Fin du else (Standard)
-
-       // MISE A JOUR DES FILTRES DISPONIBLES BASÉE SUR LA LISTE FINALE (Pour éviter les options vides)
-       const coatings = [...new Set(finalLenses.map(l => l.coating).filter(Boolean))].sort();
-       setAvailableCoatings(coatings);
-       const designs = [...new Set(finalLenses.map(l => l.design).filter(Boolean))].sort();
+       const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
-       
-       setFilteredLenses(finalLenses);
-       setStats({ total: lenses.length, filtered: finalLenses.length });
-
+       if (formData.design && formData.design !== '') { setFilteredLenses(workingList.filter(l => cleanText(l.design) === cleanText(formData.design))); } else { setFilteredLenses(workingList); }
+       setStats({ total: lenses.length, filtered: workingList.length });
     } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
-  }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.pricingMode, userSettings.perLensConfig, isSelectingAlternance, selectedLens, supplementaryPairs]);
+  }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.pricingMode, userSettings.perLensConfig]);
 
-  const handleAddSupplementaryPair = (type) => {
-      const newId = Date.now();
-      if (type === 'discount') {
-          if (!selectedLens) return alert("Veuillez d'abord sélectionner une première paire.");
-          setSupplementaryPairs(prev => [...prev, {
-              id: newId,
-              type: 'discount',
-              lens: { ...selectedLens, sellingPrice: selectedLens.sellingPrice * 0.5 },
-              description: "Offre -50% Identique"
-          }]);
-      } else {
-          // MODE MANUEL ALTERNANCE (Déclenche le changement de filtrage)
-          setIsSelectingAlternance(true);
-      }
-  };
-  
-  // ... (Reste des handlers inchangé) ...
-  const handleLensSelection = (lens) => {
-      if (isSelectingAlternance) {
-          const newId = Date.now();
-          const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
-          const isUni = cleanText(lens.type).includes('UNIFOCAL');
-          const isSecondPair = supplementaryPairs.length === 0;
-          const useSuperBonifie = isMainProg && isSecondPair;
-          
-          setSupplementaryPairs(prev => [...prev, {
-              id: newId,
-              type: 'alternance',
-              lens: lens,
-              description: `Offre Alternance (${useSuperBonifie ? 'Super Bonifié' : 'Bonifié'})`,
-              needsVlVp: isMainProg && isUni // Flag pour afficher les cases
-          }]);
-          
-          setIsSelectingAlternance(false); // Fin du mode sélection
-      } else {
-          setSelectedLens(lens);
-      }
-  };
-  
-  const toggleVlVp = (id, type) => {
-      setSupplementaryPairs(prev => prev.map(p => {
-          if (p.id === id) {
-              return { ...p, vl_vp_selection: type };
-          }
-          return p;
-      }));
-  };
-
-  const removeSupplementaryPair = (id) => {
-      setSupplementaryPairs(prev => prev.filter(p => p.id !== id));
-  };
-
-  // Mise à jour Setting Supp
-  const updateComponentPrice = (key, val) => {
-      setUserSettings(prev => ({
-          ...prev,
-          supplementaryConfig: {
-              ...prev.supplementaryConfig,
-              componentPrices: {
-                  ...(prev.supplementaryConfig?.componentPrices || DEFAULT_SETTINGS.supplementaryConfig.componentPrices),
-                  [key]: parseFloat(val) || 0
-              }
-          }
-      }));
-  };
-
-  const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
-  const saveOffer = () => {
-      if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
-      
-      const mainPairPrice = selectedLens.sellingPrice * 2;
-      // Calcul total paires supp
-      const suppTotal = supplementaryPairs.reduce((acc, pair) => acc + (pair.lens.sellingPrice * 2), 0);
-      const totalGlobal = mainPairPrice + suppTotal;
-      const remainder = totalGlobal - parseFloat(client.reimbursement || 0);
-
-      const lensWithCorrection = { ...selectedLens, correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } };
-      
-      const payload = { 
-          client: client, 
-          lens: lensWithCorrection, 
-          supplementaryPairs: supplementaryPairs, // Sauvegarde des paires supp
-          finance: { reimbursement: client.reimbursement, total: totalGlobal, remainder: remainder } 
-      };
-      axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
-  };
-  const deleteOffer = (id) => {
-      if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) {
-          axios.delete(`${SAVE_URL}/${id}`).then(() => { alert("Dossier supprimé."); fetchHistory(); }).catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); });
-      }
-  };
   // ... (Upload functions kept identical) ...
   const triggerFileUpload = () => { if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)"); setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile); axios.post(UPLOAD_URL, data, { onUploadProgress: (e) => { setUploadProgress(Math.round((e.loaded * 100) / e.total)); } }).then(res => { alert(`✅ Succès ! ${res.data.count} verres importés.`); fetchData(); }).catch(err => { console.error("Upload Error:", err); const msg = err.response?.data?.detail || err.message; alert(`❌ Erreur upload : ${msg}`); }).finally(() => { setSyncLoading(false); setUploadProgress(0); }); };
   const triggerUserUpload = () => { if (!userFile) return alert("Sélectionner un fichier Excel"); setSyncLoading(true); const data = new FormData(); data.append('file', userFile); axios.post(`${baseBackendUrl}/upload-users`, data).then(res => alert(`✅ ${res.data.count} utilisateurs importés`)).catch(err => { const msg = err.response?.data?.detail || err.message; alert(`Erreur upload utilisateurs: ${msg}`); }).finally(() => setSyncLoading(false)); };
@@ -878,38 +784,6 @@ function PodiumCore() {
   const toggleBrand = (brandId) => { setUserSettings(prev => { const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : []; const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId]; return { ...prev, disabledBrands: newDisabled }; }); };
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
-  const handleReset = () => {
-      if(window.confirm("Tout remettre à zéro ?")) {
-          sessionStorage.clear();
-          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
-          setSecondPairPrice(0);
-          setSupplementaryPairs([]); 
-          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false, od_sphere: 0, od_cylinder: 0, od_axis: 0, od_addition: 0, og_sphere: 0, og_cylinder: 0, og_axis: 0, og_addition: 0 });
-          setSelectedLens(null);
-          setIsSelectingAlternance(false);
-      }
-  };
-
-  // -- FONCTIONS DÉFINIES À L'INTÉRIEUR POUR ÊTRE ACCESSIBLES DANS LE JSX --
-  const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
-  const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
-
-  const handlePricingConfigSave = (newConfig) => { 
-      setUserSettings(prev => ({ ...prev, perLensConfig: newConfig })); 
-      setShowPricingConfig(false); 
-  };
-  
-  const handleAlternanceConfigSave = (newComponentPrices) => {
-      setUserSettings(prev => ({
-          ...prev,
-          supplementaryConfig: {
-              ...prev.supplementaryConfig,
-              mode: 'component',
-              componentPrices: newComponentPrices
-          }
-      }));
-      setShowAlternanceConfig(false);
-  };
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
@@ -925,30 +799,15 @@ function PodiumCore() {
   return (
       <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Poppins'] uppercase transition-colors duration-300`}>
           <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
-          
           {showPricingConfig && (<PricingConfigurator lenses={lenses} config={userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} }} onSave={handlePricingConfigSave} onClose={() => setShowPricingConfig(false)}/>)}
-          {showAlternanceConfig && (<AlternanceConfigurator attributes={alternanceAttributes} currentPrices={userSettings.supplementaryConfig?.componentPrices || {}} onSave={handleAlternanceConfigSave} onClose={() => setShowAlternanceConfig(false)}/>)}
-
-          {/* HEADER & SIDEBAR KEPT SAME AS PREVIOUS VERSION */}
+          
+          {/* ... HEADER & SIDEBAR & FOOTER ... */}
           <div className="bg-slate-900 text-white px-4 lg:px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
               <div className="flex items-center gap-3"><button onClick={toggleSidebar} className="lg:hidden p-1 rounded hover:bg-slate-700"><Menu className="w-5 h-5"/></button>{currentSettings.shopLogo ? (<img src={currentSettings.shopLogo} alt="Logo" className="h-8 w-auto object-contain rounded bg-white p-0.5"/>) : (<div className="h-8 w-8 bg-slate-700 rounded flex items-center justify-center"><Store className="w-4 h-4"/></div>)}<span>{currentSettings.shopName}</span></div>
               <div className="flex items-center gap-4"><button onClick={handleReset} className="flex items-center gap-1 text-red-400 hover:text-red-300" title="RAZ"><RotateCcw className="w-4 h-4"/> <span className="hidden sm:inline">RAZ</span></button><button onClick={handleLogout} className="flex items-center gap-1 text-red-400 hover:text-red-300"><LogOut className="w-4 h-4"/> <span className="hidden sm:inline">QUITTER</span></button></div>
           </div>
-          
-          {/* MODE SÉLECTION ALTERNANCE ACTIVE */}
-          {isSelectingAlternance && (
-              <div className="bg-purple-600 text-white px-6 py-3 shadow-md animate-in slide-in-from-top-4 flex justify-between items-center relative z-40">
-                  <div className="flex items-center gap-3 font-bold">
-                      <PackagePlus className="w-6 h-6 animate-pulse"/>
-                      <span>MODE SÉLECTION ALTERNANCE ACTIVE</span>
-                      <span className="text-xs bg-purple-500 px-2 py-1 rounded border border-purple-400 font-normal">Choisissez un verre dans la liste ci-dessous</span>
-                  </div>
-                  <button onClick={() => setIsSelectingAlternance(false)} className="text-xs bg-white text-purple-600 px-4 py-2 rounded font-bold hover:bg-purple-50">ANNULER LA SÉLECTION</button>
-              </div>
-          )}
-          
+          {/* ... (Le reste du JSX est identique à la version 5.30, pas de changement nécessaire ici) ... */}
           <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-4 lg:px-6 py-4 shadow-sm z-40`}>
-            {/* ... Header Code Same ... */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                 <div className="flex items-center gap-4 flex-1 w-full lg:w-auto overflow-x-auto">
                     <button onClick={() => { setShowHistory(true); fetchHistory(); }} className="p-3 rounded-xl shadow-lg text-white hover:opacity-90 transition-colors shrink-0" style={{backgroundColor: userSettings.customColor}}><FolderOpen className="w-6 h-6"/></button>
@@ -964,43 +823,16 @@ function PodiumCore() {
           </header>
 
           <div className="flex flex-1 overflow-hidden relative z-0">
-            {/* SIDEBAR SAME AS BEFORE */}
             <aside className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-r flex flex-col overflow-y-auto z-50 transition-transform duration-300 w-80 fixed inset-y-0 left-0 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="p-6 space-y-6 pb-32 pt-20 lg:pt-6">
                     <div className="lg:hidden flex justify-end mb-4"><button onClick={toggleSidebar}><X className="w-6 h-6"/></button></div>
-                    {/* DISABLE SIDEBAR IN ALTERNANCE MODE TO AVOID CONFUSION */}
-                    <div className={isSelectingAlternance ? "opacity-30 pointer-events-none grayscale transition-all" : "transition-all"}>
-                        <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
-                        
-                        {/* CORRECTION */}
-                        <div>
-                            <label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label>
-                            <div className="grid grid-cols-2 gap-3">
-                                {/* COLONNE OD */}
-                                <div className="space-y-2">
-                                    <div className="text-center text-[10px] font-bold text-blue-600 border-b border-blue-100 pb-1">OD (Droit)</div>
-                                    <div className="flex items-center gap-1"><span className="text-[9px] font-bold w-4 text-right opacity-50">SPH</span><div className="relative w-full"><input type="number" step="0.25" name="od_sphere" value={formData.od_sphere} onChange={handleChange} onFocus={(e)=>e.target.select()} className="w-full p-1.5 pr-4 border rounded text-xs font-bold bg-transparent text-center"/><span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] text-slate-400">D</span></div></div>
-                                    <div className="flex items-center gap-1"><span className="text-[9px] font-bold w-4 text-right opacity-50">CYL</span><div className="relative w-full"><input type="number" step="0.25" name="od_cylinder" value={formData.od_cylinder} onChange={handleChange} onFocus={(e)=>e.target.select()} className="w-full p-1.5 pr-4 border rounded text-xs font-bold bg-transparent text-center"/><span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] text-slate-400">D</span></div></div>
-                                    <div className="flex items-center gap-1"><span className="text-[9px] font-bold w-4 text-right opacity-50">AXE</span><div className="relative w-full"><input type="number" step="1" name="od_axis" value={formData.od_axis} onChange={handleChange} onFocus={(e)=>e.target.select()} className="w-full p-1.5 pr-4 border rounded text-xs font-bold bg-transparent text-center" placeholder="Deg"/><span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] text-slate-400">°</span></div></div>
-                                    <div className={`flex items-center gap-1 transition-opacity ${isAdditionDisabled ? 'opacity-30 pointer-events-none' : ''}`}><span className="text-[9px] font-bold w-4 text-right opacity-50">ADD</span><div className="relative w-full"><input type="number" step="0.25" name="od_addition" value={formData.od_addition} onChange={handleChange} onFocus={(e)=>e.target.select()} className="w-full p-1.5 pr-4 border rounded text-xs font-bold bg-transparent text-center"/><span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] text-slate-400">D</span></div></div>
-                                </div>
-                                {/* COLONNE OG */}
-                                <div className="space-y-2">
-                                    <div className="text-center text-[10px] font-bold text-blue-600 border-b border-blue-100 pb-1">OG (Gauche)</div>
-                                    <div className="flex items-center gap-1"><span className="text-[9px] font-bold w-4 text-right opacity-50">SPH</span><div className="relative w-full"><input type="number" step="0.25" name="og_sphere" value={formData.og_sphere} onChange={handleChange} onFocus={(e)=>e.target.select()} className="w-full p-1.5 pr-4 border rounded text-xs font-bold bg-transparent text-center"/><span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] text-slate-400">D</span></div></div>
-                                    <div className="flex items-center gap-1"><span className="text-[9px] font-bold w-4 text-right opacity-50">CYL</span><div className="relative w-full"><input type="number" step="0.25" name="og_cylinder" value={formData.og_cylinder} onChange={handleChange} onFocus={(e)=>e.target.select()} className="w-full p-1.5 pr-4 border rounded text-xs font-bold bg-transparent text-center"/><span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] text-slate-400">D</span></div></div>
-                                    <div className="flex items-center gap-1"><span className="text-[9px] font-bold w-4 text-right opacity-50">AXE</span><div className="relative w-full"><input type="number" step="1" name="og_axis" value={formData.og_axis} onChange={handleChange} onFocus={(e)=>e.target.select()} className="w-full p-1.5 pr-4 border rounded text-xs font-bold bg-transparent text-center" placeholder="Deg"/><span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] text-slate-400">°</span></div></div>
-                                    <div className={`flex items-center gap-1 transition-opacity ${isAdditionDisabled ? 'opacity-30 pointer-events-none' : ''}`}><span className="text-[9px] font-bold w-4 text-right opacity-50">ADD</span><div className="relative w-full"><input type="number" step="0.25" name="og_addition" value={formData.og_addition} onChange={handleChange} onFocus={(e)=>e.target.select()} className="w-full p-1.5 pr-4 border rounded text-xs font-bold bg-transparent text-center"/><span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] text-slate-400">D</span></div></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="mb-4 mt-4"><button onClick={() => setFormData(prev => ({ ...prev, calisize: !prev.calisize }))} className={`w-full py-3 rounded-xl flex items-center justify-between px-4 border transition-all ${formData.calisize ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}><span className="text-xs font-bold flex items-center gap-2"><ScanLine className="w-4 h-4"/> OPTION PRÉCAL (CALISIZE)</span>{formData.calisize ? <CheckCircle className="w-4 h-4"/> : <div className="w-4 h-4 border-2 border-slate-300 rounded-full"></div>}</button></div>
-                        <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{LENS_TYPES.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
-                        {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
-                        <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{INDICES.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
-                        <div><label className="text-[10px] font-bold opacity-50 mb-2 block">TRAITEMENTS</label><button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-[10px] font-bold rounded border ${formData.coating === '' ? 'text-white border-transparent' : 'border-transparent opacity-60'}`} style={formData.coating === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button><label className={`flex items-center gap-2 p-2 rounded border cursor-pointer mb-2 ${formData.photochromic ? 'bg-yellow-50 border-yellow-300' : 'border-transparent opacity-80'}`}><input type="checkbox" checked={formData.photochromic} onChange={handleChange} name="photochromic" className="accent-yellow-500"/><span className={`text-[10px] font-bold ${formData.photochromic ? 'text-yellow-700' : 'opacity-80'}`}>PHOTOCHROMIQUE</span></label><div className="flex flex-col gap-1">{availableCoatings.length > 0 ? availableCoatings.map(c => (<button key={c} onClick={() => handleCoatingChange(c)} className={`p-2 rounded border text-left text-[10px] font-bold ${formData.coating === c ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}>{c}</button>)) : <div className="text-[10px] opacity-50 italic text-center">Aucun traitement spécifique</div>}</div></div>
-                    </div>
+                    <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
+                    <div><label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label><div className="grid grid-cols-1 gap-2 mb-2"><div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">SPH</span><div className="relative flex-1"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div><div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">CYL</span><div className="relative flex-1"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div></div><div className={`flex items-center gap-2 transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><span className="text-[10px] font-bold w-6 opacity-50 text-right">ADD</span><div className="relative flex-1"><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div></div>
+                    <div className="mb-4"><button onClick={() => setFormData(prev => ({ ...prev, calisize: !prev.calisize }))} className={`w-full py-3 rounded-xl flex items-center justify-between px-4 border transition-all ${formData.calisize ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}><span className="text-xs font-bold flex items-center gap-2"><ScanLine className="w-4 h-4"/> OPTION PRÉCAL (CALISIZE)</span>{formData.calisize ? <CheckCircle className="w-4 h-4"/> : <div className="w-4 h-4 border-2 border-slate-300 rounded-full"></div>}</button></div>
+                    <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{LENS_TYPES.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
+                    {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
+                    <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{INDICES.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
+                    <div><label className="text-[10px] font-bold opacity-50 mb-2 block">TRAITEMENTS</label><button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-[10px] font-bold rounded border ${formData.coating === '' ? 'text-white border-transparent' : 'border-transparent opacity-60'}`} style={formData.coating === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button><label className={`flex items-center gap-2 p-2 rounded border cursor-pointer mb-2 ${formData.photochromic ? 'bg-yellow-50 border-yellow-300' : 'border-transparent opacity-80'}`}><input type="checkbox" checked={formData.photochromic} onChange={handleChange} name="photochromic" className="accent-yellow-500"/><span className={`text-[10px] font-bold ${formData.photochromic ? 'text-yellow-700' : 'opacity-80'}`}>PHOTOCHROMIQUE</span></label><div className="flex flex-col gap-1">{availableCoatings.length > 0 ? availableCoatings.map(c => (<button key={c} onClick={() => handleCoatingChange(c)} className={`p-2 rounded border text-left text-[10px] font-bold ${formData.coating === c ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}>{c}</button>)) : <div className="text-[10px] opacity-50 italic text-center">Aucun traitement spécifique</div>}</div></div>
                 </div>
             </aside>
 
@@ -1014,7 +846,7 @@ function PodiumCore() {
                         </div>
                     )}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {filteredLenses.slice(0, 3).map((lens, index) => (<LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} onSelect={handleLensSelection} isSelected={selectedLens && selectedLens.id === lens.id} />))}
+                        {filteredLenses.slice(0, 3).map((lens, index) => (<LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} onSelect={setSelectedLens} isSelected={selectedLens && selectedLens.id === lens.id} />))}
                     </div>
                     {filteredLenses.length === 0 && !loading && <div className="text-center py-20 opacity-50 text-sm font-bold">AUCUN VERRE TROUVÉ</div>}
                 </div>
@@ -1069,20 +901,8 @@ function PodiumCore() {
                                       <div className="flex items-center gap-3">
                                           <span className="font-bold text-slate-400">#{idx + 2}</span>
                                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${pair.type === 'discount' ? 'bg-yellow-100 text-yellow-700' : 'bg-purple-100 text-purple-700'}`}>{pair.description}</span>
-                                          <div className="flex flex-col">
-                                            <div className="font-mono text-[10px] text-slate-400 select-all cursor-pointer">{pair.lens.commercial_code || "REF-UNK"}</div>
-                                            <span className="font-bold text-slate-700">{pair.lens.name}</span>
-                                          </div>
+                                          <span className="font-bold text-slate-700">{pair.lens.name}</span>
                                       </div>
-                                      
-                                      {/* OPTIONS VL / VP SI NÉCESSAIRE */}
-                                      {pair.needsVlVp && (
-                                          <div className="flex items-center bg-white border border-purple-200 rounded-lg p-1">
-                                              <button onClick={() => toggleVlVp(pair.id, 'VL')} className={`px-3 py-1 rounded text-[10px] font-bold transition-colors ${pair.vl_vp_selection === 'VL' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:bg-purple-50'}`}>VL</button>
-                                              <button onClick={() => toggleVlVp(pair.id, 'VP')} className={`px-3 py-1 rounded text-[10px] font-bold transition-colors ${pair.vl_vp_selection === 'VP' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:bg-purple-50'}`}>VP</button>
-                                          </div>
-                                      )}
-
                                       <div className="flex items-center gap-4">
                                           <div className="text-right">
                                               <span className="text-slate-400 mr-2">Prix Paire :</span>
@@ -1127,19 +947,26 @@ function PodiumCore() {
                           </div>
                       </div>
                       {userSettings.supplementaryConfig?.mode === 'component' && (
-                           <div className="text-center">
-                               <p className="text-xs text-slate-500 mb-4">Configurez les prix de chaque composant (Matière, Indice, etc.) pour calculer le prix de vente final.</p>
-                               <button 
-                                  onClick={() => setShowAlternanceConfig(true)}
-                                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-200 transition-all flex items-center justify-center gap-2"
-                               >
-                                  <Component className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR DE COMPOSANTS
-                               </button>
-                           </div>
+                          <div className="grid grid-cols-2 gap-4">
+                              <div><label className="text-[10px] font-bold text-slate-400 block mb-1">PRIX GÉOMÉTRIE (€)</label>
+                                  <div className="space-y-1">
+                                      {['UNIFOCAL', 'PROGRESSIF', 'DEGRESSIF', 'PROGRESSIF_INTERIEUR'].map(k => (
+                                          <div key={k} className="flex justify-between items-center"><span className="text-[10px]">{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-12 text-center border rounded text-xs p-1"/></div>
+                                      ))}
+                                  </div>
+                              </div>
+                              <div><label className="text-[10px] font-bold text-slate-400 block mb-1">SUPPLÉMENTS (€)</label>
+                                  <div className="space-y-1">
+                                      {['1.60', '1.67', 'HMC', 'BLUE', 'PHOTO', 'TEINTE'].map(k => (
+                                          <div key={k} className="flex justify-between items-center"><span className="text-[10px]">{k}</span><input type="number" value={userSettings.supplementaryConfig.componentPrices[k] || 0} onChange={(e) => updateComponentPrice(k, e.target.value)} className="w-12 text-center border rounded text-xs p-1"/></div>
+                                      ))}
+                                  </div>
+                              </div>
+                          </div>
                       )}
                   </div>
 
-                  {/* PRIX MARCHÉ LIBRE (Reste inchangé) */}
+                  {/* PRIX MARCHÉ LIBRE - RESTORED FULL LIST */}
                    <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE (1ère Paire)</h4>
                      <div className="mb-6 flex gap-4 p-1 bg-slate-100 rounded-xl">
                          <button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'linear' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'linear' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>FORMULE (Ax + B)</button>
@@ -1179,19 +1006,12 @@ function PodiumCore() {
                     <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
                     <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
                     {/* AFFICHAGE CORRECTION */}
-                    {offer.lens && offer.lens.correction_data && offer.lens.correction_data.od ? (
-                        <div className="flex flex-col gap-1 mt-1">
-                            <div className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-mono border border-blue-100">
-                                <span className="font-bold mr-1">OD:</span> 
-                                {offer.lens.correction_data.od.sphere > 0 ? '+' : ''}{offer.lens.correction_data.od.sphere} ({offer.lens.correction_data.od.cylinder > 0 ? '+' : ''}{offer.lens.correction_data.od.cylinder}) {offer.lens.correction_data.od.axis}° Add {offer.lens.correction_data.od.addition}
-                            </div>
-                            <div className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-mono border border-blue-100">
-                                <span className="font-bold mr-1">OG:</span> 
-                                {offer.lens.correction_data.og.sphere > 0 ? '+' : ''}{offer.lens.correction_data.og.sphere} ({offer.lens.correction_data.og.cylinder > 0 ? '+' : ''}{offer.lens.correction_data.og.cylinder}) {offer.lens.correction_data.og.axis}° Add {offer.lens.correction_data.og.addition}
-                            </div>
+                    {(offer.correction || (offer.lens && offer.lens.correction_data)) && (
+                        <div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono">
+                            <span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span>
+                            <span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span>
+                            <span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span>
                         </div>
-                    ) : (
-                        <div className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded mt-1">Correction non disponible</div>
                     )}
                 </div>
               </div>
