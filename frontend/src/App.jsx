@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.46"; // CORRECTIF : Force le mode manuel pour Alternance (Fix Network Conflict)
+const APP_VERSION = "5.52"; // VERSION COMPLETE (Sans abréviations)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -151,7 +151,6 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   const mVal = safeNum(lens.margin);
   const displayMargin = (sPrice > 0) ? ((mVal / sPrice) * 100).toFixed(0) : "0";
   
-  // Gestionnaire de clic flexible (priorité à onClick prop si fourni, sinon onSelect)
   const handleClick = () => {
       if (onClick) {
           onClick(lens);
@@ -387,6 +386,7 @@ const AlternanceConfigurator = ({ attributes, currentPrices, onSave, onClose }) 
     };
 
     const sections = [
+        // GÉOMÉTRIE SUPPRIMÉE ICI
         { title: "DESIGN", data: attributes.designs, color: "text-indigo-600", bg: "bg-indigo-50" },
         { title: "INDICE", data: attributes.indices, color: "text-green-600", bg: "bg-green-50" },
         { title: "MATIÈRE", data: attributes.materials, color: "text-orange-600", bg: "bg-orange-50" },
@@ -623,14 +623,16 @@ function PodiumCore() {
        // CAPSULE 1 : MODE SÉLECTION ALTERNANCE (Totalement isolé)
        // ---------------------------------------------------------
        if (isSelectingAlternance) {
-           // 1. Filtre Marque Relaxed (Contains 'ALTERNANCE') pour éviter les bugs de casse/espaces
-           workingList = workingList.filter(l => cleanText(l.brand).includes('ALTERNANCE'));
+           // 1. Filtre Marque strict (IGNORE formData)
+           workingList = workingList.filter(l => cleanText(l.brand) === 'ALTERNANCE');
            
-           // 2. Filtre Compatibilité Type (Basé sur la 1ère paire)
+           // 2. Filtre Compatibilité Type (IGNORE formData.type, se base sur la 1ère paire)
            const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
            if (isMainProg) {
+               // Si Prog, on veut Prog OU Unifocal
                workingList = workingList.filter(l => cleanText(l.type).includes('PROGRESSIF') || cleanText(l.type).includes('UNIFOCAL'));
            } else {
+               // Si Uni, on veut QUE Unifocal
                workingList = workingList.filter(l => cleanText(l.type).includes('UNIFOCAL'));
            }
 
@@ -644,53 +646,43 @@ function PodiumCore() {
                   : (l.purchase_price_bonifie || l.purchase_price || 0);
                 
                 let sellPrice = 0;
-                // Fallback sécurité : si componentPrices vide, on met un prix par défaut
                 if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
                     sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
-                    if (sellPrice === 0) sellPrice = cost * 2.5; // Fallback si config non faite
                 } else {
+                    // Mode Manuel ou Fallback
                     sellPrice = cost * 2.5; 
                 }
                 return { ...l, sellingPrice: sellPrice, margin: sellPrice - cost };
            });
            
+           // Tri
            workingList.sort((a, b) => b.margin - a.margin);
-           
-           // IMPORTANT : On met à jour filteredLenses directement et on arrête là
-           setFilteredLenses(workingList);
-           setStats({ total: lenses.length, filtered: workingList.length });
-           
-           // Mise à jour des filtres disponibles pour l'Alternance uniquement
-           const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
-           setAvailableCoatings(coatings);
-           const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
-           setAvailableDesigns(designs);
-           return; // STOP : On ne joue pas la suite du code standard
-       }
+           finalLenses = workingList;
 
-       // ---------------------------------------------------------
-       // CAPSULE 2 : MODE STANDARD (1ère Paire)
-       // ---------------------------------------------------------
-       
-       // 1. Filtres Sidebar
-       if (formData.brand && formData.brand !== '') { 
-           workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
-           if (formData.network === 'SANTECLAIR') { workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand))); } 
-           else if (formData.network !== 'HORS_RESEAU') { workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand))); }
-           if (Array.isArray(userSettings.disabledBrands) && userSettings.disabledBrands.length > 0) {
-               workingList = workingList.filter(l => !userSettings.disabledBrands.includes(cleanText(l.brand)));
+           // ---------------------------------------------------------
+           // CAPSULE 2 : MODE STANDARD (1ère Paire via Sidebar)
+           // ---------------------------------------------------------
+           
+           // 1. Filtres Sidebar
+           if (formData.brand && formData.brand !== '') { 
+               workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
+           } else {
+               if (formData.network === 'SANTECLAIR') { workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand))); } 
+               else if (formData.network !== 'HORS_RESEAU') { workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand))); }
+               if (Array.isArray(userSettings.disabledBrands) && userSettings.disabledBrands.length > 0) {
+                   workingList = workingList.filter(l => !userSettings.disabledBrands.includes(cleanText(l.brand)));
+               }
            }
-       }
-
-       // 2. Filtre Type
-       if (formData.type) { 
-           const targetType = cleanText(formData.type); 
-           if (targetType === 'PROGRESSIF_INTERIEUR') {
-               workingList = workingList.filter(l => { 
-                    const type = cleanText(l.type || l.geometry); 
-                    return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
-               });
+    
+           // 2. Filtre Type
+           if (formData.type) { 
+               const targetType = cleanText(formData.type); 
+               if (targetType === 'PROGRESSIF_INTERIEUR') {
+                   workingList = workingList.filter(l => { 
+                        const type = cleanText(l.type || l.geometry); 
+                        return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
+                   });
            } else { 
                workingList = workingList.filter(l => cleanText(l.type || l.geometry) === targetType); 
            } 
@@ -766,14 +758,17 @@ function PodiumCore() {
        if (formData.myopiaControl) { workingList = workingList.filter(l => cleanText(l.name).includes("MIYO")); }
        if (formData.design && formData.design !== '') { workingList = workingList.filter(l => cleanText(l.design) === cleanText(formData.design)); }
        
-       // Mise à jour des filtres disponibles BASÉE SUR LA LISTE STANDARD
-       const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
+       finalLenses = workingList;
+       } // Fin du else (Standard)
+
+       // MISE A JOUR DES FILTRES DISPONIBLES BASÉE SUR LA LISTE FINALE (Pour éviter les options vides)
+       const coatings = [...new Set(finalLenses.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
-       const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
+       const designs = [...new Set(finalLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
        
-       setFilteredLenses(workingList);
-       setStats({ total: lenses.length, filtered: workingList.length });
+       setFilteredLenses(finalLenses);
+       setStats({ total: lenses.length, filtered: finalLenses.length });
 
     } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
   }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.pricingMode, userSettings.perLensConfig, isSelectingAlternance, selectedLens, supplementaryPairs]);
@@ -1018,16 +1013,10 @@ function PodiumCore() {
                             <div className="w-full max-w-sm"><LensCard lens={comparisonLens} index={0} currentTheme={currentTheme} showMargins={showMargins} isReference={true} /></div>
                         </div>
                     )}
-                    
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredLenses.slice(0, 3).map((lens, index) => (<LensCard key={lens.id} lens={lens} index={index} currentTheme={currentTheme} showMargins={showMargins} onCompare={handleCompare} onSelect={handleLensSelection} isSelected={selectedLens && selectedLens.id === lens.id} />))}
                     </div>
-                    
-                    {filteredLenses.length === 0 && !loading && (
-                        <div className="text-center py-20 opacity-50 text-sm font-bold">
-                             {isSelectingAlternance ? "AUCUN VERRE ALTERNANCE COMPATIBLE AVEC LA 1ÈRE PAIRE" : "AUCUN VERRE TROUVÉ"}
-                        </div>
-                    )}
+                    {filteredLenses.length === 0 && !loading && <div className="text-center py-20 opacity-50 text-sm font-bold">AUCUN VERRE TROUVÉ</div>}
                 </div>
             </section>
           </div>
@@ -1134,4 +1123,100 @@ function PodiumCore() {
                           <label className="text-xs font-bold text-slate-500 mb-2 block">MODE DE CALCUL (GAMME ALTERNANCE)</label>
                           <div className="flex gap-2">
                               <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'component'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'component' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>PAR COMPOSANT</button>
-                              <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig
+                              <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'manual'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'manual' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>MANUEL (GRILLE)</button>
+                          </div>
+                      </div>
+                      {userSettings.supplementaryConfig?.mode === 'component' && (
+                           <div className="text-center">
+                               <p className="text-xs text-slate-500 mb-4">Configurez les prix de chaque composant (Matière, Indice, etc.) pour calculer le prix de vente final.</p>
+                               <button 
+                                  onClick={() => setShowAlternanceConfig(true)}
+                                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-200 transition-all flex items-center justify-center gap-2"
+                               >
+                                  <Component className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR DE COMPOSANTS
+                               </button>
+                           </div>
+                      )}
+                  </div>
+
+                  {/* PRIX MARCHÉ LIBRE (Reste inchangé) */}
+                   <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE (1ère Paire)</h4>
+                     <div className="mb-6 flex gap-4 p-1 bg-slate-100 rounded-xl">
+                         <button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'linear' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'linear' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>FORMULE (Ax + B)</button>
+                         <button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'per_lens' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'per_lens' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>MANUEL (AU VERRE)</button>
+                     </div>
+                     {userSettings.pricingMode === 'linear' ? (
+                         <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-4">
+                            <div className="flex items-center justify-between bg-indigo-50 p-2 rounded border border-indigo-100"><span className="text-xs font-bold text-indigo-700">SUPPLÉMENT CALISIZE (€)</span><input type="number" step="1" value={safePricing.calisize?.price ?? 10} onChange={(e) => handlePriceRuleChange('calisize', 'price', e.target.value)} className="w-16 p-1 border rounded text-center text-xs font-bold text-indigo-700"/></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                         </div>
+                     ) : (
+                         <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 text-center animate-in fade-in slide-in-from-right-4">
+                             <ListFilter className="w-10 h-10 text-blue-500 mx-auto mb-3"/>
+                             <h3 className="font-bold text-blue-900 mb-2">Configuration Manuelle</h3>
+                             <p className="text-xs text-blue-700 mb-6">Définissez vos prix de vente et la disponibilité des verres ligne par ligne.</p>
+                             <button onClick={() => setShowPricingConfig(true)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"><Settings className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR</button>
+                         </div>
+                     )}
+                   </div>
+                  <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
+              </div>
+            </div>
+          )}
+          
+          {/* ... (Autres Modales Historique etc. inchangées) ... */}
+          {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+          <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+            <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+              <div className="flex items-center gap-4">
+                <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+                <div>
+                    <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
+                    <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
+                    {/* AFFICHAGE CORRECTION */}
+                    {offer.lens && offer.lens.correction_data && offer.lens.correction_data.od ? (
+                        <div className="flex flex-col gap-1 mt-1">
+                            <div className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-mono border border-blue-100">
+                                <span className="font-bold mr-1">OD:</span> 
+                                {offer.lens.correction_data.od.sphere > 0 ? '+' : ''}{offer.lens.correction_data.od.sphere} ({offer.lens.correction_data.od.cylinder > 0 ? '+' : ''}{offer.lens.correction_data.od.cylinder}) {offer.lens.correction_data.od.axis}° Add {offer.lens.correction_data.od.addition}
+                            </div>
+                            <div className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-mono border border-blue-100">
+                                <span className="font-bold mr-1">OG:</span> 
+                                {offer.lens.correction_data.og.sphere > 0 ? '+' : ''}{offer.lens.correction_data.og.sphere} ({offer.lens.correction_data.og.cylinder > 0 ? '+' : ''}{offer.lens.correction_data.og.cylinder}) {offer.lens.correction_data.og.axis}° Add {offer.lens.correction_data.og.addition}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded mt-1">Correction non disponible</div>
+                    )}
+                </div>
+              </div>
+              <div className="text-right">
+                  <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
+                  <div className="font-bold text-slate-800">{offer.lens?.name}</div>
+                  <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+                <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button>
+              </div>
+            </div>))}</div></div></div>)}
+    </div>
+  );
+}
+
+// --- COMPOSANT RACINE ---
+export default function App() {
+    return (
+        <div className="font-['Poppins']">
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
+            <ErrorBoundary>
+                <PodiumCore />
+            </ErrorBoundary>
+        </div>
+    );
+}
