@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.44"; // CORRECTIF : Affichage Liste Alternance (Bypass Filtres 1ère paire)
+const APP_VERSION = "5.45"; // CORRECTIF : Filtres Alternance Isolés
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -223,8 +223,10 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     }, [lenses]);
 
     const [localConfig, setLocalConfig] = useState(() => {
+        // Deep Copy + Defaults
         const safeConfig = JSON.parse(JSON.stringify(config || {}));
         if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = {};
+        // Ensure all arrays exist
         ['types', 'designs', 'indices', 'materials', 'coatings'].forEach(k => {
             if (!safeConfig.disabledAttributes[k]) safeConfig.disabledAttributes[k] = [];
         });
@@ -380,6 +382,7 @@ const AlternanceConfigurator = ({ attributes, currentPrices, onSave, onClose }) 
     };
 
     const sections = [
+        // GÉOMÉTRIE SUPPRIMÉE ICI
         { title: "DESIGN", data: attributes.designs, color: "text-indigo-600", bg: "bg-indigo-50" },
         { title: "INDICE", data: attributes.indices, color: "text-green-600", bg: "bg-green-50" },
         { title: "MATIÈRE", data: attributes.materials, color: "text-orange-600", bg: "bg-orange-50" },
@@ -565,7 +568,10 @@ function PodiumCore() {
   // Extraction dynamique des attributs SPECIFIQUES À ALTERNANCE pour la configuration
   const alternanceAttributes = useMemo(() => {
       const attrs = { types: new Set(), designs: new Set(), indices: new Set(), materials: new Set(), coatings: new Set() };
+      
+      // FILTRE : Uniquement la marque ALTERNANCE
       const alternanceLenses = lenses.filter(l => cleanText(l.brand) === 'ALTERNANCE');
+
       alternanceLenses.forEach(l => {
           if(l.type) attrs.types.add(cleanText(l.type));
           if(l.design) attrs.designs.add(cleanText(l.design));
@@ -670,6 +676,7 @@ function PodiumCore() {
                   if ((config.disabledAttributes?.designs || []).includes(lens.design)) return false;
                   if ((config.disabledAttributes?.indices || []).includes(lens.index_mat)) return false;
                   if ((config.disabledAttributes?.coatings || []).includes(lens.coating)) return false;
+                  // NEW: Filtrage par type et matière pour être cohérent avec le nouveau configurateur
                   if ((config.disabledAttributes?.types || []).includes(lens.type)) return false;
                   if ((config.disabledAttributes?.materials || []).includes(lens.material)) return false;
                   
