@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.46"; // CORRECTIF : Force le mode manuel pour Alternance (Fix Network Conflict)
+const APP_VERSION = "5.51"; // ARCHITECTURE : Capsules Logiques Indépendantes (Fix Filtres)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -518,6 +518,7 @@ function PodiumCore() {
         const p = safeJSONParse("optique_user_settings", null); 
         if (!p) return DEFAULT_SETTINGS;
         
+        // RECHERCHE ET CHARGEMENT DES SETTINGS PAR UTILISATEUR
         return { 
             ...DEFAULT_SETTINGS, 
             ...p, 
@@ -542,7 +543,29 @@ function PodiumCore() {
         }; 
     } catch { return DEFAULT_SETTINGS; }
   });
-  useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
+  
+  // Gestion persistante par utilisateur
+  useEffect(() => {
+      if (user && user.username) {
+          const key = `optique_settings_${user.username}`;
+          const saved = localStorage.getItem(key);
+          if (saved) {
+              setUserSettings(JSON.parse(saved));
+          } else {
+              // Si pas de settings pour cet utilisateur, on prend les défauts
+              setUserSettings(DEFAULT_SETTINGS);
+          }
+      }
+  }, [user]);
+
+  useEffect(() => {
+      if (user && user.username) {
+          const key = `optique_settings_${user.username}`;
+          localStorage.setItem(key, JSON.stringify(userSettings));
+      }
+      // Fallback global pour compatibilité
+      localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); 
+  }, [userSettings, user]);
 
   const currentSettings = { ...userSettings, shopName: user?.shop_name || userSettings.shopName };
   const [formData, setFormData] = useState(() => {
@@ -562,9 +585,8 @@ function PodiumCore() {
     const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
     
-    // CORRECTIF MAJEUR : ON CHARGE TOUT LE CATALOGUE SANS FILTRER PAR MARQUE CÔTÉ SERVEUR
-    const params = { pocketLimit: -1 }; 
-    // if (formData.type) params.type = formData.type; // REMOVE TYPE FILTER TO ALLOW ALTERNANCE UNIFOCAL IF PROG SELECTED
+    const params = { brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 };
+    if (formData.type) params.type = formData.type;
 
     axios.get(API_URL, { params })
       .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
@@ -620,46 +642,79 @@ function PodiumCore() {
     if (safeLenses.length > 0) {
        let workingList = safeLenses.map(l => { return {...l}; }); 
 
-       // MODE SÉLECTION ALTERNANCE (Force filtres)
+       // ---------------------------------------------------------
+       // CAPSULE 1 : MODE SÉLECTION ALTERNANCE (Totalement isolé)
+       // ---------------------------------------------------------
        if (isSelectingAlternance) {
-           // 1. Marque ALTERNANCE
+           // 1. Filtre Marque strict
            workingList = workingList.filter(l => cleanText(l.brand) === 'ALTERNANCE');
            
-           // 2. Filtre Type selon 1ère paire
+           // 2. Filtre Compatibilité Type
            const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
-           // Si progressif, on autorise aussi les unifocaux
            if (isMainProg) {
+               // Si Prog, on veut Prog OU Unifocal
                workingList = workingList.filter(l => cleanText(l.type).includes('PROGRESSIF') || cleanText(l.type).includes('UNIFOCAL'));
            } else {
+               // Si Uni, on veut QUE Unifocal
                workingList = workingList.filter(l => cleanText(l.type).includes('UNIFOCAL'));
            }
 
+           // 3. Calcul Prix Spécifique (Mode Composant ou Forfait)
+           const isSecondPair = supplementaryPairs.length === 0;
+           const useSuperBonifie = isMainProg && isSecondPair;
+
+           workingList = workingList.map(l => {
+                const cost = useSuperBonifie 
+                  ? (l.purchase_price_super_bonifie || l.purchase_price || 0) 
+                  : (l.purchase_price_bonifie || l.purchase_price || 0);
+                
+                let sellPrice = 0;
+                if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
+                    sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
+                } else {
+                    sellPrice = cost * 2.5; 
+                }
+                return { ...l, sellingPrice: sellPrice, margin: sellPrice - cost };
+           });
+           
+           // Tri
+           workingList.sort((a, b) => b.margin - a.margin);
+
+           setFilteredLenses(workingList);
+           // Stats update logic...
+           return; // STOP HERE -> On ne joue pas la logique standard
+       }
+
+       // ---------------------------------------------------------
+       // CAPSULE 2 : MODE STANDARD (1ère Paire via Sidebar)
+       // ---------------------------------------------------------
+       
+       // 1. Filtres Sidebar (Marque, Réseau...)
+       if (formData.brand && formData.brand !== '') { 
+           workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
-           // MODE STANDARD
-           if (formData.brand && formData.brand !== '') { 
-               workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
-           } else {
-               if (formData.network === 'SANTECLAIR') { workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand))); } 
-               else if (formData.network !== 'HORS_RESEAU') { workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand))); }
-               if (Array.isArray(userSettings.disabledBrands) && userSettings.disabledBrands.length > 0) {
-                   workingList = workingList.filter(l => !userSettings.disabledBrands.includes(cleanText(l.brand)));
-               }
-           }
-    
-           if (formData.type) { 
-               const targetType = cleanText(formData.type); 
-               if (targetType === 'PROGRESSIF_INTERIEUR') {
-                   workingList = workingList.filter(l => { 
-                        const type = cleanText(l.type || l.geometry); 
-                        return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
-                   });
-               } else { 
-                   workingList = workingList.filter(l => cleanText(l.type || l.geometry) === targetType); 
-               } 
+           // Logique Réseaux
+           if (formData.network === 'SANTECLAIR') { workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand))); } 
+           else if (formData.network !== 'HORS_RESEAU') { workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand))); }
+           if (Array.isArray(userSettings.disabledBrands) && userSettings.disabledBrands.length > 0) {
+               workingList = workingList.filter(l => !userSettings.disabledBrands.includes(cleanText(l.brand)));
            }
        }
 
-       // CALCUL PRIX + CALISIZE
+       // 2. Filtre Type
+       if (formData.type) { 
+           const targetType = cleanText(formData.type); 
+           if (targetType === 'PROGRESSIF_INTERIEUR') {
+               workingList = workingList.filter(l => { 
+                    const type = cleanText(l.type || l.geometry); 
+                    return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
+               });
+           } else { 
+               workingList = workingList.filter(l => cleanText(l.type || l.geometry) === targetType); 
+           } 
+       }
+
+       // 3. Calcul Prix Standard
        let calisizeAddon = 0;
        if (formData.calisize) {
            if (formData.network === 'HORS_RESEAU') {
@@ -669,84 +724,44 @@ function PodiumCore() {
            }
        }
 
-       // CORRECTIF : FORCER LE MODE "HORS RESEAU" SI ON SELECTIONNE UNE ALTERNANCE
-       // Cela permet de contourner les filtres de réseaux qui masqueraient les verres Alternance
-       const forceManualMode = formData.network === 'HORS_RESEAU' || isSelectingAlternance;
+       if (formData.network === 'HORS_RESEAU') {
+           // ... existing manual/linear logic ...
+           if (userSettings.pricingMode === 'per_lens') {
+               const config = userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} };
+               workingList = workingList.filter(lens => {
+                   if ((config.disabledAttributes?.designs || []).includes(lens.design)) return false;
+                   if ((config.disabledAttributes?.indices || []).includes(lens.index_mat)) return false;
+                   if ((config.disabledAttributes?.coatings || []).includes(lens.coating)) return false;
+                   if ((config.disabledAttributes?.types || []).includes(lens.type)) return false;
+                   if ((config.disabledAttributes?.materials || []).includes(lens.material)) return false;
+                   
+                   const key = getLensKey(lens);
+                   const manualPrice = config.prices[key];
+                   if (!manualPrice || manualPrice <= 0) return false; 
 
-       if (forceManualMode) {
-          // --- LOGIQUE DE PRIX DYNAMIQUE SELON LE MODE ---
-          if (userSettings.pricingMode === 'per_lens' && !isSelectingAlternance) {
-              // MODE MANUEL "AU VERRE"
-              const config = userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} };
-              
-              workingList = workingList.filter(lens => {
-                  // 1. Filtrer les exclus (OFF)
-                  if ((config.disabledAttributes?.designs || []).includes(lens.design)) return false;
-                  if ((config.disabledAttributes?.indices || []).includes(lens.index_mat)) return false;
-                  if ((config.disabledAttributes?.coatings || []).includes(lens.coating)) return false;
-                  // NEW: Filtrage par type et matière pour être cohérent avec le nouveau configurateur
-                  if ((config.disabledAttributes?.types || []).includes(lens.type)) return false;
-                  if ((config.disabledAttributes?.materials || []).includes(lens.material)) return false;
-                  
-                  // 2. Vérifier si un prix est défini
-                  const key = getLensKey(lens);
-                  const manualPrice = config.prices[key];
-                  
-                  if (!manualPrice || manualPrice <= 0) return false; // On ne montre pas les verres sans prix
-
-                  // 3. Appliquer le prix
-                  const pPrice = parseFloat(lens.purchase_price || 0);
-                  lens.sellingPrice = manualPrice + calisizeAddon;
-                  lens.margin = lens.sellingPrice - pPrice;
-                  return true;
-              });
-
-          } else if (!isSelectingAlternance) {
-              // MODE CLASSIQUE LINEAIRE (Ax + B) - SEULEMENT SI PAS EN MODE ALTERNANCE
-              const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
-              workingList = workingList.map(lens => {
-                 let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
-                 const lensType = cleanText(lens.type || lens.geometry);
-                 
-                 if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
-                 else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
-                 else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
-                 else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
-                 const pPrice = parseFloat(lens.purchase_price || 0);
-                 
-                 let newSelling = (pPrice * rule.x) + rule.b;
-                 newSelling += calisizeAddon; 
-    
-                 const newMargin = newSelling - pPrice;
-                 return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
-              });
-          }
-
-          // PRIX SPÉCIFIQUE ALTERNANCE (SI EN MODE SELECTION)
-          if (isSelectingAlternance) {
-             const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
-             const isSecondPair = supplementaryPairs.length === 0;
-             const useSuperBonifie = isMainProg && isSecondPair;
-
-             workingList = workingList.map(l => {
-                  const cost = useSuperBonifie 
-                    ? (l.purchase_price_super_bonifie || l.purchase_price || 0) 
-                    : (l.purchase_price_bonifie || l.purchase_price || 0);
-                  
-                  let sellPrice = 0;
-                  if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
-                      sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
-                  } else {
-                      // Mode Manuel ou Fallback
-                      sellPrice = cost * 2.5; 
-                  }
-                  return { ...l, sellingPrice: sellPrice, margin: sellPrice - cost };
-             });
-          }
-
-          workingList.sort((a, b) => b.margin - a.margin);
+                   const pPrice = parseFloat(lens.purchase_price || 0);
+                   lens.sellingPrice = manualPrice + calisizeAddon;
+                   lens.margin = lens.sellingPrice - pPrice;
+                   return true;
+               });
+           } else {
+               const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
+               workingList = workingList.map(lens => {
+                   let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
+                   const lensType = cleanText(lens.type || lens.geometry);
+                   if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
+                   else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
+                   else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
+                   else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
+                   const pPrice = parseFloat(lens.purchase_price || 0);
+                   let newSelling = (pPrice * rule.x) + rule.b;
+                   newSelling += calisizeAddon; 
+                   const newMargin = newSelling - pPrice;
+                   return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
+               });
+           }
+           workingList.sort((a, b) => b.margin - a.margin);
        } else {
-           // MODE RESEAUX (Inchangé)
            const priceMap = { 'KALIXIA': 'sell_kalixia', 'ITELIS': 'sell_itelis', 'CARTEBLANCHE': 'sell_carteblanche', 'SEVEANE': 'sell_seveane', 'SANTECLAIR': 'sell_santeclair' };
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { 
@@ -758,28 +773,28 @@ function PodiumCore() {
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
-       if (formData.materialIndex && formData.materialIndex !== '' && !isSelectingAlternance) {
+       // 4. Filtres Attributs (Indice, Traitement...)
+       if (formData.materialIndex && formData.materialIndex !== '') {
            workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
        }
 
        const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
-       if(!isSelectingAlternance) {
-           if (formData.photochromic) { workingList = workingList.filter(l => isPhotoC(l)); } else { workingList = workingList.filter(l => !isPhotoC(l)); }
-           if (formData.coating && formData.coating !== '') { workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating)); }
-           if (formData.myopiaControl) { workingList = workingList.filter(l => cleanText(l.name).includes("MIYO")); }
-           if (formData.design && formData.design !== '') { setFilteredLenses(workingList.filter(l => cleanText(l.design) === cleanText(formData.design))); } else { setFilteredLenses(workingList); }
-       } else {
-           setFilteredLenses(workingList);
-       }
        
+       if (formData.photochromic) { workingList = workingList.filter(l => isPhotoC(l)); } else { workingList = workingList.filter(l => !isPhotoC(l)); }
+       if (formData.coating && formData.coating !== '') { workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating)); }
+       if (formData.myopiaControl) { workingList = workingList.filter(l => cleanText(l.name).includes("MIYO")); }
+       if (formData.design && formData.design !== '') { setFilteredLenses(workingList.filter(l => cleanText(l.design) === cleanText(formData.design))); } else { setFilteredLenses(workingList); }
+       
+       setStats({ total: lenses.length, filtered: workingList.length });
+
+       // Mise à jour des filtres disponibles (Design, Coating...)
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
-       
-       setStats({ total: lenses.length, filtered: workingList.length });
+
     } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
-  }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.pricingMode, userSettings.perLensConfig, isSelectingAlternance, selectedLens]);
+  }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.pricingMode, userSettings.perLensConfig, isSelectingAlternance, selectedLens, supplementaryPairs]);
 
   const handleAddSupplementaryPair = (type) => {
       const newId = Date.now();
