@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.45"; // CORRECTIF : Filtres Alternance Isolés
+const APP_VERSION = "5.46"; // CORRECTIF : Force le mode manuel pour Alternance (Fix Network Conflict)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -26,7 +26,12 @@ const DEFAULT_SETTINGS = {
     },
     supplementaryConfig: {
         mode: 'component', 
-        componentPrices: {}, 
+        componentPrices: {
+            'UNIFOCAL': 30, 'PROGRESSIF': 80, 'DEGRESSIF': 60, 'MULTIFOCAL': 70, 'PROGRESSIF_INTERIEUR': 70,
+            '1.50': 0, '1.58': 10, '1.59': 10, '1.60': 20, '1.67': 40, '1.74': 80,
+            'HMC': 0, 'HMC+': 10, 'BLUE': 20, 'PHOTO': 40,
+            'TEINTE': 20
+        },
         manualPrices: {}
     },
     pricing: {
@@ -663,12 +668,14 @@ function PodiumCore() {
            }
        }
 
-       if (formData.network === 'HORS_RESEAU') {
-          // CORRECTIF: Le mode de prix "Per Lens" standard ne doit PAS s'appliquer en mode Alternance
-          // car les verres Alternance n'ont pas forcément de prix définis dans "perLensConfig" (1ère paire)
-          
+       // CORRECTIF : FORCER LE MODE "HORS RESEAU" SI ON SELECTIONNE UNE ALTERNANCE
+       // Cela permet de contourner les filtres de réseaux qui masqueraient les verres Alternance
+       const forceManualMode = formData.network === 'HORS_RESEAU' || isSelectingAlternance;
+
+       if (forceManualMode) {
+          // --- LOGIQUE DE PRIX DYNAMIQUE SELON LE MODE ---
           if (userSettings.pricingMode === 'per_lens' && !isSelectingAlternance) {
-              // MODE MANUEL "AU VERRE" (Classique)
+              // MODE MANUEL "AU VERRE"
               const config = userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} };
               
               workingList = workingList.filter(lens => {
@@ -694,7 +701,7 @@ function PodiumCore() {
               });
 
           } else if (!isSelectingAlternance) {
-              // MODE CLASSIQUE LINEAIRE (Ax + B) - Seulement si PAS en mode Alternance
+              // MODE CLASSIQUE LINEAIRE (Ax + B) - SEULEMENT SI PAS EN MODE ALTERNANCE
               const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
               workingList = workingList.map(lens => {
                  let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
@@ -713,7 +720,7 @@ function PodiumCore() {
                  return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
               });
           }
-          
+
           // PRIX SPÉCIFIQUE ALTERNANCE (SI EN MODE SELECTION)
           if (isSelectingAlternance) {
              const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
