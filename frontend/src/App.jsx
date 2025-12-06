@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.36"; // MODIF : Suppression colonne Géométrie dans Config Alternance
+const APP_VERSION = "5.37"; // RESTAURATION : Configurateur 1ère Paire Complet (Marges + Filtres)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -21,7 +21,8 @@ const DEFAULT_SETTINGS = {
     disabledBrands: [],
     pricingMode: 'linear', 
     perLensConfig: {
-        disabledAttributes: { designs: [], indices: [], coatings: [] }, 
+        // Ajout de types et materials pour le filtrage complet
+        disabledAttributes: { designs: [], indices: [], coatings: [], types: [], materials: [] }, 
         prices: {} 
     },
     supplementaryConfig: {
@@ -68,7 +69,6 @@ const checkIsPhoto = (item) => {
     return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN");
 };
 
-// --- CALCULATEUR DYNAMIQUE ---
 const calculateComponentPrice = (lens, componentPrices) => {
     let price = 0;
     if (!componentPrices) return 0; 
@@ -80,7 +80,6 @@ const calculateComponentPrice = (lens, componentPrices) => {
         cleanText(lens.material),
         cleanText(lens.coating)
     ];
-    // Ajout Photochromique manuel si détecté
     if (checkIsPhoto(lens)) keysToSum.push('PHOTOCHROMIQUE');
 
     keysToSum.forEach(key => {
@@ -88,7 +87,6 @@ const calculateComponentPrice = (lens, componentPrices) => {
             price += componentPrices[key];
         }
     });
-
     return price;
 };
 
@@ -113,6 +111,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// --- UI COMPONENTS ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const [hasError, setHasError] = useState(false);
   const safeBrand = brand || 'unknown';
@@ -168,24 +167,27 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   );
 };
 
+// --- CONFIGURATEUR 1ERE PAIRE (MARCHÉ LIBRE) ---
 const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterPhoto, setFilterPhoto] = useState('all'); 
     const [filterBrand, setFilterBrand] = useState('');
 
+    // 1. Extraction Dynamique pour les filtres de gauche
     const availableAttributes = useMemo(() => {
         const filteredLenses = filterBrand 
             ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand))
             : lenses;
             
         return {
+            types: [...new Set(filteredLenses.map(l => cleanText(l.type)))].sort().filter(Boolean),
             designs: [...new Set(filteredLenses.map(l => cleanText(l.design)))].sort().filter(Boolean),
             indices: [...new Set(filteredLenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean),
+            materials: [...new Set(filteredLenses.map(l => cleanText(l.material)))].sort().filter(Boolean),
             coatings: [...new Set(filteredLenses.map(l => cleanText(l.coating)))].sort().filter(Boolean)
         };
     }, [lenses, filterBrand]);
 
-    const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
-
+    // 2. Calcul des combinaisons uniques pour le tableau
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
@@ -196,6 +198,7 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                     type: cleanText(l.type),      
                     design: cleanText(l.design),
                     index_mat: cleanText(l.index_mat),
+                    material: cleanText(l.material), // Ajout Matière
                     coating: cleanText(l.coating),
                     avg_purchase: l.purchase_price,
                     isPhoto: checkIsPhoto(l), 
@@ -212,12 +215,14 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     }, [lenses]);
 
     const [localConfig, setLocalConfig] = useState(() => {
+        // Deep Copy + Defaults
         const safeConfig = JSON.parse(JSON.stringify(config || {}));
-        if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = { designs: [], indices: [], coatings: [] };
+        if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = {};
+        // Ensure all arrays exist
+        ['types', 'designs', 'indices', 'materials', 'coatings'].forEach(k => {
+            if (!safeConfig.disabledAttributes[k]) safeConfig.disabledAttributes[k] = [];
+        });
         if (!safeConfig.prices) safeConfig.prices = {};
-        if (!safeConfig.disabledAttributes.designs) safeConfig.disabledAttributes.designs = [];
-        if (!safeConfig.disabledAttributes.indices) safeConfig.disabledAttributes.indices = [];
-        if (!safeConfig.disabledAttributes.coatings) safeConfig.disabledAttributes.coatings = [];
         return safeConfig;
     });
 
@@ -241,7 +246,7 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
             ...prev,
             disabledAttributes: {
                 ...prev.disabledAttributes,
-                [type]: enableAll ? [] : [...allValues]
+                [type]: enableAll ? [] : [...allValues] // Vide = Tous actifs
             }
         }));
     };
@@ -256,46 +261,104 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterText, setFilterText] = useState("");
 
     const filteredRows = uniqueCombinations.filter(row => {
+        // Vérifie les filtres d'exclusion (Sidebar)
+        if ((localConfig.disabledAttributes.types || []).includes(row.type)) return false;
         if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
         if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
+        if ((localConfig.disabledAttributes.materials || []).includes(row.material)) return false;
         if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
         
+        // Filtres Top Bar
         if (filterBrand && filterBrand !== '' && row.brand !== cleanText(filterBrand)) return false;
-
         if (filterPhoto === 'white' && row.isPhoto) return false;
         if (filterPhoto === 'photo' && !row.isPhoto) return false;
 
-        return (row.type + row.design + row.coating).toLowerCase().includes(filterText.toLowerCase());
+        // Recherche texte
+        return (row.type + row.design + row.coating + row.material).toLowerCase().includes(filterText.toLowerCase());
     });
 
     const handleResetFiltered = () => {
         if (filteredRows.length === 0) return alert("Aucun verre affiché à réinitialiser.");
-        if (window.confirm(`⚠️ ATTENTION : Vous allez remettre à 0€ les ${filteredRows.length} lignes actuellement affichées.\n\nCette action affecte uniquement la sélection visible (Filtres + Recherche).\n\nVoulez-vous continuer ?`)) {
-            if (window.confirm("🔴 DOUBLE CONFIRMATION REQUISE\n\nÊtes-vous ABSOLUMENT sûr de vouloir supprimer ces tarifs ?\nCette action est irréversible.")) {
+        if (window.confirm(`⚠️ ATTENTION : Remise à 0€ des ${filteredRows.length} lignes affichées ?`)) {
+            if (window.confirm("🔴 DOUBLE CONFIRMATION : Action irréversible.")) {
                 const newPrices = { ...localConfig.prices };
-                filteredRows.forEach(row => {
-                    newPrices[row.key] = 0;
-                });
+                filteredRows.forEach(row => { newPrices[row.key] = 0; });
                 setLocalConfig(prev => ({ ...prev, prices: newPrices }));
             }
         }
     };
 
+    const FilterSection = ({ title, type, items }) => (
+        <div className="mb-6">
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</h3>
+                <div className="flex gap-1">
+                    <button onClick={() => setAllAttributes(type, true, items)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                    <button onClick={() => setAllAttributes(type, false, items)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                </div>
+            </div>
+            <div className="flex flex-col gap-1">
+                {items.map(item => {
+                    const isDisabled = (localConfig.disabledAttributes[type] || []).includes(item);
+                    return (
+                        <button key={item} onClick={() => toggleAttribute(type, item)} className={`px-2 py-1.5 rounded text-xs font-bold border text-left flex justify-between items-center ${isDisabled ? 'bg-slate-50 text-slate-400 border-slate-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                            <span className="truncate pr-2">{item}</span>
+                            {isDisabled ? <ToggleLeft className="w-4 h-4 shrink-0"/> : <ToggleRight className="w-4 h-4 shrink-0"/>}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+
     return (
         <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-['Poppins']">
             <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm"><div><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Calculator className="w-6 h-6 text-blue-600"/>CONFIGURATEUR (Paires Principales)</h2></div><div className="flex gap-4"><button onClick={onClose} className="px-6 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100">ANNULER</button><button onClick={() => onSave(localConfig)} className="px-6 py-2 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200">ENREGISTRER</button></div></div>
             <div className="flex-1 overflow-hidden flex">
-                 <aside className="w-80 bg-white border-r overflow-y-auto p-6 space-y-8">
-                     {/* Filtres simplifiés pour l'exemple */}
-                     <div><h3 className="text-xs font-bold text-slate-400 mb-2">INDICES</h3><div className="flex flex-wrap gap-2">{availableIndices.map(i => <button key={i} onClick={() => toggleAttribute('indices', i)} className={`px-3 py-1 rounded text-xs font-bold border ${localConfig.disabledAttributes.indices.includes(i) ? 'bg-slate-100' : 'bg-green-100 text-green-800'}`}>{i}</button>)}</div></div>
+                 <aside className="w-64 bg-white border-r overflow-y-auto p-4 shrink-0">
+                     <FilterSection title="GÉOMÉTRIE" type="types" items={availableAttributes.types} />
+                     <FilterSection title="DESIGN" type="designs" items={availableAttributes.designs} />
+                     <FilterSection title="INDICE" type="indices" items={availableAttributes.indices} />
+                     <FilterSection title="MATIÈRE" type="materials" items={availableAttributes.materials} />
+                     <FilterSection title="TRAITEMENT" type="coatings" items={availableAttributes.coatings} />
                  </aside>
-                 <main className="flex-1 bg-slate-50 p-6 overflow-auto">
-                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                         <table className="min-w-full divide-y divide-slate-100">
-                             <thead className="bg-slate-50"><tr><th className="px-6 py-3 text-left text-xs font-bold text-slate-500">Type</th><th className="px-6 py-3 text-left text-xs font-bold text-slate-500">Design</th><th className="px-6 py-3 text-right text-xs font-bold text-blue-600">PRIX</th></tr></thead>
-                             <tbody className="divide-y divide-slate-100">{filteredRows.map(row => (<tr key={row.key}><td className="px-6 py-4 text-xs font-bold">{row.type}</td><td className="px-6 py-4 text-xs">{row.design} {row.coating}</td><td className="px-6 py-4 text-right"><input type="number" className="w-20 text-right border-b font-bold" value={localConfig.prices[row.key] || ''} onChange={(e) => updatePrice(row.key, e.target.value)} placeholder="0"/></td></tr>))}</tbody>
-                         </table>
-                     </div>
+                 <main className="flex-1 flex flex-col bg-slate-50">
+                    <div className="p-4 border-b bg-white flex flex-col gap-4">
+                        <div className="flex items-center gap-4"><div className="flex-1 relative"><Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/><input type="text" placeholder="Recherche..." className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none text-sm font-bold text-slate-700 focus:ring-2 ring-blue-100" value={filterText} onChange={(e) => setFilterText(e.target.value)}/></div><button onClick={handleResetFiltered} className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200 transition-colors"><Trash2 className="w-4 h-4"/> RAZ SÉLECTION</button></div>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><div className="px-2 text-xs font-bold text-slate-400 flex items-center gap-1"><Briefcase className="w-3 h-3"/> MARQUE</div>{availableBrands.map(b => (<button key={b.id} onClick={() => setFilterBrand(b.id)} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterBrand === b.id ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>{b.label}</button>))}</div>
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><button onClick={() => setFilterPhoto('all')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500'}`}><ListFilter className="w-3 h-3"/> TOUS</button><button onClick={() => setFilterPhoto('white')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}><Sun className="w-3 h-3"/> BLANCS</button><button onClick={() => setFilterPhoto('photo')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500'}`}><SunDim className="w-3 h-3"/> PHOTO</button></div>
+                            <span className="ml-auto text-xs text-slate-400 font-mono font-bold bg-slate-50 px-2 py-1 rounded border border-slate-100">{filteredRows.length} lignes</span>
+                        </div>
+                    </div>
+                    <div className="flex-1 overflow-auto p-6">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <table className="min-w-full divide-y divide-slate-100">
+                                <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">TYPE</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">DESIGN</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">MAT</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">IND</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">TRAIT</th><th className="px-4 py-3 text-right text-xs font-bold text-slate-400">ACHAT</th><th className="px-4 py-3 text-right text-xs font-bold text-blue-600 w-32 border-l border-blue-100">VENTE</th><th className="px-4 py-3 text-right text-xs font-bold text-green-600 w-24 bg-green-50/50">MARGE €</th><th className="px-4 py-3 text-right text-xs font-bold text-green-600 w-16 bg-green-50/50">%</th></tr></thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {filteredRows.map(row => {
+                                        const price = localConfig.prices[row.key] || 0;
+                                        const purchase = safeNum(row.avg_purchase);
+                                        const margin = price - purchase;
+                                        const marginPercent = price > 0 ? (margin / price) * 100 : 0;
+                                        return (
+                                            <tr key={row.key} className="hover:bg-slate-50">
+                                                <td className="px-4 py-3 text-xs font-bold text-slate-700">{row.type}</td>
+                                                <td className="px-4 py-3 text-xs text-slate-600">{row.design}</td>
+                                                <td className="px-4 py-3 text-xs text-slate-600">{row.material}</td>
+                                                <td className="px-4 py-3 text-xs font-bold text-slate-800 bg-slate-100 rounded text-center">{row.index_mat}</td>
+                                                <td className="px-4 py-3 text-xs text-slate-600">{row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}{row.coating}</td>
+                                                <td className="px-4 py-3 text-xs text-right text-slate-400 font-mono">{purchase.toFixed(0)}€</td>
+                                                <td className="px-4 py-3 text-right border-l border-blue-100 bg-blue-50/30"><input type="number" className={`w-full text-right font-bold bg-transparent outline-none border-b-2 focus:border-blue-500 transition-colors ${price > 0 ? 'text-blue-700 border-blue-200' : 'text-slate-300 border-slate-200'}`} placeholder="0" value={price === 0 ? '' : price} onChange={(e) => updatePrice(row.key, e.target.value)}/></td>
+                                                <td className={`px-4 py-3 text-xs text-right font-bold ${margin > 0 ? 'text-green-600' : 'text-red-400'}`}>{price > 0 ? `${margin.toFixed(2)}` : '-'}</td>
+                                                <td className={`px-4 py-3 text-xs text-right font-bold ${marginPercent > 40 ? 'text-green-600' : (marginPercent > 0 ? 'text-orange-500' : 'text-red-400')}`}>{price > 0 ? `${marginPercent.toFixed(0)}%` : '-'}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                  </main>
             </div>
         </div>
@@ -584,6 +647,9 @@ function PodiumCore() {
                   if ((config.disabledAttributes?.designs || []).includes(lens.design)) return false;
                   if ((config.disabledAttributes?.indices || []).includes(lens.index_mat)) return false;
                   if ((config.disabledAttributes?.coatings || []).includes(lens.coating)) return false;
+                  // NEW: Filtrage par type et matière pour être cohérent avec le nouveau configurateur
+                  if ((config.disabledAttributes?.types || []).includes(lens.type)) return false;
+                  if ((config.disabledAttributes?.materials || []).includes(lens.material)) return false;
                   
                   // 2. Vérifier si un prix est défini
                   const key = getLensKey(lens);
