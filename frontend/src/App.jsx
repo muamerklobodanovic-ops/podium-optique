@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.51"; // ARCHITECTURE : Capsules Logiques Indépendantes (Fix Filtres)
+const APP_VERSION = "5.47"; // CORRECTIF : Filtrage Cohérent & Sidebar Dynamique
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -151,7 +151,6 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   const mVal = safeNum(lens.margin);
   const displayMargin = (sPrice > 0) ? ((mVal / sPrice) * 100).toFixed(0) : "0";
   
-  // Gestionnaire de clic flexible (priorité à onClick prop si fourni, sinon onSelect)
   const handleClick = () => {
       if (onClick) {
           onClick(lens);
@@ -200,7 +199,8 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
         };
     }, [lenses, filterBrand]);
 
-    // 2. Calcul des combinaisons uniques pour le tableau
+    const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
+
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
@@ -387,7 +387,6 @@ const AlternanceConfigurator = ({ attributes, currentPrices, onSave, onClose }) 
     };
 
     const sections = [
-        // GÉOMÉTRIE SUPPRIMÉE ICI
         { title: "DESIGN", data: attributes.designs, color: "text-indigo-600", bg: "bg-indigo-50" },
         { title: "INDICE", data: attributes.indices, color: "text-green-600", bg: "bg-green-50" },
         { title: "MATIÈRE", data: attributes.materials, color: "text-orange-600", bg: "bg-orange-50" },
@@ -641,6 +640,7 @@ function PodiumCore() {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
        let workingList = safeLenses.map(l => { return {...l}; }); 
+       let finalLenses = [];
 
        // ---------------------------------------------------------
        // CAPSULE 1 : MODE SÉLECTION ALTERNANCE (Totalement isolé)
@@ -672,6 +672,7 @@ function PodiumCore() {
                 if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
                     sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
                 } else {
+                    // Mode Manuel ou Fallback
                     sellPrice = cost * 2.5; 
                 }
                 return { ...l, sellingPrice: sellPrice, margin: sellPrice - cost };
@@ -679,119 +680,120 @@ function PodiumCore() {
            
            // Tri
            workingList.sort((a, b) => b.margin - a.margin);
+           finalLenses = workingList;
 
-           setFilteredLenses(workingList);
-           // Stats update logic...
-           return; // STOP HERE -> On ne joue pas la logique standard
-       }
-
-       // ---------------------------------------------------------
-       // CAPSULE 2 : MODE STANDARD (1ère Paire via Sidebar)
-       // ---------------------------------------------------------
-       
-       // 1. Filtres Sidebar (Marque, Réseau...)
-       if (formData.brand && formData.brand !== '') { 
-           workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
-           // Logique Réseaux
-           if (formData.network === 'SANTECLAIR') { workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand))); } 
-           else if (formData.network !== 'HORS_RESEAU') { workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand))); }
-           if (Array.isArray(userSettings.disabledBrands) && userSettings.disabledBrands.length > 0) {
-               workingList = workingList.filter(l => !userSettings.disabledBrands.includes(cleanText(l.brand)));
+           // ---------------------------------------------------------
+           // CAPSULE 2 : MODE STANDARD (1ère Paire via Sidebar)
+           // ---------------------------------------------------------
+           
+           // 1. Filtres Sidebar (Marque, Réseau...)
+           if (formData.brand && formData.brand !== '') { 
+               workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
+           } else {
+               // Logique Réseaux
+               if (formData.network === 'SANTECLAIR') { workingList = workingList.filter(l => ['SEIKO', 'ZEISS'].includes(cleanText(l.brand))); } 
+               else if (formData.network !== 'HORS_RESEAU') { workingList = workingList.filter(l => !['ORUS', 'ZEISS'].includes(cleanText(l.brand))); }
+               if (Array.isArray(userSettings.disabledBrands) && userSettings.disabledBrands.length > 0) {
+                   workingList = workingList.filter(l => !userSettings.disabledBrands.includes(cleanText(l.brand)));
+               }
            }
-       }
+    
+           // 2. Filtre Type
+           if (formData.type) { 
+               const targetType = cleanText(formData.type); 
+               if (targetType === 'PROGRESSIF_INTERIEUR') {
+                   workingList = workingList.filter(l => { 
+                        const type = cleanText(l.type || l.geometry); 
+                        return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
+                   });
+               } else { 
+                   workingList = workingList.filter(l => cleanText(l.type || l.geometry) === targetType); 
+               } 
+           }
 
-       // 2. Filtre Type
-       if (formData.type) { 
-           const targetType = cleanText(formData.type); 
-           if (targetType === 'PROGRESSIF_INTERIEUR') {
-               workingList = workingList.filter(l => { 
-                    const type = cleanText(l.type || l.geometry); 
-                    return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
-               });
-           } else { 
-               workingList = workingList.filter(l => cleanText(l.type || l.geometry) === targetType); 
-           } 
-       }
+           // 3. Calcul Prix Standard
+           let calisizeAddon = 0;
+           if (formData.calisize) {
+               if (formData.network === 'HORS_RESEAU') {
+                   calisizeAddon = userSettings.pricing?.calisize?.price || 10;
+               } else {
+                   calisizeAddon = CALISIZE_NETWORK_PRICES[formData.network] || 0;
+               }
+           }
 
-       // 3. Calcul Prix Standard
-       let calisizeAddon = 0;
-       if (formData.calisize) {
            if (formData.network === 'HORS_RESEAU') {
-               calisizeAddon = userSettings.pricing?.calisize?.price || 10;
+               // ... existing manual/linear logic ...
+               if (userSettings.pricingMode === 'per_lens') {
+                   const config = userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} };
+                   workingList = workingList.filter(lens => {
+                       if ((config.disabledAttributes?.designs || []).includes(lens.design)) return false;
+                       if ((config.disabledAttributes?.indices || []).includes(lens.index_mat)) return false;
+                       if ((config.disabledAttributes?.coatings || []).includes(lens.coating)) return false;
+                       if ((config.disabledAttributes?.types || []).includes(lens.type)) return false;
+                       if ((config.disabledAttributes?.materials || []).includes(lens.material)) return false;
+                       
+                       const key = getLensKey(lens);
+                       const manualPrice = config.prices[key];
+                       if (!manualPrice || manualPrice <= 0) return false; 
+
+                       const pPrice = parseFloat(lens.purchase_price || 0);
+                       lens.sellingPrice = manualPrice + calisizeAddon;
+                       lens.margin = lens.sellingPrice - pPrice;
+                       return true;
+                   });
+               } else {
+                   const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
+                   workingList = workingList.map(lens => {
+                       let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
+                       const lensType = cleanText(lens.type || lens.geometry);
+                       if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
+                       else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
+                       else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
+                       else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
+                       const pPrice = parseFloat(lens.purchase_price || 0);
+                       let newSelling = (pPrice * rule.x) + rule.b;
+                       newSelling += calisizeAddon; 
+                       const newMargin = newSelling - pPrice;
+                       return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
+                   });
+               }
+               workingList.sort((a, b) => b.margin - a.margin);
            } else {
-               calisizeAddon = CALISIZE_NETWORK_PRICES[formData.network] || 0;
-           }
-       }
-
-       if (formData.network === 'HORS_RESEAU') {
-           // ... existing manual/linear logic ...
-           if (userSettings.pricingMode === 'per_lens') {
-               const config = userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} };
-               workingList = workingList.filter(lens => {
-                   if ((config.disabledAttributes?.designs || []).includes(lens.design)) return false;
-                   if ((config.disabledAttributes?.indices || []).includes(lens.index_mat)) return false;
-                   if ((config.disabledAttributes?.coatings || []).includes(lens.coating)) return false;
-                   if ((config.disabledAttributes?.types || []).includes(lens.type)) return false;
-                   if ((config.disabledAttributes?.materials || []).includes(lens.material)) return false;
-                   
-                   const key = getLensKey(lens);
-                   const manualPrice = config.prices[key];
-                   if (!manualPrice || manualPrice <= 0) return false; 
-
-                   const pPrice = parseFloat(lens.purchase_price || 0);
-                   lens.sellingPrice = manualPrice + calisizeAddon;
-                   lens.margin = lens.sellingPrice - pPrice;
-                   return true;
+               const priceMap = { 'KALIXIA': 'sell_kalixia', 'ITELIS': 'sell_itelis', 'CARTEBLANCHE': 'sell_carteblanche', 'SEVEANE': 'sell_seveane', 'SANTECLAIR': 'sell_santeclair' };
+               const key = priceMap[formData.network];
+               workingList = workingList.map(l => { 
+                   let sPrice = l[key] ? parseFloat(l[key]) : 0; 
+                   if (sPrice > 0) sPrice += calisizeAddon; 
+                   return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; 
                });
-           } else {
-               const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
-               workingList = workingList.map(lens => {
-                   let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
-                   const lensType = cleanText(lens.type || lens.geometry);
-                   if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
-                   else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
-                   else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
-                   else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
-                   const pPrice = parseFloat(lens.purchase_price || 0);
-                   let newSelling = (pPrice * rule.x) + rule.b;
-                   newSelling += calisizeAddon; 
-                   const newMargin = newSelling - pPrice;
-                   return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
-               });
+               workingList = workingList.filter(l => l.sellingPrice > 0);
+               workingList.sort((a, b) => b.margin - a.margin);
            }
-           workingList.sort((a, b) => b.margin - a.margin);
-       } else {
-           const priceMap = { 'KALIXIA': 'sell_kalixia', 'ITELIS': 'sell_itelis', 'CARTEBLANCHE': 'sell_carteblanche', 'SEVEANE': 'sell_seveane', 'SANTECLAIR': 'sell_santeclair' };
-           const key = priceMap[formData.network];
-           workingList = workingList.map(l => { 
-               let sPrice = l[key] ? parseFloat(l[key]) : 0; 
-               if (sPrice > 0) sPrice += calisizeAddon; 
-               return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; 
-            });
-           workingList = workingList.filter(l => l.sellingPrice > 0);
-           workingList.sort((a, b) => b.margin - a.margin);
+
+           // 4. Filtres Attributs (Indice, Traitement...)
+           if (formData.materialIndex && formData.materialIndex !== '') {
+               workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
+           }
+
+           const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
+           
+           if (formData.photochromic) { workingList = workingList.filter(l => isPhotoC(l)); } else { workingList = workingList.filter(l => !isPhotoC(l)); }
+           if (formData.coating && formData.coating !== '') { workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating)); }
+           if (formData.myopiaControl) { workingList = workingList.filter(l => cleanText(l.name).includes("MIYO")); }
+           if (formData.design && formData.design !== '') { workingList = workingList.filter(l => cleanText(l.design) === cleanText(formData.design)); }
+           
+           finalLenses = workingList;
        }
-
-       // 4. Filtres Attributs (Indice, Traitement...)
-       if (formData.materialIndex && formData.materialIndex !== '') {
-           workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
-       }
-
-       const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
        
-       if (formData.photochromic) { workingList = workingList.filter(l => isPhotoC(l)); } else { workingList = workingList.filter(l => !isPhotoC(l)); }
-       if (formData.coating && formData.coating !== '') { workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating)); }
-       if (formData.myopiaControl) { workingList = workingList.filter(l => cleanText(l.name).includes("MIYO")); }
-       if (formData.design && formData.design !== '') { setFilteredLenses(workingList.filter(l => cleanText(l.design) === cleanText(formData.design))); } else { setFilteredLenses(workingList); }
-       
-       setStats({ total: lenses.length, filtered: workingList.length });
-
-       // Mise à jour des filtres disponibles (Design, Coating...)
-       const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
+       // Mise à jour des filtres disponibles (Basé sur la liste filtrée pour cohérence)
+       const coatings = [...new Set(finalLenses.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
-       const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
+       const designs = [...new Set(finalLenses.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
+       
+       setFilteredLenses(finalLenses);
+       setStats({ total: lenses.length, filtered: finalLenses.length });
 
     } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
   }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.pricingMode, userSettings.perLensConfig, isSelectingAlternance, selectedLens, supplementaryPairs]);
