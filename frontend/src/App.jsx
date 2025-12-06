@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.42"; // REVERT : Suppression Filtre Intelligent (Retour logique 5.40)
+const APP_VERSION = "5.50"; // UPDATE : Profils Utilisateurs & Données Cloisonnées
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -110,7 +110,6 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// --- UI COMPONENTS ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
   const [hasError, setHasError] = useState(false);
   const safeBrand = brand || 'unknown';
@@ -166,12 +165,10 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   );
 };
 
-// --- CONFIGURATEUR 1ERE PAIRE (MARCHÉ LIBRE) ---
 const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterPhoto, setFilterPhoto] = useState('all'); 
     const [filterBrand, setFilterBrand] = useState('');
 
-    // 1. Extraction Dynamique pour les filtres de gauche
     const availableAttributes = useMemo(() => {
         const filteredLenses = filterBrand 
             ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand))
@@ -186,7 +183,8 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
         };
     }, [lenses, filterBrand]);
 
-    // 2. Calcul des combinaisons uniques pour le tableau
+    const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
+
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
@@ -197,7 +195,7 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                     type: cleanText(l.type),      
                     design: cleanText(l.design),
                     index_mat: cleanText(l.index_mat),
-                    material: cleanText(l.material), // Ajout Matière
+                    material: cleanText(l.material), 
                     coating: cleanText(l.coating),
                     avg_purchase: l.purchase_price,
                     isPhoto: checkIsPhoto(l), 
@@ -214,10 +212,8 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     }, [lenses]);
 
     const [localConfig, setLocalConfig] = useState(() => {
-        // Deep Copy + Defaults
         const safeConfig = JSON.parse(JSON.stringify(config || {}));
         if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = {};
-        // Ensure all arrays exist
         ['types', 'designs', 'indices', 'materials', 'coatings'].forEach(k => {
             if (!safeConfig.disabledAttributes[k]) safeConfig.disabledAttributes[k] = [];
         });
@@ -260,19 +256,16 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterText, setFilterText] = useState("");
 
     const filteredRows = uniqueCombinations.filter(row => {
-        // Vérifie les filtres d'exclusion (Sidebar)
         if ((localConfig.disabledAttributes.types || []).includes(row.type)) return false;
         if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
         if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
         if ((localConfig.disabledAttributes.materials || []).includes(row.material)) return false;
         if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
         
-        // Filtres Top Bar
         if (filterBrand && filterBrand !== '' && row.brand !== cleanText(filterBrand)) return false;
         if (filterPhoto === 'white' && row.isPhoto) return false;
         if (filterPhoto === 'photo' && !row.isPhoto) return false;
 
-        // Recherche texte
         return (row.type + row.design + row.coating + row.material).toLowerCase().includes(filterText.toLowerCase());
     });
 
@@ -364,7 +357,6 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     );
 };
 
-// --- NOUVEAU COMPOSANT : CONFIGURATEUR ALTERNANCE (5 AXES) ---
 const AlternanceConfigurator = ({ attributes, currentPrices, onSave, onClose }) => {
     const [localPrices, setLocalPrices] = useState({ ...currentPrices });
 
@@ -373,7 +365,6 @@ const AlternanceConfigurator = ({ attributes, currentPrices, onSave, onClose }) 
     };
 
     const sections = [
-        // GÉOMÉTRIE SUPPRIMÉE ICI
         { title: "DESIGN", data: attributes.designs, color: "text-indigo-600", bg: "bg-indigo-50" },
         { title: "INDICE", data: attributes.indices, color: "text-green-600", bg: "bg-green-50" },
         { title: "MATIÈRE", data: attributes.materials, color: "text-orange-600", bg: "bg-orange-50" },
@@ -493,7 +484,7 @@ function PodiumCore() {
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
   const [userFile, setUserFile] = useState(null);
   const [showPricingConfig, setShowPricingConfig] = useState(false); 
-  const [showAlternanceConfig, setShowAlternanceConfig] = useState(false); // AJOUT : État pour la modale Alternance
+  const [showAlternanceConfig, setShowAlternanceConfig] = useState(false); 
   
   const [supplementaryPairs, setSupplementaryPairs] = useState([]);
 
@@ -503,6 +494,7 @@ function PodiumCore() {
         const p = safeJSONParse("optique_user_settings", null); 
         if (!p) return DEFAULT_SETTINGS;
         
+        // RECHERCHE ET CHARGEMENT DES SETTINGS PAR UTILISATEUR
         return { 
             ...DEFAULT_SETTINGS, 
             ...p, 
@@ -527,7 +519,29 @@ function PodiumCore() {
         }; 
     } catch { return DEFAULT_SETTINGS; }
   });
-  useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
+  
+  // Gestion persistante par utilisateur
+  useEffect(() => {
+      if (user && user.username) {
+          const key = `optique_settings_${user.username}`;
+          const saved = localStorage.getItem(key);
+          if (saved) {
+              setUserSettings(JSON.parse(saved));
+          } else {
+              // Si pas de settings pour cet utilisateur, on prend les défauts
+              setUserSettings(DEFAULT_SETTINGS);
+          }
+      }
+  }, [user]);
+
+  useEffect(() => {
+      if (user && user.username) {
+          const key = `optique_settings_${user.username}`;
+          localStorage.setItem(key, JSON.stringify(userSettings));
+      }
+      // Fallback global pour compatibilité
+      localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); 
+  }, [userSettings, user]);
 
   const currentSettings = { ...userSettings, shopName: user?.shop_name || userSettings.shopName };
   const [formData, setFormData] = useState(() => {
@@ -558,10 +572,7 @@ function PodiumCore() {
   // Extraction dynamique des attributs SPECIFIQUES À ALTERNANCE pour la configuration
   const alternanceAttributes = useMemo(() => {
       const attrs = { types: new Set(), designs: new Set(), indices: new Set(), materials: new Set(), coatings: new Set() };
-      
-      // FILTRE : Uniquement la marque ALTERNANCE
       const alternanceLenses = lenses.filter(l => cleanText(l.brand) === 'ALTERNANCE');
-
       alternanceLenses.forEach(l => {
           if(l.type) attrs.types.add(cleanText(l.type));
           if(l.design) attrs.designs.add(cleanText(l.design));
@@ -626,9 +637,6 @@ function PodiumCore() {
            } 
        }
 
-       // --- LOGIQUE DE FILTRE CORRECTION INTELLIGENT REMOVED (REVERTED TO 5.40) ---
-
-       // CALCUL PRIX + CALISIZE
        let calisizeAddon = 0;
        if (formData.calisize) {
            if (formData.network === 'HORS_RESEAU') {
@@ -791,7 +799,15 @@ function PodiumCore() {
       }));
   };
 
-  const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
+  const fetchHistory = () => { 
+      axios.get(SAVE_URL).then(res => {
+          // FILTRE PAR UTILISATEUR : Seuls les dossiers de l'user courant (ou admin) sont affichés
+          const allOffers = Array.isArray(res.data) ? res.data : [];
+          const myOffers = user?.role === 'admin' ? allOffers : allOffers.filter(offer => offer.createdBy === user.username);
+          setSavedOffers(myOffers);
+      }).catch(err => console.error("Erreur historique", err)); 
+  };
+  
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
       
@@ -807,7 +823,8 @@ function PodiumCore() {
           client: client, 
           lens: lensWithCorrection, 
           supplementaryPairs: supplementaryPairs, // Sauvegarde des paires supp
-          finance: { reimbursement: client.reimbursement, total: totalGlobal, remainder: remainder } 
+          finance: { reimbursement: client.reimbursement, total: totalGlobal, remainder: remainder },
+          createdBy: user.username // AJOUT DU CREATEUR POUR LE FILTRAGE
       };
       axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
   };
@@ -830,7 +847,16 @@ function PodiumCore() {
   const toggleBrand = (brandId) => { setUserSettings(prev => { const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : []; const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId]; return { ...prev, disabledBrands: newDisabled }; }); };
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
-  const handleReset = () => { if(window.confirm("Tout remettre à zéro ?")) { sessionStorage.clear(); setClient({ name: '', firstname: '', dob: '', reimbursement: 0 }); setSecondPairPrice(0); setSupplementaryPairs([]); setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false, od_sphere: 0, od_cylinder: 0, od_axis: 0, od_addition: 0, og_sphere: 0, og_cylinder: 0, og_axis: 0, og_addition: 0 }); setSelectedLens(null); } };
+  const handleReset = () => {
+      if(window.confirm("Tout remettre à zéro ?")) {
+          sessionStorage.clear();
+          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
+          setSecondPairPrice(0);
+          setSupplementaryPairs([]); 
+          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false, od_sphere: 0, od_cylinder: 0, od_axis: 0, od_addition: 0, og_sphere: 0, og_cylinder: 0, og_axis: 0, og_addition: 0 });
+          setSelectedLens(null);
+      }
+  };
 
   // -- FONCTIONS DÉFINIES À L'INTÉRIEUR POUR ÊTRE ACCESSIBLES DANS LE JSX --
   const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
