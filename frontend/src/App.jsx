@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.48"; // CORRECTIF : Reset Filtres à l'entrée Alternance
+const APP_VERSION = "5.52"; // VERSION COMPLETE (Sans abréviations)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -179,13 +179,17 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   );
 };
 
-// --- CONFIGURATEUR 1ERE PAIRE ---
+// --- CONFIGURATEUR 1ERE PAIRE (MARCHÉ LIBRE) ---
 const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterPhoto, setFilterPhoto] = useState('all'); 
     const [filterBrand, setFilterBrand] = useState('');
 
+    // 1. Extraction Dynamique pour les filtres de gauche
     const availableAttributes = useMemo(() => {
-        const filteredLenses = filterBrand ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand)) : lenses;
+        const filteredLenses = filterBrand 
+            ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand))
+            : lenses;
+            
         return {
             types: [...new Set(filteredLenses.map(l => cleanText(l.type)))].sort().filter(Boolean),
             designs: [...new Set(filteredLenses.map(l => cleanText(l.design)))].sort().filter(Boolean),
@@ -195,60 +199,100 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
         };
     }, [lenses, filterBrand]);
 
-    const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
-
+    // 2. Calcul des combinaisons uniques pour le tableau
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
         lenses.forEach(l => {
             const key = getLensKey(l);
             if (!map.has(key)) {
-                map.set(key, { key, type: cleanText(l.type), design: cleanText(l.design), index_mat: cleanText(l.index_mat), material: cleanText(l.material), coating: cleanText(l.coating), avg_purchase: l.purchase_price, isPhoto: checkIsPhoto(l), brand: cleanText(l.brand) });
+                map.set(key, {
+                    key,
+                    type: cleanText(l.type),      
+                    design: cleanText(l.design),
+                    index_mat: cleanText(l.index_mat),
+                    material: cleanText(l.material), // Ajout Matière
+                    coating: cleanText(l.coating),
+                    avg_purchase: l.purchase_price,
+                    isPhoto: checkIsPhoto(l), 
+                    brand: cleanText(l.brand) 
+                });
             }
         });
         return Array.from(map.values()).sort((a, b) => a.type.localeCompare(b.type) || a.design.localeCompare(b.design));
     }, [lenses]);
     
-    const availableBrands = useMemo(() => { const brands = new Set(lenses.map(l => cleanText(l.brand))); return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id))); }, [lenses]);
+    const availableBrands = useMemo(() => {
+        const brands = new Set(lenses.map(l => cleanText(l.brand)));
+        return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id)));
+    }, [lenses]);
 
     const [localConfig, setLocalConfig] = useState(() => {
+        // Deep Copy + Defaults
         const safeConfig = JSON.parse(JSON.stringify(config || {}));
         if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = {};
-        ['types', 'designs', 'indices', 'materials', 'coatings'].forEach(k => { if (!safeConfig.disabledAttributes[k]) safeConfig.disabledAttributes[k] = []; });
+        // Ensure all arrays exist
+        ['types', 'designs', 'indices', 'materials', 'coatings'].forEach(k => {
+            if (!safeConfig.disabledAttributes[k]) safeConfig.disabledAttributes[k] = [];
+        });
         if (!safeConfig.prices) safeConfig.prices = {};
         return safeConfig;
     });
 
     const toggleAttribute = (type, value) => {
         const current = localConfig.disabledAttributes[type] || [];
-        const updated = current.includes(value) ? current.filter(v => v !== value) : [...current, value]; 
-        setLocalConfig(prev => ({ ...prev, disabledAttributes: { ...prev.disabledAttributes, [type]: updated } }));
+        const isCurrentlyDisabled = current.includes(value);
+        let updated;
+        if (isCurrentlyDisabled) {
+            updated = current.filter(v => v !== value); 
+        } else {
+            updated = [...current, value]; 
+        }
+        setLocalConfig(prev => ({
+            ...prev,
+            disabledAttributes: { ...prev.disabledAttributes, [type]: updated }
+        }));
     };
 
     const setAllAttributes = (type, enableAll, allValues) => {
-        setLocalConfig(prev => ({ ...prev, disabledAttributes: { ...prev.disabledAttributes, [type]: enableAll ? [] : [...allValues] } }));
+        setLocalConfig(prev => ({
+            ...prev,
+            disabledAttributes: {
+                ...prev.disabledAttributes,
+                [type]: enableAll ? [] : [...allValues]
+            }
+        }));
     };
 
     const updatePrice = (key, value) => {
-        setLocalConfig(prev => ({ ...prev, prices: { ...prev.prices, [key]: parseFloat(value) || 0 } }));
+        setLocalConfig(prev => ({
+            ...prev,
+            prices: { ...prev.prices, [key]: parseFloat(value) || 0 }
+        }));
     };
 
     const [filterText, setFilterText] = useState("");
+
     const filteredRows = uniqueCombinations.filter(row => {
+        // Vérifie les filtres d'exclusion (Sidebar)
         if ((localConfig.disabledAttributes.types || []).includes(row.type)) return false;
         if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
         if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
         if ((localConfig.disabledAttributes.materials || []).includes(row.material)) return false;
         if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
+        
+        // Filtres Top Bar
         if (filterBrand && filterBrand !== '' && row.brand !== cleanText(filterBrand)) return false;
         if (filterPhoto === 'white' && row.isPhoto) return false;
         if (filterPhoto === 'photo' && !row.isPhoto) return false;
+
+        // Recherche texte
         return (row.type + row.design + row.coating + row.material).toLowerCase().includes(filterText.toLowerCase());
     });
 
     const handleResetFiltered = () => {
         if (filteredRows.length === 0) return alert("Aucun verre affiché à réinitialiser.");
-        if (window.confirm(`⚠️ ATTENTION : Remise à 0€ ?`)) {
-            if (window.confirm("🔴 DOUBLE CONFIRMATION")) {
+        if (window.confirm(`⚠️ ATTENTION : Remise à 0€ des ${filteredRows.length} lignes affichées ?`)) {
+            if (window.confirm("🔴 DOUBLE CONFIRMATION : Action irréversible.")) {
                 const newPrices = { ...localConfig.prices };
                 filteredRows.forEach(row => { newPrices[row.key] = 0; });
                 setLocalConfig(prev => ({ ...prev, prices: newPrices }));
@@ -258,42 +302,198 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
 
     const FilterSection = ({ title, type, items }) => (
         <div className="mb-6">
-            <div className="flex justify-between items-center mb-2"><h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</h3><div className="flex gap-1"><button onClick={() => setAllAttributes(type, true, items)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button><button onClick={() => setAllAttributes(type, false, items)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button></div></div>
-            <div className="flex flex-col gap-1">{items.map(item => { const isDisabled = (localConfig.disabledAttributes[type] || []).includes(item); return (<button key={item} onClick={() => toggleAttribute(type, item)} className={`px-2 py-1.5 rounded text-xs font-bold border text-left flex justify-between items-center ${isDisabled ? 'bg-slate-50 text-slate-400 border-slate-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}><span className="truncate pr-2">{item}</span>{isDisabled ? <ToggleLeft className="w-4 h-4 shrink-0"/> : <ToggleRight className="w-4 h-4 shrink-0"/>}</button>); })}</div>
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</h3>
+                <div className="flex gap-1">
+                    <button onClick={() => setAllAttributes(type, true, items)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">TOUS</button>
+                    <button onClick={() => setAllAttributes(type, false, items)} className="text-[10px] font-bold text-slate-400 hover:bg-slate-100 px-2 py-1 rounded">AUCUN</button>
+                </div>
+            </div>
+            <div className="flex flex-col gap-1">
+                {items.map(item => {
+                    const isDisabled = (localConfig.disabledAttributes[type] || []).includes(item);
+                    return (
+                        <button key={item} onClick={() => toggleAttribute(type, item)} className={`px-2 py-1.5 rounded text-xs font-bold border text-left flex justify-between items-center ${isDisabled ? 'bg-slate-50 text-slate-400 border-slate-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                            <span className="truncate pr-2">{item}</span>
+                            {isDisabled ? <ToggleLeft className="w-4 h-4 shrink-0"/> : <ToggleRight className="w-4 h-4 shrink-0"/>}
+                        </button>
+                    );
+                })}
+            </div>
         </div>
     );
 
     return (
         <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-['Poppins']">
             <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm"><div><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Calculator className="w-6 h-6 text-blue-600"/>CONFIGURATEUR (Paires Principales)</h2></div><div className="flex gap-4"><button onClick={onClose} className="px-6 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100">ANNULER</button><button onClick={() => onSave(localConfig)} className="px-6 py-2 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200">ENREGISTRER</button></div></div>
-            <div className="flex-1 overflow-hidden flex"><aside className="w-64 bg-white border-r overflow-y-auto p-4 shrink-0"><FilterSection title="GÉOMÉTRIE" type="types" items={availableAttributes.types} /><FilterSection title="DESIGN" type="designs" items={availableAttributes.designs} /><FilterSection title="INDICE" type="indices" items={availableAttributes.indices} /><FilterSection title="MATIÈRE" type="materials" items={availableAttributes.materials} /><FilterSection title="TRAITEMENT" type="coatings" items={availableAttributes.coatings} /></aside><main className="flex-1 flex flex-col bg-slate-50"><div className="p-4 border-b bg-white flex flex-col gap-4"><div className="flex items-center gap-4"><div className="flex-1 relative"><Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/><input type="text" placeholder="Recherche..." className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none text-sm font-bold text-slate-700 focus:ring-2 ring-blue-100" value={filterText} onChange={(e) => setFilterText(e.target.value)}/></div><button onClick={handleResetFiltered} className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200 transition-colors"><Trash2 className="w-4 h-4"/> RAZ SÉLECTION</button></div><div className="flex flex-wrap items-center gap-4"><div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><div className="px-2 text-xs font-bold text-slate-400 flex items-center gap-1"><Briefcase className="w-3 h-3"/> MARQUE</div>{availableBrands.map(b => (<button key={b.id} onClick={() => setFilterBrand(b.id)} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterBrand === b.id ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>{b.label}</button>))}</div><div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><button onClick={() => setFilterPhoto('all')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}><ListFilter className="w-3 h-3"/> TOUS</button><button onClick={() => setFilterPhoto('white')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}><Sun className="w-3 h-3"/> BLANCS</button><button onClick={() => setFilterPhoto('photo')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}><SunDim className="w-3 h-3"/> PHOTO</button></div><span className="ml-auto text-xs text-slate-400 font-mono font-bold bg-slate-50 px-2 py-1 rounded border border-slate-100">{filteredRows.length} lignes</span></div></div><div className="flex-1 overflow-auto p-6"><div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><table className="min-w-full divide-y divide-slate-100"><thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">TYPE</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">DESIGN</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">MAT</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">IND</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">TRAIT</th><th className="px-4 py-3 text-right text-xs font-bold text-slate-400">ACHAT</th><th className="px-4 py-3 text-right text-xs font-bold text-blue-600 w-32 border-l border-blue-100">VENTE</th><th className="px-4 py-3 text-right text-xs font-bold text-green-600 w-24 bg-green-50/50">MARGE €</th><th className="px-4 py-3 text-right text-xs font-bold text-green-600 w-16 bg-green-50/50">%</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredRows.map(row => { const price = localConfig.prices[row.key] || 0; const purchase = safeNum(row.avg_purchase); const margin = price - purchase; const marginPercent = price > 0 ? (margin / price) * 100 : 0; return (<tr key={row.key} className="hover:bg-slate-50"><td className="px-4 py-3 text-xs font-bold text-slate-700">{row.type}</td><td className="px-4 py-3 text-xs text-slate-600">{row.design}</td><td className="px-4 py-3 text-xs text-slate-600">{row.material}</td><td className="px-4 py-3 text-xs font-bold text-slate-800 bg-slate-100 rounded text-center">{row.index_mat}</td><td className="px-4 py-3 text-xs text-slate-600">{row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}{row.coating}</td><td className="px-4 py-3 text-xs text-right text-slate-400 font-mono">{purchase.toFixed(0)}€</td><td className="px-4 py-3 text-right border-l border-blue-100 bg-blue-50/30"><input type="number" step="0.5" className={`w-full text-right font-bold bg-transparent outline-none border-b-2 focus:border-blue-500 transition-colors ${price > 0 ? 'text-blue-700 border-blue-200' : 'text-slate-300 border-slate-200'}`} placeholder="0" value={price === 0 ? '' : price} onChange={(e) => updatePrice(row.key, e.target.value)}/></td><td className={`px-4 py-3 text-xs text-right font-bold ${margin > 0 ? 'text-green-600' : 'text-red-400'}`}>{price > 0 ? `${margin.toFixed(2)}` : '-'}</td><td className={`px-4 py-3 text-xs text-right font-bold ${marginPercent > 40 ? 'text-green-600' : (marginPercent > 0 ? 'text-orange-500' : 'text-red-400')}`}>{price > 0 ? `${marginPercent.toFixed(0)}%` : '-'}</td></tr>); })}</tbody></table></div></div></main></div></div>
+            <div className="flex-1 overflow-hidden flex">
+                 <aside className="w-64 bg-white border-r overflow-y-auto p-4 shrink-0">
+                     <FilterSection title="GÉOMÉTRIE" type="types" items={availableAttributes.types} />
+                     <FilterSection title="DESIGN" type="designs" items={availableAttributes.designs} />
+                     <FilterSection title="INDICE" type="indices" items={availableAttributes.indices} />
+                     <FilterSection title="MATIÈRE" type="materials" items={availableAttributes.materials} />
+                     <FilterSection title="TRAITEMENT" type="coatings" items={availableAttributes.coatings} />
+                 </aside>
+                 <main className="flex-1 flex flex-col bg-slate-50">
+                    <div className="p-4 border-b bg-white flex flex-col gap-4">
+                        <div className="flex items-center gap-4"><div className="flex-1 relative"><Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/><input type="text" placeholder="Recherche..." className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none text-sm font-bold text-slate-700 focus:ring-2 ring-blue-100" value={filterText} onChange={(e) => setFilterText(e.target.value)}/></div><button onClick={handleResetFiltered} className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200 transition-colors"><Trash2 className="w-4 h-4"/> RAZ SÉLECTION</button></div>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><div className="px-2 text-xs font-bold text-slate-400 flex items-center gap-1"><Briefcase className="w-3 h-3"/> MARQUE</div>{availableBrands.map(b => (<button key={b.id} onClick={() => setFilterBrand(b.id)} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterBrand === b.id ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>{b.label}</button>))}</div>
+                            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg"><button onClick={() => setFilterPhoto('all')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}><ListFilter className="w-3 h-3"/> TOUS</button><button onClick={() => setFilterPhoto('white')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'white' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}><Sun className="w-3 h-3"/> BLANCS</button><button onClick={() => setFilterPhoto('photo')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${filterPhoto === 'photo' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}><SunDim className="w-3 h-3"/> PHOTO</button></div>
+                            <span className="ml-auto text-xs text-slate-400 font-mono font-bold bg-slate-50 px-2 py-1 rounded border border-slate-100">{filteredRows.length} lignes</span>
+                        </div>
+                    </div>
+                    <div className="flex-1 overflow-auto p-6">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <table className="min-w-full divide-y divide-slate-100">
+                                <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">TYPE</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">DESIGN</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">MAT</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">IND</th><th className="px-4 py-3 text-left text-xs font-bold text-slate-500">TRAIT</th><th className="px-4 py-3 text-right text-xs font-bold text-slate-400">ACHAT</th><th className="px-4 py-3 text-right text-xs font-bold text-blue-600 w-32 border-l border-blue-100">VENTE</th><th className="px-4 py-3 text-right text-xs font-bold text-green-600 w-24 bg-green-50/50">MARGE €</th><th className="px-4 py-3 text-right text-xs font-bold text-green-600 w-16 bg-green-50/50">%</th></tr></thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {filteredRows.map(row => {
+                                        const price = localConfig.prices[row.key] || 0;
+                                        const purchase = safeNum(row.avg_purchase);
+                                        const margin = price - purchase;
+                                        const marginPercent = price > 0 ? (margin / price) * 100 : 0;
+                                        return (
+                                            <tr key={row.key} className="hover:bg-slate-50">
+                                                <td className="px-4 py-3 text-xs font-bold text-slate-700">{row.type}</td>
+                                                <td className="px-4 py-3 text-xs text-slate-600">{row.design}</td>
+                                                <td className="px-4 py-3 text-xs text-slate-600">{row.material}</td>
+                                                <td className="px-4 py-3 text-xs font-bold text-slate-800 bg-slate-100 rounded text-center">{row.index_mat}</td>
+                                                <td className="px-4 py-3 text-xs text-slate-600">{row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}{row.coating}</td>
+                                                <td className="px-4 py-3 text-xs text-right text-slate-400 font-mono">{purchase.toFixed(0)}€</td>
+                                                <td className="px-4 py-3 text-right border-l border-blue-100 bg-blue-50/30"><input type="number" step="0.5" className={`w-full text-right font-bold bg-transparent outline-none border-b-2 focus:border-blue-500 transition-colors ${price > 0 ? 'text-blue-700 border-blue-200' : 'text-slate-300 border-slate-200'}`} placeholder="0" value={price === 0 ? '' : price} onChange={(e) => updatePrice(row.key, e.target.value)}/></td>
+                                                <td className={`px-4 py-3 text-xs text-right font-bold ${margin > 0 ? 'text-green-600' : 'text-red-400'}`}>{price > 0 ? `${margin.toFixed(2)}` : '-'}</td>
+                                                <td className={`px-4 py-3 text-xs text-right font-bold ${marginPercent > 40 ? 'text-green-600' : (marginPercent > 0 ? 'text-orange-500' : 'text-red-400')}`}>{price > 0 ? `${marginPercent.toFixed(0)}%` : '-'}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                 </main>
+            </div>
+        </div>
     );
 };
 
 // --- NOUVEAU COMPOSANT : CONFIGURATEUR ALTERNANCE (5 AXES) ---
 const AlternanceConfigurator = ({ attributes, currentPrices, onSave, onClose }) => {
     const [localPrices, setLocalPrices] = useState({ ...currentPrices });
-    const updatePrice = (key, value) => { setLocalPrices(prev => ({ ...prev, [key]: parseFloat(value) || 0 })); };
+
+    const updatePrice = (key, value) => {
+        setLocalPrices(prev => ({ ...prev, [key]: parseFloat(value) || 0 }));
+    };
+
     const sections = [
+        // GÉOMÉTRIE SUPPRIMÉE ICI
         { title: "DESIGN", data: attributes.designs, color: "text-indigo-600", bg: "bg-indigo-50" },
         { title: "INDICE", data: attributes.indices, color: "text-green-600", bg: "bg-green-50" },
         { title: "MATIÈRE", data: attributes.materials, color: "text-orange-600", bg: "bg-orange-50" },
         { title: "TRAITEMENT", data: attributes.coatings, color: "text-purple-600", bg: "bg-purple-50" },
     ];
+
     return (
-        <div className="fixed inset-0 z-[210] bg-gray-50 flex flex-col font-['Poppins'] animate-in fade-in zoom-in-95 duration-200"><div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-md z-10"><div><div className="flex items-center gap-2 text-purple-600 mb-1"><PackagePlus className="w-6 h-6" /><span className="text-xs font-bold bg-purple-100 px-2 py-0.5 rounded">GAMME ALTERNANCE UNIQUEMENT</span></div><h2 className="text-2xl font-bold text-slate-800">Structure Tarifaire par Composant</h2><p className="text-sm text-slate-500">Définissez le prix de chaque brique. Le prix final sera la somme des composants.</p></div><div className="flex gap-4"><button onClick={onClose} className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors">ANNULER</button><button onClick={() => onSave(localPrices)} className="px-8 py-3 rounded-xl font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-lg shadow-purple-200 transition-all flex items-center gap-2"><Save className="w-4 h-4"/> ENREGISTRER</button></div></div><div className="flex-1 overflow-auto p-8"><div className="grid grid-cols-4 gap-6 h-full">{sections.map((section) => (<div key={section.title} className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full"><div className={`px-4 py-3 border-b border-slate-100 font-bold text-xs ${section.color} ${section.bg} flex justify-between items-center`}>{section.title}<span className="opacity-50">{section.data.length} éléments</span></div><div className="flex-1 overflow-y-auto p-2 space-y-1">{section.data.map(item => (<div key={item} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg group transition-colors"><span className="text-xs font-bold text-slate-700 truncate pr-2" title={item}>{item}</span><div className="flex items-center gap-1"><input type="number" step="0.5" className="w-16 text-right text-sm font-bold border border-slate-200 rounded-md px-2 py-1 focus:ring-2 ring-purple-100 outline-none text-slate-800 group-hover:border-purple-200" placeholder="0" value={localPrices[item] || ''} onChange={(e) => updatePrice(item, e.target.value)}/><span className="text-[10px] text-slate-400 font-bold">€</span></div></div>))} {section.title === 'TRAITEMENT' && (<div className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg border-t border-dashed mt-2"><div className="flex items-center gap-1 text-purple-600"><SunDim className="w-3 h-3"/><span className="text-xs font-bold truncate">PHOTOCHROMIQUE</span></div><div className="flex items-center gap-1"><input type="number" step="0.5" className="w-16 text-right text-sm font-bold border border-slate-200 rounded-md px-2 py-1 focus:ring-2 ring-purple-100 outline-none text-slate-800" value={localPrices['PHOTO'] || ''} onChange={(e) => updatePrice('PHOTO', e.target.value)} /><span className="text-[10px] text-slate-400 font-bold">€</span></div></div>)}</div></div>))}</div></div></div>
+        <div className="fixed inset-0 z-[210] bg-gray-50 flex flex-col font-['Poppins'] animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-md z-10">
+                <div>
+                    <div className="flex items-center gap-2 text-purple-600 mb-1">
+                        <PackagePlus className="w-6 h-6" />
+                        <span className="text-xs font-bold bg-purple-100 px-2 py-0.5 rounded">GAMME ALTERNANCE UNIQUEMENT</span>
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-800">Structure Tarifaire par Composant</h2>
+                    <p className="text-sm text-slate-500">Définissez le prix de chaque brique. Le prix final sera la somme des composants.</p>
+                </div>
+                <div className="flex gap-4">
+                    <button onClick={onClose} className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors">ANNULER</button>
+                    <button onClick={() => onSave(localPrices)} className="px-8 py-3 rounded-xl font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-lg shadow-purple-200 transition-all flex items-center gap-2">
+                        <Save className="w-4 h-4"/> ENREGISTRER
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-8">
+                <div className="grid grid-cols-4 gap-6 h-full">
+                    {sections.map((section) => (
+                        <div key={section.title} className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full">
+                            <div className={`px-4 py-3 border-b border-slate-100 font-bold text-xs ${section.color} ${section.bg} flex justify-between items-center`}>
+                                {section.title}
+                                <span className="opacity-50">{section.data.length} éléments</span>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                {section.data.map(item => (
+                                    <div key={item} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg group transition-colors">
+                                        <span className="text-xs font-bold text-slate-700 truncate pr-2" title={item}>{item}</span>
+                                        <div className="flex items-center gap-1">
+                                            <input 
+                                                type="number" 
+                                                step="0.5"
+                                                className="w-16 text-right text-sm font-bold border border-slate-200 rounded-md px-2 py-1 focus:ring-2 ring-purple-100 outline-none text-slate-800 group-hover:border-purple-200"
+                                                placeholder="0"
+                                                value={localPrices[item] || ''}
+                                                onChange={(e) => updatePrice(item, e.target.value)}
+                                            />
+                                            <span className="text-[10px] text-slate-400 font-bold">€</span>
+                                        </div>
+                                    </div>
+                                ))}
+                                {section.title === 'TRAITEMENT' && (
+                                    <div className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg border-t border-dashed mt-2">
+                                        <div className="flex items-center gap-1 text-purple-600">
+                                            <SunDim className="w-3 h-3"/>
+                                            <span className="text-xs font-bold truncate">PHOTOCHROMIQUE</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <input type="number" step="0.5" className="w-16 text-right text-sm font-bold border border-slate-200 rounded-md px-2 py-1 focus:ring-2 ring-purple-100 outline-none text-slate-800" value={localPrices['PHOTO'] || ''} onChange={(e) => updatePrice('PHOTO', e.target.value)} />
+                                            <span className="text-[10px] text-slate-400 font-bold">€</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
     );
 };
 
 const LoginScreen = ({ onLogin }) => {
-    // ... (Identique V5.47)
-    const [username, setUsername] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(null); const [loading, setLoading] = useState(false);
-    const handleSubmit = (e) => { e.preventDefault(); setLoading(true); setError(null); axios.post(`${PROD_API_URL}/auth/login`, { username, password }).then(res => onLogin(res.data.user)).catch(err => { setError(err.response?.data?.detail || "Erreur de connexion"); setLoading(false); }); };
-    return (<div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-['Poppins']"><style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style><div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200"><div className="text-center mb-8"><div className="mb-6 flex justify-center"><img src="/logos/codir.png" alt="Podium Optique" className="h-16 w-auto object-contain" /></div><h1 className="text-2xl font-bold text-slate-800">Podium Optique</h1><p className="text-sm text-slate-400 mt-2">Identification requise</p></div><form onSubmit={handleSubmit} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 mb-1">IDENTIFIANT</label><input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 ring-blue-100 outline-none transition-all" placeholder="Votre identifiant" required /></div><div><label className="block text-xs font-bold text-slate-500 mb-1">MOT DE PASSE</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 ring-blue-100 outline-none transition-all" placeholder="••••••••" required /></div>{error && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg flex items-center gap-2"><XCircle className="w-4 h-4"/> {error}</div>}<button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2">{loading ? <Activity className="w-5 h-5 animate-spin"/> : <Lock className="w-5 h-5"/>} SE CONNECTER</button></form><div className="mt-8 text-center text-[10px] text-slate-300">V{APP_VERSION} • Accès Sécurisé</div></div></div>);
+    const [username, setUsername] = useState("");
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const handleSubmit = (e) => {
+        e.preventDefault(); setLoading(true); setError(null);
+        axios.post(`${PROD_API_URL}/auth/login`, { username, password })
+            .then(res => onLogin(res.data.user))
+            .catch(err => { setError(err.response?.data?.detail || "Erreur de connexion"); setLoading(false); });
+    };
+    return (
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-['Poppins']">
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
+            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
+                <div className="text-center mb-8">
+                    <div className="mb-6 flex justify-center"><img src="/logos/codir.png" alt="Podium Optique" className="h-16 w-auto object-contain" /></div>
+                    <h1 className="text-2xl font-bold text-slate-800">Podium Optique</h1>
+                    <p className="text-sm text-slate-400 mt-2">Identification requise</p>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div><label className="block text-xs font-bold text-slate-500 mb-1">IDENTIFIANT</label><input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 ring-blue-100 outline-none transition-all" placeholder="Votre identifiant" required /></div>
+                    <div><label className="block text-xs font-bold text-slate-500 mb-1">MOT DE PASSE</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 ring-blue-100 outline-none transition-all" placeholder="••••••••" required /></div>
+                    {error && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg flex items-center gap-2"><XCircle className="w-4 h-4"/> {error}</div>}
+                    <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2">{loading ? <Activity className="w-5 h-5 animate-spin"/> : <Lock className="w-5 h-5"/>} SE CONNECTER</button>
+                </form>
+                <div className="mt-8 text-center text-[10px] text-slate-300">V{APP_VERSION} • Accès Sécurisé</div>
+            </div>
+        </div>
+    );
 };
 
 function PodiumCore() {
   const [user, setUser] = useState(() => { try { const s = sessionStorage.getItem("optique_user"); return s ? JSON.parse(s) : null; } catch { return null; } });
+
+  // Handlers de connexion
   const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
   const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); };
 
@@ -355,6 +555,7 @@ function PodiumCore() {
   const UPLOAD_URL = `${baseBackendUrl}/upload-catalog`; 
   const SAVE_URL = `${baseBackendUrl}/offers`;
 
+  // --- HOISTING DU FETCHDATA (Correction du ReferenceError) ---
   const fetchData = () => {
     setLoading(true); setError(null); 
     const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
@@ -368,9 +569,13 @@ function PodiumCore() {
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
   
+  // Extraction dynamique des attributs SPECIFIQUES À ALTERNANCE pour la configuration
   const alternanceAttributes = useMemo(() => {
       const attrs = { types: new Set(), designs: new Set(), indices: new Set(), materials: new Set(), coatings: new Set() };
+      
+      // FILTRE : Uniquement la marque ALTERNANCE
       const alternanceLenses = lenses.filter(l => cleanText(l.brand) === 'ALTERNANCE');
+
       alternanceLenses.forEach(l => {
           if(l.type) attrs.types.add(cleanText(l.type));
           if(l.design) attrs.designs.add(cleanText(l.design));
@@ -424,8 +629,10 @@ function PodiumCore() {
            // 2. Filtre Compatibilité Type (IGNORE formData.type, se base sur la 1ère paire)
            const isMainProg = cleanText(selectedLens?.type).includes('PROGRESSIF');
            if (isMainProg) {
+               // Si Prog, on veut Prog OU Unifocal
                workingList = workingList.filter(l => cleanText(l.type).includes('PROGRESSIF') || cleanText(l.type).includes('UNIFOCAL'));
            } else {
+               // Si Uni, on veut QUE Unifocal
                workingList = workingList.filter(l => cleanText(l.type).includes('UNIFOCAL'));
            }
 
@@ -442,6 +649,7 @@ function PodiumCore() {
                 if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
                     sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
                 } else {
+                    // Mode Manuel ou Fallback
                     sellPrice = cost * 2.5; 
                 }
                 return { ...l, sellingPrice: sellPrice, margin: sellPrice - cost };
@@ -566,7 +774,6 @@ function PodiumCore() {
   }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.pricingMode, userSettings.perLensConfig, isSelectingAlternance, selectedLens, supplementaryPairs]);
 
   const handleAddSupplementaryPair = (type) => {
-      // ... (Code ajout paire supplémentaire inchangé) ...
       const newId = Date.now();
       if (type === 'discount') {
           if (!selectedLens) return alert("Veuillez d'abord sélectionner une première paire.");
@@ -596,24 +803,68 @@ function PodiumCore() {
               type: 'alternance',
               lens: lens,
               description: `Offre Alternance (${useSuperBonifie ? 'Super Bonifié' : 'Bonifié'})`,
-              needsVlVp: isMainProg && isUni 
+              needsVlVp: isMainProg && isUni // Flag pour afficher les cases
           }]);
           
-          setIsSelectingAlternance(false); 
+          setIsSelectingAlternance(false); // Fin du mode sélection
       } else {
           setSelectedLens(lens);
       }
   };
   
-  const toggleVlVp = (id, type) => { setSupplementaryPairs(prev => prev.map(p => { if (p.id === id) { return { ...p, vl_vp_selection: type }; } return p; })); };
-  const removeSupplementaryPair = (id) => { setSupplementaryPairs(prev => prev.filter(p => p.id !== id)); };
-  const updateComponentPrice = (key, val) => { setUserSettings(prev => ({ ...prev, supplementaryConfig: { ...prev.supplementaryConfig, componentPrices: { ...(prev.supplementaryConfig?.componentPrices || DEFAULT_SETTINGS.supplementaryConfig.componentPrices), [key]: parseFloat(val) || 0 } } })); };
-  const handlePricingConfigSave = (newConfig) => { setUserSettings(prev => ({ ...prev, perLensConfig: newConfig })); setShowPricingConfig(false); };
-  const handleAlternanceConfigSave = (newComponentPrices) => { setUserSettings(prev => ({ ...prev, supplementaryConfig: { ...prev.supplementaryConfig, mode: 'component', componentPrices: newComponentPrices } })); setShowAlternanceConfig(false); };
-  const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
-  const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
-  const saveOffer = () => { if (!selectedLens || !client.name) return alert("Nom client obligatoire !"); const mainPairPrice = selectedLens.sellingPrice * 2; const suppTotal = supplementaryPairs.reduce((acc, pair) => acc + (pair.lens.sellingPrice * 2), 0); const totalGlobal = mainPairPrice + suppTotal; const remainder = totalGlobal - parseFloat(client.reimbursement || 0); const lensWithCorrection = { ...selectedLens, correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } }; const payload = { client: client, lens: lensWithCorrection, supplementaryPairs: supplementaryPairs, finance: { reimbursement: client.reimbursement, total: totalGlobal, remainder: remainder } }; axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur")); };
-  const deleteOffer = (id) => { if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) { axios.delete(`${SAVE_URL}/${id}`).then(() => { alert("Dossier supprimé."); fetchHistory(); }).catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); }); } };
+  const toggleVlVp = (id, type) => {
+      setSupplementaryPairs(prev => prev.map(p => {
+          if (p.id === id) {
+              return { ...p, vl_vp_selection: type };
+          }
+          return p;
+      }));
+  };
+
+  const removeSupplementaryPair = (id) => {
+      setSupplementaryPairs(prev => prev.filter(p => p.id !== id));
+  };
+
+  // Mise à jour Setting Supp
+  const updateComponentPrice = (key, val) => {
+      setUserSettings(prev => ({
+          ...prev,
+          supplementaryConfig: {
+              ...prev.supplementaryConfig,
+              componentPrices: {
+                  ...(prev.supplementaryConfig?.componentPrices || DEFAULT_SETTINGS.supplementaryConfig.componentPrices),
+                  [key]: parseFloat(val) || 0
+              }
+          }
+      }));
+  };
+
+  const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
+  const saveOffer = () => {
+      if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
+      
+      const mainPairPrice = selectedLens.sellingPrice * 2;
+      // Calcul total paires supp
+      const suppTotal = supplementaryPairs.reduce((acc, pair) => acc + (pair.lens.sellingPrice * 2), 0);
+      const totalGlobal = mainPairPrice + suppTotal;
+      const remainder = totalGlobal - parseFloat(client.reimbursement || 0);
+
+      const lensWithCorrection = { ...selectedLens, correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } };
+      
+      const payload = { 
+          client: client, 
+          lens: lensWithCorrection, 
+          supplementaryPairs: supplementaryPairs, // Sauvegarde des paires supp
+          finance: { reimbursement: client.reimbursement, total: totalGlobal, remainder: remainder } 
+      };
+      axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
+  };
+  const deleteOffer = (id) => {
+      if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) {
+          axios.delete(`${SAVE_URL}/${id}`).then(() => { alert("Dossier supprimé."); fetchHistory(); }).catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); });
+      }
+  };
+  // ... (Upload functions kept identical) ...
   const triggerFileUpload = () => { if (!uploadFile) return alert("Sélectionnez un fichier Excel (.xlsx)"); setSyncLoading(true); setUploadProgress(0); const data = new FormData(); data.append('file', uploadFile); axios.post(UPLOAD_URL, data, { onUploadProgress: (e) => { setUploadProgress(Math.round((e.loaded * 100) / e.total)); } }).then(res => { alert(`✅ Succès ! ${res.data.count} verres importés.`); fetchData(); }).catch(err => { console.error("Upload Error:", err); const msg = err.response?.data?.detail || err.message; alert(`❌ Erreur upload : ${msg}`); }).finally(() => { setSyncLoading(false); setUploadProgress(0); }); };
   const triggerUserUpload = () => { if (!userFile) return alert("Sélectionner un fichier Excel"); setSyncLoading(true); const data = new FormData(); data.append('file', userFile); axios.post(`${baseBackendUrl}/upload-users`, data).then(res => alert(`✅ ${res.data.count} utilisateurs importés`)).catch(err => { const msg = err.response?.data?.detail || err.message; alert(`Erreur upload utilisateurs: ${msg}`); }).finally(() => setSyncLoading(false)); };
   const handleLogoUpload = (e, target = 'shop') => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { if (target === 'shop') { setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); } }; reader.readAsDataURL(file); } };
@@ -627,7 +878,38 @@ function PodiumCore() {
   const toggleBrand = (brandId) => { setUserSettings(prev => { const currentDisabled = Array.isArray(prev.disabledBrands) ? prev.disabledBrands : []; const newDisabled = currentDisabled.includes(brandId) ? currentDisabled.filter(id => id !== brandId) : [...currentDisabled, brandId]; return { ...prev, disabledBrands: newDisabled }; }); };
   const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); };
   const handleClientChange = (e) => { const { name, value } = e.target; if (name === 'reimbursement' && parseFloat(value) < 0) return; setClient(prev => ({ ...prev, [name]: value })); };
-  const handleReset = () => { if(window.confirm("Tout remettre à zéro ?")) { sessionStorage.clear(); setClient({ name: '', firstname: '', dob: '', reimbursement: 0 }); setSecondPairPrice(0); setSupplementaryPairs([]); setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false, od_sphere: 0, od_cylinder: 0, od_axis: 0, od_addition: 0, og_sphere: 0, og_cylinder: 0, og_axis: 0, og_addition: 0 }); setSelectedLens(null); setIsSelectingAlternance(false); } };
+  const handleReset = () => {
+      if(window.confirm("Tout remettre à zéro ?")) {
+          sessionStorage.clear();
+          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
+          setSecondPairPrice(0);
+          setSupplementaryPairs([]); 
+          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false, od_sphere: 0, od_cylinder: 0, od_axis: 0, od_addition: 0, og_sphere: 0, og_cylinder: 0, og_axis: 0, og_addition: 0 });
+          setSelectedLens(null);
+          setIsSelectingAlternance(false);
+      }
+  };
+
+  // -- FONCTIONS DÉFINIES À L'INTÉRIEUR POUR ÊTRE ACCESSIBLES DANS LE JSX --
+  const checkDatabase = () => { setSyncLoading(true); axios.get(API_URL).then(res => { const data = Array.isArray(res.data) ? res.data : []; if (data.length === 0) { alert("⚠️ Base vide."); } else { alert(`✅ OK : ${data.length} verres.`); } }).catch(err => { alert(`❌ ERREUR: ${err.message}`); }).finally(() => setSyncLoading(false)); };
+  const testConnection = () => { setSyncLoading(true); axios.get(API_URL, { params: { limit: 1 } }).then(res => { alert(`✅ CONNEXION RÉUSSIE !`); }).catch(err => { alert(`❌ ÉCHEC DE CONNEXION`); }).finally(() => setSyncLoading(false)); };
+
+  const handlePricingConfigSave = (newConfig) => { 
+      setUserSettings(prev => ({ ...prev, perLensConfig: newConfig })); 
+      setShowPricingConfig(false); 
+  };
+  
+  const handleAlternanceConfigSave = (newComponentPrices) => {
+      setUserSettings(prev => ({
+          ...prev,
+          supplementaryConfig: {
+              ...prev.supplementaryConfig,
+              mode: 'component',
+              componentPrices: newComponentPrices
+          }
+      }));
+      setShowAlternanceConfig(false);
+  };
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
@@ -831,110 +1113,4 @@ function PodiumCore() {
                     </div>
                   )}
                   {/* ... (Sections Admin, Marque, Identité, Apparence inchangées) ... */}
-                  <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(b.id)} className={`px-3 py-2 rounded-lg text-xs font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-blue-600 text-white border-blue-600'}`}>{isDisabled ? <Square className="w-3 h-3 inline mr-1"/> : <CheckSquare className="w-3 h-3 inline mr-1"/>}{b.label}</button>); })}</div></div>
-                  <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div></div></div>
-                  
-                  {/* CONFIGURATION PAIRES SUPPLÉMENTAIRES */}
-                  <div className="mb-8 p-4 bg-purple-50 rounded-xl border border-purple-100">
-                      <h4 className="text-xs font-bold text-purple-700 mb-4 flex items-center gap-2"><PackagePlus className="w-4 h-4"/> OFFRE PAIRES SUPPLÉMENTAIRES</h4>
-                      <div className="mb-4">
-                          <label className="text-xs font-bold text-slate-500 mb-2 block">MODE DE CALCUL (GAMME ALTERNANCE)</label>
-                          <div className="flex gap-2">
-                              <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'component'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'component' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>PAR COMPOSANT</button>
-                              <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'manual'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'manual' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>MANUEL (GRILLE)</button>
-                          </div>
-                      </div>
-                      {userSettings.supplementaryConfig?.mode === 'component' && (
-                           <div className="text-center">
-                               <p className="text-xs text-slate-500 mb-4">Configurez les prix de chaque composant (Matière, Indice, etc.) pour calculer le prix de vente final.</p>
-                               <button 
-                                  onClick={() => setShowAlternanceConfig(true)}
-                                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-200 transition-all flex items-center justify-center gap-2"
-                               >
-                                  <Component className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR DE COMPOSANTS
-                               </button>
-                           </div>
-                      )}
-                  </div>
-
-                  {/* PRIX MARCHÉ LIBRE (Reste inchangé) */}
-                   <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE (1ère Paire)</h4>
-                     <div className="mb-6 flex gap-4 p-1 bg-slate-100 rounded-xl">
-                         <button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'linear' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'linear' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>FORMULE (Ax + B)</button>
-                         <button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'per_lens' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'per_lens' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>MANUEL (AU VERRE)</button>
-                     </div>
-                     {userSettings.pricingMode === 'linear' ? (
-                         <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-4">
-                            <div className="flex items-center justify-between bg-indigo-50 p-2 rounded border border-indigo-100"><span className="text-xs font-bold text-indigo-700">SUPPLÉMENT CALISIZE (€)</span><input type="number" step="1" value={safePricing.calisize?.price ?? 10} onChange={(e) => handlePriceRuleChange('calisize', 'price', e.target.value)} className="w-16 p-1 border rounded text-center text-xs font-bold text-indigo-700"/></div>
-                            <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                            <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                            <div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                            <div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                            <div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                            <div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
-                         </div>
-                     ) : (
-                         <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 text-center animate-in fade-in slide-in-from-right-4">
-                             <ListFilter className="w-10 h-10 text-blue-500 mx-auto mb-3"/>
-                             <h3 className="font-bold text-blue-900 mb-2">Configuration Manuelle</h3>
-                             <p className="text-xs text-blue-700 mb-6">Définissez vos prix de vente et la disponibilité des verres ligne par ligne.</p>
-                             <button onClick={() => setShowPricingConfig(true)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"><Settings className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR</button>
-                         </div>
-                     )}
-                   </div>
-                  <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
-              </div>
-            </div>
-          )}
-          
-          {/* ... (Autres Modales Historique etc. inchangées) ... */}
-          {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
-          <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
-            <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
-              <div className="flex items-center gap-4">
-                <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
-                <div>
-                    <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
-                    <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
-                    {/* AFFICHAGE CORRECTION */}
-                    {offer.lens && offer.lens.correction_data && offer.lens.correction_data.od ? (
-                        <div className="flex flex-col gap-1 mt-1">
-                            <div className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-mono border border-blue-100">
-                                <span className="font-bold mr-1">OD:</span> 
-                                {offer.lens.correction_data.od.sphere > 0 ? '+' : ''}{offer.lens.correction_data.od.sphere} ({offer.lens.correction_data.od.cylinder > 0 ? '+' : ''}{offer.lens.correction_data.od.cylinder}) {offer.lens.correction_data.od.axis}° Add {offer.lens.correction_data.od.addition}
-                            </div>
-                            <div className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-mono border border-blue-100">
-                                <span className="font-bold mr-1">OG:</span> 
-                                {offer.lens.correction_data.og.sphere > 0 ? '+' : ''}{offer.lens.correction_data.og.sphere} ({offer.lens.correction_data.og.cylinder > 0 ? '+' : ''}{offer.lens.correction_data.og.cylinder}) {offer.lens.correction_data.og.axis}° Add {offer.lens.correction_data.og.addition}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded mt-1">Correction non disponible</div>
-                    )}
-                </div>
-              </div>
-              <div className="text-right">
-                  <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
-                  <div className="font-bold text-slate-800">{offer.lens?.name}</div>
-                  <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
-                <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button>
-              </div>
-            </div>))}</div></div></div>)}
-    </div>
-  );
-}
-
-// --- COMPOSANT RACINE ---
-export default function App() {
-    return (
-        <div className="font-['Poppins']">
-            <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
-            <ErrorBoundary>
-                <PodiumCore />
-            </ErrorBoundary>
-        </div>
-    );
-}
+                  <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(
