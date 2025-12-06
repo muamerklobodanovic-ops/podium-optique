@@ -562,8 +562,9 @@ function PodiumCore() {
     const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
     if (!isLocal && API_URL.includes("VOTRE-URL")) { setLenses(DEMO_LENSES); setLoading(false); return; }
     
-    const params = { brand: formData.brand === '' ? undefined : formData.brand, pocketLimit: 0 };
-    if (formData.type) params.type = formData.type;
+    // CORRECTIF MAJEUR : ON CHARGE TOUT LE CATALOGUE SANS FILTRER PAR MARQUE CÔTÉ SERVEUR
+    const params = { pocketLimit: -1 }; 
+    // if (formData.type) params.type = formData.type; // REMOVE TYPE FILTER TO ALLOW ALTERNANCE UNIFOCAL IF PROG SELECTED
 
     axios.get(API_URL, { params })
       .then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); })
