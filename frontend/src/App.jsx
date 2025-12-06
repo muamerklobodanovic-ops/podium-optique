@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.34"; // AJOUT : Page Dédiée Tarif Alternance
+const APP_VERSION = "5.35"; // AJOUT : Filtre Marque Alternance dans le Configurateur Dédié
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -169,20 +169,118 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
 };
 
 const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
-    // ... (Même code que V5.30 pour ce composant "Paires Principales" - inchangé) ...
-    // Pour gain de place, je remets le bloc minimal fonctionnel
-    const [filterPhoto, setFilterPhoto] = useState('all'); const [filterBrand, setFilterBrand] = useState('');
+    const [filterPhoto, setFilterPhoto] = useState('all'); 
+    const [filterBrand, setFilterBrand] = useState('');
+
+    const availableAttributes = useMemo(() => {
+        const filteredLenses = filterBrand 
+            ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand))
+            : lenses;
+            
+        return {
+            designs: [...new Set(filteredLenses.map(l => cleanText(l.design)))].sort().filter(Boolean),
+            indices: [...new Set(filteredLenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean),
+            coatings: [...new Set(filteredLenses.map(l => cleanText(l.coating)))].sort().filter(Boolean)
+        };
+    }, [lenses, filterBrand]);
+
+    const { designs: availableDesigns, indices: availableIndices, coatings: availableCoatings } = availableAttributes;
+
     const uniqueCombinations = useMemo(() => {
         const map = new Map();
-        lenses.forEach(l => { const key = getLensKey(l); if (!map.has(key)) { map.set(key, { key, type: cleanText(l.type), design: cleanText(l.design), index_mat: cleanText(l.index_mat), coating: cleanText(l.coating), avg_purchase: l.purchase_price, isPhoto: checkIsPhoto(l), brand: cleanText(l.brand) }); } });
+        lenses.forEach(l => {
+            const key = getLensKey(l);
+            if (!map.has(key)) {
+                map.set(key, {
+                    key,
+                    type: cleanText(l.type),      
+                    design: cleanText(l.design),
+                    index_mat: cleanText(l.index_mat),
+                    coating: cleanText(l.coating),
+                    avg_purchase: l.purchase_price,
+                    isPhoto: checkIsPhoto(l), 
+                    brand: cleanText(l.brand) 
+                });
+            }
+        });
         return Array.from(map.values()).sort((a, b) => a.type.localeCompare(b.type) || a.design.localeCompare(b.design));
     }, [lenses]);
-    const availableDesigns = [...new Set(lenses.map(l => cleanText(l.design)))].sort().filter(Boolean); const availableIndices = [...new Set(lenses.map(l => cleanText(l.index_mat)))].sort().filter(Boolean); const availableCoatings = [...new Set(lenses.map(l => cleanText(l.coating)))].sort().filter(Boolean); const availableBrands = useMemo(() => { const brands = new Set(lenses.map(l => cleanText(l.brand))); return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id))); }, [lenses]);
-    const [localConfig, setLocalConfig] = useState(() => { const safeConfig = JSON.parse(JSON.stringify(config || {})); if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = { designs: [], indices: [], coatings: [] }; if (!safeConfig.prices) safeConfig.prices = {}; return safeConfig; });
-    const toggleAttribute = (type, value) => { const current = localConfig.disabledAttributes[type] || []; const updated = current.includes(value) ? current.filter(v => v !== value) : [...current, value]; setLocalConfig(prev => ({ ...prev, disabledAttributes: { ...prev.disabledAttributes, [type]: updated } })); };
-    const updatePrice = (key, value) => { setLocalConfig(prev => ({ ...prev, prices: { ...prev.prices, [key]: parseFloat(value) || 0 } })); };
+    
+    const availableBrands = useMemo(() => {
+        const brands = new Set(lenses.map(l => cleanText(l.brand)));
+        return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id)));
+    }, [lenses]);
+
+    const [localConfig, setLocalConfig] = useState(() => {
+        const safeConfig = JSON.parse(JSON.stringify(config || {}));
+        if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = { designs: [], indices: [], coatings: [] };
+        if (!safeConfig.prices) safeConfig.prices = {};
+        if (!safeConfig.disabledAttributes.designs) safeConfig.disabledAttributes.designs = [];
+        if (!safeConfig.disabledAttributes.indices) safeConfig.disabledAttributes.indices = [];
+        if (!safeConfig.disabledAttributes.coatings) safeConfig.disabledAttributes.coatings = [];
+        return safeConfig;
+    });
+
+    const toggleAttribute = (type, value) => {
+        const current = localConfig.disabledAttributes[type] || [];
+        const isCurrentlyDisabled = current.includes(value);
+        let updated;
+        if (isCurrentlyDisabled) {
+            updated = current.filter(v => v !== value); 
+        } else {
+            updated = [...current, value]; 
+        }
+        setLocalConfig(prev => ({
+            ...prev,
+            disabledAttributes: { ...prev.disabledAttributes, [type]: updated }
+        }));
+    };
+
+    const setAllAttributes = (type, enableAll, allValues) => {
+        setLocalConfig(prev => ({
+            ...prev,
+            disabledAttributes: {
+                ...prev.disabledAttributes,
+                [type]: enableAll ? [] : [...allValues]
+            }
+        }));
+    };
+
+    const updatePrice = (key, value) => {
+        setLocalConfig(prev => ({
+            ...prev,
+            prices: { ...prev.prices, [key]: parseFloat(value) || 0 }
+        }));
+    };
+
     const [filterText, setFilterText] = useState("");
-    const filteredRows = uniqueCombinations.filter(row => { if ((localConfig.disabledAttributes.designs || []).includes(row.design) || (localConfig.disabledAttributes.indices || []).includes(row.index_mat) || (localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false; if (filterBrand && row.brand !== cleanText(filterBrand)) return false; if (filterPhoto === 'white' && row.isPhoto) return false; if (filterPhoto === 'photo' && !row.isPhoto) return false; return (row.type + row.design + row.coating).toLowerCase().includes(filterText.toLowerCase()); });
+
+    const filteredRows = uniqueCombinations.filter(row => {
+        if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
+        if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
+        if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
+        
+        if (filterBrand && filterBrand !== '' && row.brand !== cleanText(filterBrand)) return false;
+
+        if (filterPhoto === 'white' && row.isPhoto) return false;
+        if (filterPhoto === 'photo' && !row.isPhoto) return false;
+
+        return (row.type + row.design + row.coating).toLowerCase().includes(filterText.toLowerCase());
+    });
+
+    const handleResetFiltered = () => {
+        if (filteredRows.length === 0) return alert("Aucun verre affiché à réinitialiser.");
+        if (window.confirm(`⚠️ ATTENTION : Vous allez remettre à 0€ les ${filteredRows.length} lignes actuellement affichées.\n\nCette action affecte uniquement la sélection visible (Filtres + Recherche).\n\nVoulez-vous continuer ?`)) {
+            if (window.confirm("🔴 DOUBLE CONFIRMATION REQUISE\n\nÊtes-vous ABSOLUMENT sûr de vouloir supprimer ces tarifs ?\nCette action est irréversible.")) {
+                const newPrices = { ...localConfig.prices };
+                filteredRows.forEach(row => {
+                    newPrices[row.key] = 0;
+                });
+                setLocalConfig(prev => ({ ...prev, prices: newPrices }));
+            }
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col font-['Poppins']">
             <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm"><div><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Calculator className="w-6 h-6 text-blue-600"/>CONFIGURATEUR (Paires Principales)</h2></div><div className="flex gap-4"><button onClick={onClose} className="px-6 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100">ANNULER</button><button onClick={() => onSave(localConfig)} className="px-6 py-2 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200">ENREGISTRER</button></div></div>
@@ -336,6 +434,7 @@ function PodiumCore() {
   
   const [supplementaryPairs, setSupplementaryPairs] = useState([]);
 
+  // SÉCURISATION : Initialisation robuste de userSettings
   const [userSettings, setUserSettings] = useState(() => {
     try { 
         const p = safeJSONParse("optique_user_settings", null); 
@@ -379,6 +478,7 @@ function PodiumCore() {
   const UPLOAD_URL = `${baseBackendUrl}/upload-catalog`; 
   const SAVE_URL = `${baseBackendUrl}/offers`;
 
+  // --- HOISTING DU FETCHDATA (Correction du ReferenceError) ---
   const fetchData = () => {
     setLoading(true); setError(null); 
     const isLocal = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1");
@@ -392,10 +492,14 @@ function PodiumCore() {
       .catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
   
-  // Extraction dynamique des attributs pour la configuration
-  const catalogAttributes = useMemo(() => {
+  // Extraction dynamique des attributs SPECIFIQUES À ALTERNANCE pour la configuration
+  const alternanceAttributes = useMemo(() => {
       const attrs = { types: new Set(), designs: new Set(), indices: new Set(), materials: new Set(), coatings: new Set() };
-      lenses.forEach(l => {
+      
+      // FILTRE : Uniquement la marque ALTERNANCE
+      const alternanceLenses = lenses.filter(l => cleanText(l.brand) === 'ALTERNANCE');
+
+      alternanceLenses.forEach(l => {
           if(l.type) attrs.types.add(cleanText(l.type));
           if(l.design) attrs.designs.add(cleanText(l.design));
           if(l.index_mat) attrs.indices.add(cleanText(l.index_mat));
@@ -570,12 +674,24 @@ function PodiumCore() {
               if (userSettings.supplementaryConfig?.mode === 'component' && userSettings.supplementaryConfig.componentPrices) {
                   sellPrice = calculateComponentPrice(l, userSettings.supplementaryConfig.componentPrices);
               } else {
+                  // Mode Manuel ou Fallback
                   sellPrice = cost * 2.5; 
               }
-              return { ...l, costForMargin: cost, sellingPrice: sellPrice, margin: sellPrice - cost };
+
+              return {
+                  ...l,
+                  costForMargin: cost,
+                  sellingPrice: sellPrice,
+                  margin: sellPrice - cost
+              };
           });
+
+          // Tri par marge décroissante (Optimisation)
           alternanceLenses.sort((a, b) => b.margin - a.margin);
+
+          // On prend le meilleur verre (le premier de la liste triée) ou un placeholder si vide
           const bestOption = alternanceLenses.length > 0 ? alternanceLenses[0] : null;
+
           if (bestOption) {
               setSupplementaryPairs(prev => [...prev, {
                   id: newId,
@@ -694,7 +810,7 @@ function PodiumCore() {
           <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
           
           {showPricingConfig && (<PricingConfigurator lenses={lenses} config={userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} }} onSave={handlePricingConfigSave} onClose={() => setShowPricingConfig(false)}/>)}
-          {showAlternanceConfig && (<AlternanceConfigurator attributes={catalogAttributes} currentPrices={userSettings.supplementaryConfig?.componentPrices || {}} onSave={handleAlternanceConfigSave} onClose={() => setShowAlternanceConfig(false)}/>)}
+          {showAlternanceConfig && (<AlternanceConfigurator attributes={alternanceAttributes} currentPrices={userSettings.supplementaryConfig?.componentPrices || {}} onSave={handleAlternanceConfigSave} onClose={() => setShowAlternanceConfig(false)}/>)}
 
           {/* HEADER & SIDEBAR KEPT SAME AS PREVIOUS VERSION */}
           <div className="bg-slate-900 text-white px-4 lg:px-6 py-2 flex justify-between items-center z-50 text-xs font-bold tracking-widest shadow-md">
