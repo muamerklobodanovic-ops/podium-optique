@@ -1113,4 +1113,110 @@ function PodiumCore() {
                     </div>
                   )}
                   {/* ... (Sections Admin, Marque, Identité, Apparence inchangées) ... */}
-                  <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(
+                  <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(b.id)} className={`px-3 py-2 rounded-lg text-xs font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-blue-600 text-white border-blue-600'}`}>{isDisabled ? <Square className="w-3 h-3 inline mr-1"/> : <CheckSquare className="w-3 h-3 inline mr-1"/>}{b.label}</button>); })}</div></div>
+                  <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div></div></div>
+                  
+                  {/* CONFIGURATION PAIRES SUPPLÉMENTAIRES */}
+                  <div className="mb-8 p-4 bg-purple-50 rounded-xl border border-purple-100">
+                      <h4 className="text-xs font-bold text-purple-700 mb-4 flex items-center gap-2"><PackagePlus className="w-4 h-4"/> OFFRE PAIRES SUPPLÉMENTAIRES</h4>
+                      <div className="mb-4">
+                          <label className="text-xs font-bold text-slate-500 mb-2 block">MODE DE CALCUL (GAMME ALTERNANCE)</label>
+                          <div className="flex gap-2">
+                              <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'component'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'component' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>PAR COMPOSANT</button>
+                              <button onClick={() => setUserSettings(prev => ({...prev, supplementaryConfig: {...prev.supplementaryConfig, mode: 'manual'}}))} className={`flex-1 py-2 text-xs font-bold rounded border ${userSettings.supplementaryConfig?.mode === 'manual' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200'}`}>MANUEL (GRILLE)</button>
+                          </div>
+                      </div>
+                      {userSettings.supplementaryConfig?.mode === 'component' && (
+                           <div className="text-center">
+                               <p className="text-xs text-slate-500 mb-4">Configurez les prix de chaque composant (Matière, Indice, etc.) pour calculer le prix de vente final.</p>
+                               <button 
+                                  onClick={() => setShowAlternanceConfig(true)}
+                                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-200 transition-all flex items-center justify-center gap-2"
+                               >
+                                  <Component className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR DE COMPOSANTS
+                               </button>
+                           </div>
+                      )}
+                  </div>
+
+                  {/* PRIX MARCHÉ LIBRE (Reste inchangé) */}
+                   <div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE (1ère Paire)</h4>
+                     <div className="mb-6 flex gap-4 p-1 bg-slate-100 rounded-xl">
+                         <button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'linear' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'linear' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>FORMULE (Ax + B)</button>
+                         <button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'per_lens' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'per_lens' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>MANUEL (AU VERRE)</button>
+                     </div>
+                     {userSettings.pricingMode === 'linear' ? (
+                         <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-4">
+                            <div className="flex items-center justify-between bg-indigo-50 p-2 rounded border border-indigo-100"><span className="text-xs font-bold text-indigo-700">SUPPLÉMENT CALISIZE (€)</span><input type="number" step="1" value={safePricing.calisize?.price ?? 10} onChange={(e) => handlePriceRuleChange('calisize', 'price', e.target.value)} className="w-16 p-1 border rounded text-center text-xs font-bold text-indigo-700"/></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                            <div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div>
+                         </div>
+                     ) : (
+                         <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 text-center animate-in fade-in slide-in-from-right-4">
+                             <ListFilter className="w-10 h-10 text-blue-500 mx-auto mb-3"/>
+                             <h3 className="font-bold text-blue-900 mb-2">Configuration Manuelle</h3>
+                             <p className="text-xs text-blue-700 mb-6">Définissez vos prix de vente et la disponibilité des verres ligne par ligne.</p>
+                             <button onClick={() => setShowPricingConfig(true)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"><Settings className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR</button>
+                         </div>
+                     )}
+                   </div>
+                  <button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button>
+              </div>
+            </div>
+          )}
+          
+          {/* ... (Autres Modales Historique etc. inchangées) ... */}
+          {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
+          <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
+            <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
+              <div className="flex items-center gap-4">
+                <div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div>
+                <div>
+                    <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
+                    <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
+                    {/* AFFICHAGE CORRECTION */}
+                    {offer.lens && offer.lens.correction_data && offer.lens.correction_data.od ? (
+                        <div className="flex flex-col gap-1 mt-1">
+                            <div className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-mono border border-blue-100">
+                                <span className="font-bold mr-1">OD:</span> 
+                                {offer.lens.correction_data.od.sphere > 0 ? '+' : ''}{offer.lens.correction_data.od.sphere} ({offer.lens.correction_data.od.cylinder > 0 ? '+' : ''}{offer.lens.correction_data.od.cylinder}) {offer.lens.correction_data.od.axis}° Add {offer.lens.correction_data.od.addition}
+                            </div>
+                            <div className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-mono border border-blue-100">
+                                <span className="font-bold mr-1">OG:</span> 
+                                {offer.lens.correction_data.og.sphere > 0 ? '+' : ''}{offer.lens.correction_data.og.sphere} ({offer.lens.correction_data.og.cylinder > 0 ? '+' : ''}{offer.lens.correction_data.og.cylinder}) {offer.lens.correction_data.og.axis}° Add {offer.lens.correction_data.og.addition}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded mt-1">Correction non disponible</div>
+                    )}
+                </div>
+              </div>
+              <div className="text-right">
+                  <div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div>
+                  <div className="font-bold text-slate-800">{offer.lens?.name}</div>
+                  <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div>
+                <button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button>
+              </div>
+            </div>))}</div></div></div>)}
+    </div>
+  );
+}
+
+// --- COMPOSANT RACINE ---
+export default function App() {
+    return (
+        <div className="font-['Poppins']">
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
+            <ErrorBoundary>
+                <PodiumCore />
+            </ErrorBoundary>
+        </div>
+    );
+}
