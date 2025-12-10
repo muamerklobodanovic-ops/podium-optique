@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.26"; // Code Complet Intégral
+const APP_VERSION = "5.27"; // Hyperviseur : Recherche par Adhérent
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -132,6 +132,7 @@ const Hypervisor = ({ onClose }) => {
     const [selectedUser, setSelectedUser] = useState("");
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
         axios.get(`${PROD_API_URL}/admin/users`)
@@ -147,6 +148,13 @@ const Hypervisor = ({ onClose }) => {
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
     }, [selectedUser]);
+
+    const filteredUsers = useMemo(() => {
+        return users.filter(u => 
+            u.username.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            (u.shop_name && u.shop_name.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+    }, [users, searchTerm]);
 
     const StatBar = ({ label, value, total }) => {
         const percent = total > 0 ? (value / total) * 100 : 0;
@@ -188,24 +196,46 @@ const Hypervisor = ({ onClose }) => {
             
             <div className="p-6 overflow-y-auto">
                 <div className="max-w-7xl mx-auto">
-                    <div className="mb-8 flex items-center gap-4">
-                        <label className="font-bold text-slate-600">CIBLER UN UTILISATEUR :</label>
-                        <select 
-                            className="p-3 rounded-xl border border-slate-300 font-bold text-slate-700 outline-none focus:ring-2 ring-purple-200 min-w-[300px]"
-                            value={selectedUser}
-                            onChange={(e) => setSelectedUser(e.target.value)}
-                        >
-                            <option value="">-- Sélectionner --</option>
-                            {users.map(u => <option key={u.username} value={u.username}>{u.shop_name} ({u.username})</option>)}
-                        </select>
+                    {/* ZONE DE RECHERCHE */}
+                    <div className="mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Filtrer (Nom / Adhérent)</label>
+                                <div className="relative">
+                                    <Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/>
+                                    <input 
+                                        type="text" 
+                                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all"
+                                        placeholder="Ex: 12345 ou Optic 2000..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Sélectionner un compte</label>
+                                <select 
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all"
+                                    value={selectedUser}
+                                    onChange={(e) => setSelectedUser(e.target.value)}
+                                >
+                                    <option value="">-- Choisir parmi {filteredUsers.length} comptes --</option>
+                                    {filteredUsers.map(u => (
+                                        <option key={u.username} value={u.username}>
+                                            {u.shop_name} ({u.username})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     {loading && <div className="text-center py-10"><Activity className="w-8 h-8 animate-spin mx-auto text-purple-500"/></div>}
 
                     {stats && !loading && (
-                        <div>
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                                <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-lg">
+                                <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-lg transform transition hover:scale-105">
                                     <div className="text-sm font-bold opacity-80 mb-1">TOTAL VENTES</div>
                                     <div className="text-4xl font-black">{stats.total}</div>
                                 </div>
@@ -614,10 +644,14 @@ const LoginScreen = ({ onLogin }) => {
     };
     return (
         <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-['Poppins']">
-            <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');`}</style>
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+            `}</style>
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
                 <div className="text-center mb-8">
-                    <div className="mb-6 flex justify-center"><img src="/logos/codir.png" alt="Podium Optique" className="h-16 w-auto object-contain" /></div>
+                    <div className="mb-6 flex justify-center">
+                        <img src="/logos/codir.png" alt="Podium Optique" className="h-16 w-auto object-contain" />
+                    </div>
                     <h1 className="text-2xl font-bold text-slate-800">Podium Optique</h1>
                     <p className="text-sm text-slate-400 mt-2">Identification requise</p>
                 </div>
@@ -639,37 +673,49 @@ function App() {
 
   // --- ETATS ---
   const [lenses, setLenses] = useState([]); const [filteredLenses, setFilteredLenses] = useState([]); const [availableDesigns, setAvailableDesigns] = useState([]); const [availableCoatings, setAvailableCoatings] = useState([]);
-  const [availableMaterials, setAvailableMaterials] = useState([]); 
-  const [availableIndices, setAvailableIndices] = useState([]); 
+  const [availableMaterials, setAvailableMaterials] = useState([]); // AJOUT State Matières
+  const [availableIndices, setAvailableIndices] = useState([]); // AJOUT State Indices (Dynamique)
   const [loading, setLoading] = useState(false); const [error, setError] = useState(null); const [isOnline, setIsOnline] = useState(true); 
   const [showSettings, setShowSettings] = useState(false); const [showMargins, setShowMargins] = useState(false); const [selectedLens, setSelectedLens] = useState(null); const [isSidebarOpen, setIsSidebarOpen] = useState(true); const [comparisonLens, setComparisonLens] = useState(null); const [showHistory, setShowHistory] = useState(false); const [savedOffers, setSavedOffers] = useState([]); 
-  const [syncLoading, setSyncLoading] = useState(false); const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
+  const [syncLoading, setSyncLoading] = useState(false); const [syncStatus, setSyncStatus] = useState(null); const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
   const [stats, setStats] = useState({ total: 0, filtered: 0 });
   const [client, setClient] = useState({ name: '', firstname: '', dob: '', reimbursement: 0 }); const [secondPairPrice, setSecondPairPrice] = useState(0);
   const [uploadFile, setUploadFile] = useState(null); const [uploadProgress, setUploadProgress] = useState(0);
   const [userFile, setUserFile] = useState(null);
-  const [showPricingConfig, setShowPricingConfig] = useState(false); 
+  const [showPricingConfig, setShowPricingConfig] = useState(false); // État pour la modale plein écran
   const [showHypervisor, setShowHypervisor] = useState(false); // AJOUT: État Hyperviseur
 
   const [userSettings, setUserSettings] = useState(() => {
     try { 
         const p = safeJSONParse("optique_user_settings", null); 
-        return p ? { ...DEFAULT_SETTINGS, ...p, pricing: { ...DEFAULT_SETTINGS.pricing, ...(p.pricing || {}) }, perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(p.perLensConfig || {}) }, disabledBrands: Array.isArray(p.disabledBrands) ? p.disabledBrands : [] } : DEFAULT_SETTINGS; 
+        // Fusion profonde pour garantir la présence des nouvelles clés
+        return p ? { 
+            ...DEFAULT_SETTINGS, 
+            ...p, 
+            pricing: { ...DEFAULT_SETTINGS.pricing, ...(p.pricing || {}) },
+            perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(p.perLensConfig || {}) },
+            disabledBrands: Array.isArray(p.disabledBrands) ? p.disabledBrands : [] 
+        } : DEFAULT_SETTINGS; 
     } catch { return DEFAULT_SETTINGS; }
   });
   useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
 
   const currentSettings = { ...userSettings, shopName: user?.shop_name || userSettings.shopName };
   const [formData, setFormData] = useState(() => {
+      // Suppression de sphere, cylinder, addition de l'état initial
       try { 
           const saved = sessionStorage.getItem("optique_form_data"); 
           if(saved) {
               const parsed = JSON.parse(saved);
-              delete parsed.photochromic; delete parsed.variant;
+              // Clean ancien filtre
+              delete parsed.photochromic; 
+              delete parsed.variant;
+              // Ensure materialIndex exists
               if(!parsed.materialIndex) parsed.materialIndex = '';
               if(!parsed.material) parsed.material = '';
               return parsed;
           }
+          // MODIFICATION: Retour à la version simple avec materialIndex et material
           return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; 
       } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; }
   });
@@ -701,11 +747,12 @@ function App() {
   };
   const activeBrands = getFilteredBrandsList();
 
-  // --- LOGIQUE FILTRATION ---
+  // --- LOGIQUE DE FILTRATION ET PRIX ---
   useEffect(() => {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
        let workingList = safeLenses.map(l => { return {...l}; }); 
+
        if (formData.brand && formData.brand !== '') { 
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
        } else {
@@ -715,61 +762,106 @@ function App() {
                workingList = workingList.filter(l => !userSettings.disabledBrands.includes(cleanText(l.brand)));
            }
        }
+
        if (formData.type) { 
            const targetType = cleanText(formData.type); 
            if (targetType === 'PROGRESSIF_INTERIEUR') {
-               workingList = workingList.filter(l => { const type = cleanText(l.type || l.geometry); return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); });
-           } else { workingList = workingList.filter(l => cleanText(l.type || l.geometry) === targetType); } 
+               workingList = workingList.filter(l => { 
+                    const type = cleanText(l.type || l.geometry); 
+                    return type === 'PROGRESSIF_INTERIEUR' || type.includes('INTERIEUR'); 
+               });
+           } else { 
+               workingList = workingList.filter(l => cleanText(l.type || l.geometry) === targetType); 
+           } 
        }
+
+       // CALCUL PRIX + CALISIZE
        let calisizeAddon = 0;
-       if (formData.calisize) { calisizeAddon = (formData.network === 'HORS_RESEAU') ? (userSettings.pricing?.calisize?.price || 10) : (CALISIZE_NETWORK_PRICES[formData.network] || 0); }
+       if (formData.calisize) {
+           if (formData.network === 'HORS_RESEAU') {
+               calisizeAddon = userSettings.pricing?.calisize?.price || 10;
+           } else {
+               calisizeAddon = CALISIZE_NETWORK_PRICES[formData.network] || 0;
+           }
+       }
 
        if (formData.network === 'HORS_RESEAU') {
+          // --- LOGIQUE DE PRIX DYNAMIQUE SELON LE MODE ---
           if (userSettings.pricingMode === 'per_lens') {
+              // MODE MANUEL "AU VERRE"
               const config = userSettings.perLensConfig || { disabledAttributes: { designs: [], indices: [], coatings: [] }, prices: {} };
+              
               workingList = workingList.filter(lens => {
+                  // 1. Filtrer les exclus (OFF)
                   if ((config.disabledAttributes.designs || []).includes(lens.design)) return false;
                   if ((config.disabledAttributes.indices || []).includes(lens.index_mat)) return false;
                   if ((config.disabledAttributes.coatings || []).includes(lens.coating)) return false;
-                  const key = getLensKey(lens); const manualPrice = config.prices[key];
-                  if (!manualPrice || manualPrice <= 0) return false;
+                  
+                  // 2. Vérifier si un prix est défini
+                  const key = getLensKey(lens);
+                  const manualPrice = config.prices[key];
+                  
+                  if (!manualPrice || manualPrice <= 0) return false; // On ne montre pas les verres sans prix
+
+                  // 3. Appliquer le prix
                   const pPrice = parseFloat(lens.purchase_price || 0);
-                  lens.sellingPrice = manualPrice + calisizeAddon; lens.margin = lens.sellingPrice - pPrice;
+                  lens.sellingPrice = manualPrice + calisizeAddon;
+                  lens.margin = lens.sellingPrice - pPrice;
                   return true;
               });
+
           } else {
+              // MODE CLASSIQUE LINEAIRE (Ax + B)
               const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
               workingList = workingList.map(lens => {
                   let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
                   const lensType = cleanText(lens.type || lens.geometry);
+                  
                   if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
                   else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
                   else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
                   else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
                   const pPrice = parseFloat(lens.purchase_price || 0);
-                  let newSelling = (pPrice * rule.x) + rule.b; newSelling += calisizeAddon; 
+                  
+                  let newSelling = (pPrice * rule.x) + rule.b;
+                  newSelling += calisizeAddon; 
+    
                   const newMargin = newSelling - pPrice;
                   return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
               });
           }
           workingList.sort((a, b) => b.margin - a.margin);
        } else {
+           // MODE RESEAUX (Inchangé)
            const priceMap = { 'KALIXIA': 'sell_kalixia', 'ITELIS': 'sell_itelis', 'CARTEBLANCHE': 'sell_carteblanche', 'SEVEANE': 'sell_seveane', 'SANTECLAIR': 'sell_santeclair' };
            const key = priceMap[formData.network];
            workingList = workingList.map(l => { 
-               let sPrice = l[key] ? parseFloat(l[key]) : 0; if (sPrice > 0) sPrice += calisizeAddon; 
+               let sPrice = l[key] ? parseFloat(l[key]) : 0; 
+               if (sPrice > 0) sPrice += calisizeAddon; 
                return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; 
             });
            workingList = workingList.filter(l => l.sellingPrice > 0);
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
+       // --- 1. CALCUL DES MATIÈRES DISPONIBLES (Avant le filtre matière lui-même) ---
        const distinctMaterials = [...new Set(workingList.map(l => l.material).filter(Boolean))].sort();
        setAvailableMaterials(distinctMaterials);
-       if (formData.material && formData.material !== '') { workingList = workingList.filter(l => cleanText(l.material) === cleanText(formData.material)); }
+
+       // --- 2. FILTRAGE PAR MATIÈRE (Si une sélection existe) ---
+       if (formData.material && formData.material !== '') {
+           workingList = workingList.filter(l => cleanText(l.material) === cleanText(formData.material));
+       }
+
+       // --- 3. CALCUL DES INDICES DISPONIBLES (Dynamique) ---
        const distinctIndices = [...new Set(workingList.map(l => l.index_mat).filter(Boolean))].sort((a,b) => parseFloat(a) - parseFloat(b));
        setAvailableIndices(distinctIndices);
-       if (formData.materialIndex && formData.materialIndex !== '') { workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; }); }
+
+       // --- 4. FILTRE INDICE ---
+       if (formData.materialIndex && formData.materialIndex !== '') {
+           workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
+       }
+
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
        if (formData.coating && formData.coating !== '') { workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating)); }
@@ -788,10 +880,24 @@ function App() {
     axios.get(API_URL, { params }).then(res => { setIsOnline(true); setLenses(Array.isArray(res.data) ? res.data : []); setLoading(false); }).catch(err => { console.warn("Mode Hors Ligne", err); setIsOnline(false); setLenses(DEMO_LENSES); setLoading(false); });
   };
 
-  const handleReset = () => { if(window.confirm("Tout remettre à zéro ?")) { sessionStorage.clear(); setClient({ name: '', firstname: '', dob: '', reimbursement: 0 }); setSecondPairPrice(0); setFormData({ ...formData, material: '', materialIndex: '', calisize: false }); setSelectedLens(null); } };
+  const handleReset = () => {
+      if(window.confirm("Tout remettre à zéro ?")) {
+          sessionStorage.clear();
+          setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
+          setSecondPairPrice(0);
+          setFormData({ ...formData, material: '', materialIndex: '', calisize: false }); // Reset complet
+          setSelectedLens(null);
+      }
+  };
+
   const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
   const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); };
-  const handlePricingConfigSave = (newConfig) => { setUserSettings(prev => ({ ...prev, perLensConfig: newConfig })); setShowPricingConfig(false); };
+  
+  const handlePricingConfigSave = (newConfig) => {
+      setUserSettings(prev => ({ ...prev, perLensConfig: newConfig }));
+      setShowPricingConfig(false);
+  };
+
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
   
   // --- SAUVEGARDE AVEC TAGS ---
