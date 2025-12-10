@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.19"; // Simplification : Retrait Correction
+const APP_VERSION = "5.20"; // Ajout Filtre Type de Verre (Blanc/Photo/Teinté)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -530,7 +530,18 @@ function App() {
   const currentSettings = { ...userSettings, shopName: user?.shop_name || userSettings.shopName };
   const [formData, setFormData] = useState(() => {
       // Suppression de sphere, cylinder, addition de l'état initial
-      try { const saved = sessionStorage.getItem("optique_form_data"); return saved ? JSON.parse(saved) : { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false }; } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false }; }
+      try { 
+          const saved = sessionStorage.getItem("optique_form_data"); 
+          if(saved) {
+              const parsed = JSON.parse(saved);
+              // Migration ancienne version (photochromic bool -> variant string)
+              if (!parsed.variant) {
+                  parsed.variant = parsed.photochromic ? 'PHOTO' : 'BLANC';
+              }
+              return parsed;
+          }
+          return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, variant: 'BLANC', calisize: false }; 
+      } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, variant: 'BLANC', calisize: false }; }
   });
   
   const [serverUrl, setServerUrl] = useState(PROD_API_URL);
@@ -661,8 +672,25 @@ function App() {
            workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
        }
 
-       const isPhotoC = (item) => { const text = cleanText(item.name + " " + item.material + " " + item.coating); return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN"); };
-       if (formData.photochromic) { workingList = workingList.filter(l => isPhotoC(l)); } else { workingList = workingList.filter(l => !isPhotoC(l)); }
+       // --- NOUVELLE LOGIQUE FILTRE TYPE (BLANC / PHOTO / TEINTÉ) ---
+       const isPhoto = (item) => { 
+           const text = cleanText((item.name || "") + " " + (item.material || "") + " " + (item.coating || "") + " " + (item.design || "")); 
+           return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR"); 
+       };
+       const isSun = (item) => { 
+           const text = cleanText((item.name || "") + " " + (item.material || "") + " " + (item.coating || "") + " " + (item.design || "")); 
+           return text.includes("SUN") || text.includes("POLA") || text.includes("TEINTE") || text.includes("MIROIR") || text.includes("NUANCE") || text.includes("CAT.3"); 
+       };
+
+       if (formData.variant === 'PHOTO') { 
+           workingList = workingList.filter(l => isPhoto(l)); 
+       } else if (formData.variant === 'TEINTE') {
+           workingList = workingList.filter(l => isSun(l) && !isPhoto(l)); // Exclure photochromiques des solaires purs si besoin, ou inclure selon préférence
+       } else { 
+           // BLANC par défaut
+           workingList = workingList.filter(l => !isPhoto(l) && !isSun(l)); 
+       }
+
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
        if (formData.coating && formData.coating !== '') { workingList = workingList.filter(l => cleanText(l.coating) === cleanText(formData.coating)); }
@@ -692,7 +720,7 @@ function App() {
           sessionStorage.clear();
           setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
           setSecondPairPrice(0);
-          setFormData({ ...formData, calisize: false }); // Reset simplifié
+          setFormData({ ...formData, variant: 'BLANC', calisize: false }); // Reset avec variant
           setSelectedLens(null);
       }
   };
@@ -838,7 +866,25 @@ function App() {
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{LENS_TYPES.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{INDICES.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
-                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">TRAITEMENTS</label><button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-[10px] font-bold rounded border ${formData.coating === '' ? 'text-white border-transparent' : 'border-transparent opacity-60'}`} style={formData.coating === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button><label className={`flex items-center gap-2 p-2 rounded border cursor-pointer mb-2 ${formData.photochromic ? 'bg-yellow-50 border-yellow-300' : 'border-transparent opacity-80'}`}><input type="checkbox" checked={formData.photochromic} onChange={handleChange} name="photochromic" className="accent-yellow-500"/><span className={`text-[10px] font-bold ${formData.photochromic ? 'text-yellow-700' : 'opacity-80'}`}>PHOTOCHROMIQUE</span></label><div className="flex flex-col gap-1">{availableCoatings.length > 0 ? availableCoatings.map(c => (<button key={c} onClick={() => handleCoatingChange(c)} className={`p-2 rounded border text-left text-[10px] font-bold ${formData.coating === c ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}>{c}</button>)) : <div className="text-[10px] opacity-50 italic text-center">Aucun traitement spécifique</div>}</div></div>
+                
+                {/* NOUVEAU FILTRE TYPE DE VERRE */}
+                <div>
+                    <label className="text-[10px] font-bold opacity-50 mb-2 block">TYPE DE VERRE</label>
+                    <div className="grid grid-cols-3 gap-1">
+                        {['BLANC', 'PHOTO', 'TEINTE'].map(v => (
+                            <button 
+                                key={v} 
+                                onClick={() => setFormData({...formData, variant: v})} 
+                                className={`py-2 rounded border text-[9px] font-bold transition-all ${formData.variant === v ? 'text-white border-transparent shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`} 
+                                style={formData.variant === v ? {backgroundColor: userSettings.customColor} : {}}
+                            >
+                                {v === 'PHOTO' ? 'PHOTOCH.' : (v === 'TEINTE' ? 'SOLAIRE' : v)}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">TRAITEMENTS</label><button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-[10px] font-bold rounded border ${formData.coating === '' ? 'text-white border-transparent' : 'border-transparent opacity-60'}`} style={formData.coating === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button><div className="flex flex-col gap-1">{availableCoatings.length > 0 ? availableCoatings.map(c => (<button key={c} onClick={() => handleCoatingChange(c)} className={`p-2 rounded border text-left text-[10px] font-bold ${formData.coating === c ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}>{c}</button>)) : <div className="text-[10px] opacity-50 italic text-center">Aucun traitement spécifique</div>}</div></div>
             </div>
         </aside>
 
