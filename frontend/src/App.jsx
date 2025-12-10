@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart, TrendingUp, Medal
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.27"; // Hyperviseur : Recherche par Adhérent
+const APP_VERSION = "5.28"; // Hyperviseur Avancé (Vol/Val + Tops)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -133,6 +133,7 @@ const Hypervisor = ({ onClose }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    const [viewMode, setViewMode] = useState("volume"); // 'volume' | 'value'
 
     useEffect(() => {
         axios.get(`${PROD_API_URL}/admin/users`)
@@ -156,16 +157,26 @@ const Hypervisor = ({ onClose }) => {
         );
     }, [users, searchTerm]);
 
-    const StatBar = ({ label, value, total }) => {
-        const percent = total > 0 ? (value / total) * 100 : 0;
+    // Sous-composant pour les barres graphiques
+    const StatBar = ({ label, item, total }) => {
+        // item est { volume: number, value: number }
+        const val = viewMode === 'volume' ? item.volume : item.value;
+        // Pour l'affichage Valeur, on formatte en Euros
+        const displayVal = viewMode === 'volume' ? val : `${val.toFixed(0)} €`;
+        // Calcul du pourcentage basé sur le total du mode courant
+        const percent = total > 0 ? (val / total) * 100 : 0;
+        
         return (
             <div className="mb-2">
-                <div className="flex justify-between text-xs font-bold mb-1">
+                <div className="flex justify-between text-xs font-bold mb-1 text-slate-600">
                     <span>{label}</span>
-                    <span>{value} ({percent.toFixed(1)}%)</span>
+                    <span>{displayVal} ({percent.toFixed(1)}%)</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-600 rounded-full" style={{ width: `${percent}%` }}></div>
+                    <div 
+                        className={`h-full rounded-full transition-all duration-500 ${viewMode === 'volume' ? 'bg-blue-500' : 'bg-emerald-500'}`} 
+                        style={{ width: `${percent}%` }}
+                    ></div>
                 </div>
             </div>
         );
@@ -173,16 +184,78 @@ const Hypervisor = ({ onClose }) => {
 
     const StatWidget = ({ title, data }) => {
         if (!data) return null;
-        const total = Object.values(data).reduce((a, b) => a + b, 0);
+        // Calcul du total pour le mode courant
+        const total = Object.values(data).reduce((acc, curr) => acc + (viewMode === 'volume' ? curr.volume : curr.value), 0);
+        
+        // Tri
+        const sortedEntries = Object.entries(data).sort((a,b) => {
+            const valA = viewMode === 'volume' ? a[1].volume : a[1].value;
+            const valB = viewMode === 'volume' ? b[1].volume : b[1].value;
+            return valB - valA;
+        });
+
         return (
-            <div className="bg-white p-4 rounded-xl border shadow-sm">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 border-b pb-2">{title}</h4>
-                {Object.entries(data).sort((a,b) => b[1] - a[1]).map(([k, v]) => (
-                    <StatBar key={k} label={k} value={v} total={total} />
-                ))}
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex justify-between">
+                    {title}
+                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">{viewMode === 'volume' ? 'Vol.' : '€'}</span>
+                </h4>
+                <div className="space-y-3">
+                    {sortedEntries.map(([k, v]) => (
+                        <StatBar key={k} label={k} item={v} total={total} />
+                    ))}
+                    {sortedEntries.length === 0 && <div className="text-xs text-slate-300 italic text-center py-2">Aucune donnée</div>}
+                </div>
             </div>
         );
     };
+
+    const Top3Widget = ({ title, data }) => {
+        if (!data) return null;
+        // data contient { by_volume: [], by_value: [], by_margin: [] }
+        return (
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-lg col-span-1 lg:col-span-2">
+                <h4 className="text-sm font-bold text-indigo-700 uppercase tracking-wider mb-6 flex items-center gap-2">
+                    <Medal className="w-5 h-5"/> {title}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {/* PAR VOLUME */}
+                    <div>
+                        <h5 className="text-xs font-bold text-blue-500 mb-3 text-center uppercase">Top Volume</h5>
+                        {data.by_volume.map((item, i) => (
+                            <div key={i} className="flex items-center gap-2 mb-2 text-xs bg-blue-50/50 p-2 rounded-lg border border-blue-100">
+                                <span className={`font-bold w-5 h-5 flex items-center justify-center rounded-full ${i===0 ? 'bg-yellow-400 text-white' : 'bg-blue-200 text-blue-700'}`}>{i+1}</span>
+                                <div className="flex-1 truncate font-bold text-slate-700">{item.name}</div>
+                                <div className="text-slate-500">{item.volume}</div>
+                            </div>
+                        ))}
+                    </div>
+                    {/* PAR VALEUR */}
+                    <div>
+                        <h5 className="text-xs font-bold text-emerald-500 mb-3 text-center uppercase">Top Chiffre d'Affaires</h5>
+                        {data.by_value.map((item, i) => (
+                            <div key={i} className="flex items-center gap-2 mb-2 text-xs bg-emerald-50/50 p-2 rounded-lg border border-emerald-100">
+                                <span className={`font-bold w-5 h-5 flex items-center justify-center rounded-full ${i===0 ? 'bg-yellow-400 text-white' : 'bg-emerald-200 text-emerald-700'}`}>{i+1}</span>
+                                <div className="flex-1 truncate font-bold text-slate-700">{item.name}</div>
+                                <div className="text-slate-500">{item.value.toFixed(0)}€</div>
+                            </div>
+                        ))}
+                    </div>
+                    {/* PAR MARGE */}
+                    <div>
+                        <h5 className="text-xs font-bold text-purple-500 mb-3 text-center uppercase">Top Marge</h5>
+                        {data.by_margin.map((item, i) => (
+                            <div key={i} className="flex items-center gap-2 mb-2 text-xs bg-purple-50/50 p-2 rounded-lg border border-purple-100">
+                                <span className={`font-bold w-5 h-5 flex items-center justify-center rounded-full ${i===0 ? 'bg-yellow-400 text-white' : 'bg-purple-200 text-purple-700'}`}>{i+1}</span>
+                                <div className="flex-1 truncate font-bold text-slate-700">{item.name}</div>
+                                <div className="text-slate-500">{item.margin.toFixed(0)}€</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-[150] bg-slate-50 flex flex-col font-['Poppins']">
@@ -194,7 +267,7 @@ const Hypervisor = ({ onClose }) => {
                 <button onClick={onClose} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg font-bold">FERMER</button>
             </div>
             
-            <div className="p-6 overflow-y-auto">
+            <div className="p-6 overflow-y-auto pb-20">
                 <div className="max-w-7xl mx-auto">
                     {/* ZONE DE RECHERCHE */}
                     <div className="mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -234,14 +307,41 @@ const Hypervisor = ({ onClose }) => {
 
                     {stats && !loading && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                                <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-lg transform transition hover:scale-105">
-                                    <div className="text-sm font-bold opacity-80 mb-1">TOTAL VENTES</div>
-                                    <div className="text-4xl font-black">{stats.total}</div>
+                            {/* KPI & TOGGLE MODE */}
+                            <div className="flex flex-col md:flex-row gap-6 mb-8 items-stretch">
+                                <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-lg flex-1">
+                                    <div className="text-sm font-bold opacity-80 mb-1">VENTES TOTALES</div>
+                                    <div className="text-4xl font-black mb-2">{stats.total_sales}</div>
+                                    <div className="text-xs opacity-60">Dossiers créés</div>
+                                </div>
+                                <div className="bg-emerald-600 text-white p-6 rounded-2xl shadow-lg flex-1">
+                                    <div className="text-sm font-bold opacity-80 mb-1">CHIFFRE D'AFFAIRES (EST.)</div>
+                                    <div className="text-4xl font-black mb-2">{stats.total_revenue.toLocaleString()} €</div>
+                                    <div className="text-xs opacity-60">Basé sur les prix de vente configurés</div>
+                                </div>
+                                
+                                {/* SELECTEUR MODE */}
+                                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-center min-w-[200px]">
+                                    <span className="text-xs font-bold text-slate-400 uppercase mb-3">MODE D'AFFICHAGE</span>
+                                    <div className="flex bg-slate-100 p-1 rounded-xl w-full">
+                                        <button 
+                                            onClick={() => setViewMode('volume')}
+                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'volume' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                        >
+                                            VOLUME
+                                        </button>
+                                        <button 
+                                            onClick={() => setViewMode('value')}
+                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'value' ? 'bg-white shadow text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                        >
+                                            VALEUR (€)
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {/* GRAPHIQUES DETAILS */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
                                 <StatWidget title="Réseaux de Soin" data={stats.breakdown.network} />
                                 <StatWidget title="Géométries" data={stats.breakdown.geometry} />
                                 <StatWidget title="Indices" data={stats.breakdown.index} />
@@ -249,6 +349,12 @@ const Hypervisor = ({ onClose }) => {
                                 <StatWidget title="Designs" data={stats.breakdown.design} />
                                 <StatWidget title="Traitements" data={stats.breakdown.coating} />
                                 <StatWidget title="Flux Commercial" data={stats.breakdown.commercial_flow} />
+                            </div>
+
+                            {/* PODIUMS TOP 3 */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <Top3Widget title="TOP 3 - UNIFOCAUX" data={stats.tops?.UNIFOCAL} />
+                                <Top3Widget title="TOP 3 - PROGRESSIFS" data={stats.tops?.PROGRESSIF} />
                             </div>
                         </div>
                     )}
