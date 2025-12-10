@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.24"; // Ajout Marque ALTERNANCE
+const APP_VERSION = "5.25"; // Colonnes Achat Alternance (Std/Bonifié/Super)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -158,6 +158,9 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                     index_mat: cleanText(l.index_mat),
                     coating: cleanText(l.coating),
                     avg_purchase: l.purchase_price,
+                    // AJOUT CHAMPS ALTERNANCE
+                    avg_purchase_bonifie: l.purchase_price_bonifie,
+                    avg_purchase_super_bonifie: l.purchase_price_super_bonifie,
                     isPhoto: checkIsPhoto(l), 
                     brand: cleanText(l.brand) 
                 });
@@ -411,7 +414,18 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                                         <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Design</th>
                                         <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Index</th>
                                         <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Traitement</th>
-                                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Achat Moy.</th>
+                                        
+                                        {/* EN-TÊTE CONDITIONNEL ALTERNANCE */}
+                                        {filterBrand === 'ALTERNANCE' ? (
+                                            <>
+                                                <th className="px-2 py-3 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Achat Std</th>
+                                                <th className="px-2 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider">Bonifié</th>
+                                                <th className="px-2 py-3 text-right text-xs font-bold text-indigo-600 uppercase tracking-wider">Super Bon.</th>
+                                            </>
+                                        ) : (
+                                            <th className="px-6 py-3 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Achat Moy.</th>
+                                        )}
+
                                         <th className="px-6 py-3 text-right text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 border-l border-blue-100 w-32">PRIX VENTE</th>
                                         <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">Marge €</th>
                                         <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50/50">%</th>
@@ -433,7 +447,18 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
                                                     {row.isPhoto && <SunDim className="w-3 h-3 inline mr-1 text-purple-500"/>}
                                                     {row.coating}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-xs text-right text-slate-400 font-mono">~{purchase.toFixed(0)}€</td>
+                                                
+                                                {/* LIGNES CONDITIONNELLES ALTERNANCE */}
+                                                {filterBrand === 'ALTERNANCE' ? (
+                                                    <>
+                                                        <td className="px-2 py-4 whitespace-nowrap text-xs text-right text-slate-400 font-mono">~{safeNum(row.avg_purchase).toFixed(0)}€</td>
+                                                        <td className="px-2 py-4 whitespace-nowrap text-xs text-right text-green-600 font-mono">~{safeNum(row.avg_purchase_bonifie).toFixed(0)}€</td>
+                                                        <td className="px-2 py-4 whitespace-nowrap text-xs text-right text-indigo-600 font-mono">~{safeNum(row.avg_purchase_super_bonifie).toFixed(0)}€</td>
+                                                    </>
+                                                ) : (
+                                                    <td className="px-6 py-4 whitespace-nowrap text-xs text-right text-slate-400 font-mono">~{purchase.toFixed(0)}€</td>
+                                                )}
+
                                                 <td className="px-6 py-4 whitespace-nowrap text-right bg-blue-50/30 border-l border-blue-100">
                                                     <input 
                                                         type="number" 
