@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.21"; // Filtre dynamique sur colonne 'material'
+const APP_VERSION = "5.23"; // Suppression Filtre Photo (Géré par Material)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -537,15 +537,14 @@ function App() {
           const saved = sessionStorage.getItem("optique_form_data"); 
           if(saved) {
               const parsed = JSON.parse(saved);
-              // Migration ancienne version (photochromic bool -> variant string)
-              if (!parsed.variant) {
-                  parsed.variant = parsed.photochromic ? 'PHOTO' : 'BLANC';
-              }
+              // Clean ancien filtre
+              delete parsed.photochromic; 
+              delete parsed.variant;
               return parsed;
           }
-          // MODIFICATION: Ajout 'material' dans l'état initial
-          return { network: 'HORS_RESEAU', brand: '', type: '', design: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, variant: 'BLANC', calisize: false }; 
-      } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, variant: 'BLANC', calisize: false }; }
+          // MODIFICATION: Suppression photochromic et variant
+          return { network: 'HORS_RESEAU', brand: '', type: '', design: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; 
+      } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; }
   });
   
   const [serverUrl, setServerUrl] = useState(PROD_API_URL);
@@ -682,24 +681,9 @@ function App() {
            workingList = workingList.filter(l => cleanText(l.material) === cleanText(formData.material));
        }
 
-       // --- 3. FILTRE VARIANT (BLANC / PHOTO / TEINTÉ) ---
-       const isPhoto = (item) => { 
-           const text = cleanText((item.name || "") + " " + (item.material || "") + " " + (item.coating || "") + " " + (item.design || "")); 
-           return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR"); 
-       };
-       const isSun = (item) => { 
-           const text = cleanText((item.name || "") + " " + (item.material || "") + " " + (item.coating || "") + " " + (item.design || "")); 
-           return text.includes("SUN") || text.includes("POLA") || text.includes("TEINTE") || text.includes("MIROIR") || text.includes("NUANCE") || text.includes("CAT.3"); 
-       };
-
-       if (formData.variant === 'PHOTO') { 
-           workingList = workingList.filter(l => isPhoto(l)); 
-       } else if (formData.variant === 'TEINTE') {
-           workingList = workingList.filter(l => isSun(l) && !isPhoto(l)); // Exclure photochromiques des solaires purs si besoin
-       } else { 
-           // BLANC par défaut
-           workingList = workingList.filter(l => !isPhoto(l) && !isSun(l)); 
-       }
+       // --- 3. RETRAIT FILTRE PHOTOCHROMIQUE ---
+       // Le filtre spécifique "PHOTOCHROMIQUE" est supprimé.
+       // La distinction se fait désormais uniquement via la sélection de la matière (ex: "ORMA TRANSITIONS")
 
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
@@ -730,7 +714,7 @@ function App() {
           sessionStorage.clear();
           setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
           setSecondPairPrice(0);
-          setFormData({ ...formData, variant: 'BLANC', material: '', calisize: false }); // Reset complet
+          setFormData({ ...formData, material: '', calisize: false }); // Reset complet
           setSelectedLens(null);
       }
   };
@@ -874,23 +858,6 @@ function App() {
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{LENS_TYPES.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
                 
-                {/* NOUVEAU FILTRE TYPE DE VERRE */}
-                <div>
-                    <label className="text-[10px] font-bold opacity-50 mb-2 block">TYPE DE VERRE</label>
-                    <div className="grid grid-cols-3 gap-1">
-                        {['BLANC', 'PHOTO', 'TEINTE'].map(v => (
-                            <button 
-                                key={v} 
-                                onClick={() => setFormData({...formData, variant: v})} 
-                                className={`py-2 rounded border text-[9px] font-bold transition-all ${formData.variant === v ? 'text-white border-transparent shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`} 
-                                style={formData.variant === v ? {backgroundColor: userSettings.customColor} : {}}
-                            >
-                                {v === 'PHOTO' ? 'PHOTOCH.' : (v === 'TEINTE' ? 'SOLAIRE' : v)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
                 {/* FILTRE MATIÈRE (REMPLACE INDICE) */}
                 <div>
                     <label className="text-[10px] font-bold opacity-50 mb-2 block">MATIÈRE / TEINTE</label>
