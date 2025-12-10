@@ -2,17 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart, TrendingUp, Medal
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.28"; // Hyperviseur Avancé (Vol/Val + Tops)
+const APP_VERSION = "5.29"; // Persistance Logo/Thème & Nom Magasin Figé
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
 const DEFAULT_SETTINGS = {
-    shopName: "MON OPTICIEN",
+    // shopName retiré des defaults car géré par l'user connecté
     shopLogo: "", 
     themeColor: "blue", 
     bgColor: "bg-slate-50",
@@ -157,15 +157,10 @@ const Hypervisor = ({ onClose }) => {
         );
     }, [users, searchTerm]);
 
-    // Sous-composant pour les barres graphiques
     const StatBar = ({ label, item, total }) => {
-        // item est { volume: number, value: number }
         const val = viewMode === 'volume' ? item.volume : item.value;
-        // Pour l'affichage Valeur, on formatte en Euros
         const displayVal = viewMode === 'volume' ? val : `${val.toFixed(0)} €`;
-        // Calcul du pourcentage basé sur le total du mode courant
         const percent = total > 0 ? (val / total) * 100 : 0;
-        
         return (
             <div className="mb-2">
                 <div className="flex justify-between text-xs font-bold mb-1 text-slate-600">
@@ -173,10 +168,7 @@ const Hypervisor = ({ onClose }) => {
                     <span>{displayVal} ({percent.toFixed(1)}%)</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                        className={`h-full rounded-full transition-all duration-500 ${viewMode === 'volume' ? 'bg-blue-500' : 'bg-emerald-500'}`} 
-                        style={{ width: `${percent}%` }}
-                    ></div>
+                    <div className={`h-full rounded-full transition-all duration-500 ${viewMode === 'volume' ? 'bg-blue-500' : 'bg-emerald-500'}`} style={{ width: `${percent}%` }}></div>
                 </div>
             </div>
         );
@@ -184,74 +176,29 @@ const Hypervisor = ({ onClose }) => {
 
     const StatWidget = ({ title, data }) => {
         if (!data) return null;
-        // Calcul du total pour le mode courant
         const total = Object.values(data).reduce((acc, curr) => acc + (viewMode === 'volume' ? curr.volume : curr.value), 0);
-        
-        // Tri
         const sortedEntries = Object.entries(data).sort((a,b) => {
             const valA = viewMode === 'volume' ? a[1].volume : a[1].value;
             const valB = viewMode === 'volume' ? b[1].volume : b[1].value;
             return valB - valA;
         });
-
         return (
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex justify-between">
-                    {title}
-                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">{viewMode === 'volume' ? 'Vol.' : '€'}</span>
-                </h4>
-                <div className="space-y-3">
-                    {sortedEntries.map(([k, v]) => (
-                        <StatBar key={k} label={k} item={v} total={total} />
-                    ))}
-                    {sortedEntries.length === 0 && <div className="text-xs text-slate-300 italic text-center py-2">Aucune donnée</div>}
-                </div>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex justify-between">{title}<span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">{viewMode === 'volume' ? 'Vol.' : '€'}</span></h4>
+                <div className="space-y-3">{sortedEntries.map(([k, v]) => (<StatBar key={k} label={k} item={v} total={total} />))}{sortedEntries.length === 0 && <div className="text-xs text-slate-300 italic text-center py-2">Aucune donnée</div>}</div>
             </div>
         );
     };
 
     const Top3Widget = ({ title, data }) => {
         if (!data) return null;
-        // data contient { by_volume: [], by_value: [], by_margin: [] }
         return (
             <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-lg col-span-1 lg:col-span-2">
-                <h4 className="text-sm font-bold text-indigo-700 uppercase tracking-wider mb-6 flex items-center gap-2">
-                    <Medal className="w-5 h-5"/> {title}
-                </h4>
+                <h4 className="text-sm font-bold text-indigo-700 uppercase tracking-wider mb-6 flex items-center gap-2"><Medal className="w-5 h-5"/> {title}</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {/* PAR VOLUME */}
-                    <div>
-                        <h5 className="text-xs font-bold text-blue-500 mb-3 text-center uppercase">Top Volume</h5>
-                        {data.by_volume.map((item, i) => (
-                            <div key={i} className="flex items-center gap-2 mb-2 text-xs bg-blue-50/50 p-2 rounded-lg border border-blue-100">
-                                <span className={`font-bold w-5 h-5 flex items-center justify-center rounded-full ${i===0 ? 'bg-yellow-400 text-white' : 'bg-blue-200 text-blue-700'}`}>{i+1}</span>
-                                <div className="flex-1 truncate font-bold text-slate-700">{item.name}</div>
-                                <div className="text-slate-500">{item.volume}</div>
-                            </div>
-                        ))}
-                    </div>
-                    {/* PAR VALEUR */}
-                    <div>
-                        <h5 className="text-xs font-bold text-emerald-500 mb-3 text-center uppercase">Top Chiffre d'Affaires</h5>
-                        {data.by_value.map((item, i) => (
-                            <div key={i} className="flex items-center gap-2 mb-2 text-xs bg-emerald-50/50 p-2 rounded-lg border border-emerald-100">
-                                <span className={`font-bold w-5 h-5 flex items-center justify-center rounded-full ${i===0 ? 'bg-yellow-400 text-white' : 'bg-emerald-200 text-emerald-700'}`}>{i+1}</span>
-                                <div className="flex-1 truncate font-bold text-slate-700">{item.name}</div>
-                                <div className="text-slate-500">{item.value.toFixed(0)}€</div>
-                            </div>
-                        ))}
-                    </div>
-                    {/* PAR MARGE */}
-                    <div>
-                        <h5 className="text-xs font-bold text-purple-500 mb-3 text-center uppercase">Top Marge</h5>
-                        {data.by_margin.map((item, i) => (
-                            <div key={i} className="flex items-center gap-2 mb-2 text-xs bg-purple-50/50 p-2 rounded-lg border border-purple-100">
-                                <span className={`font-bold w-5 h-5 flex items-center justify-center rounded-full ${i===0 ? 'bg-yellow-400 text-white' : 'bg-purple-200 text-purple-700'}`}>{i+1}</span>
-                                <div className="flex-1 truncate font-bold text-slate-700">{item.name}</div>
-                                <div className="text-slate-500">{item.margin.toFixed(0)}€</div>
-                            </div>
-                        ))}
-                    </div>
+                    <div><h5 className="text-xs font-bold text-blue-500 mb-3 text-center uppercase">Top Volume</h5>{data.by_volume.map((item, i) => (<div key={i} className="flex items-center gap-2 mb-2 text-xs bg-blue-50/50 p-2 rounded-lg border border-blue-100"><span className={`font-bold w-5 h-5 flex items-center justify-center rounded-full ${i===0 ? 'bg-yellow-400 text-white' : 'bg-blue-200 text-blue-700'}`}>{i+1}</span><div className="flex-1 truncate font-bold text-slate-700">{item.name}</div><div className="text-slate-500">{item.volume}</div></div>))}</div>
+                    <div><h5 className="text-xs font-bold text-emerald-500 mb-3 text-center uppercase">Top Chiffre d'Affaires</h5>{data.by_value.map((item, i) => (<div key={i} className="flex items-center gap-2 mb-2 text-xs bg-emerald-50/50 p-2 rounded-lg border border-emerald-100"><span className={`font-bold w-5 h-5 flex items-center justify-center rounded-full ${i===0 ? 'bg-yellow-400 text-white' : 'bg-emerald-200 text-emerald-700'}`}>{i+1}</span><div className="flex-1 truncate font-bold text-slate-700">{item.name}</div><div className="text-slate-500">{item.value.toFixed(0)}€</div></div>))}</div>
+                    <div><h5 className="text-xs font-bold text-purple-500 mb-3 text-center uppercase">Top Marge</h5>{data.by_margin.map((item, i) => (<div key={i} className="flex items-center gap-2 mb-2 text-xs bg-purple-50/50 p-2 rounded-lg border border-purple-100"><span className={`font-bold w-5 h-5 flex items-center justify-center rounded-full ${i===0 ? 'bg-yellow-400 text-white' : 'bg-purple-200 text-purple-700'}`}>{i+1}</span><div className="flex-1 truncate font-bold text-slate-700">{item.name}</div><div className="text-slate-500">{item.margin.toFixed(0)}€</div></div>))}</div>
                 </div>
             </div>
         );
@@ -260,88 +207,25 @@ const Hypervisor = ({ onClose }) => {
     return (
         <div className="fixed inset-0 z-[150] bg-slate-50 flex flex-col font-['Poppins']">
             <div className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
-                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <BarChart3 className="w-6 h-6 text-purple-600"/>
-                    HYPERVISEUR COMMERCIAL
-                </h2>
+                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><BarChart3 className="w-6 h-6 text-purple-600"/> HYPERVISEUR COMMERCIAL</h2>
                 <button onClick={onClose} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg font-bold">FERMER</button>
             </div>
-            
             <div className="p-6 overflow-y-auto pb-20">
                 <div className="max-w-7xl mx-auto">
-                    {/* ZONE DE RECHERCHE */}
                     <div className="mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Filtrer (Nom / Adhérent)</label>
-                                <div className="relative">
-                                    <Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/>
-                                    <input 
-                                        type="text" 
-                                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all"
-                                        placeholder="Ex: 12345 ou Optic 2000..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Sélectionner un compte</label>
-                                <select 
-                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all"
-                                    value={selectedUser}
-                                    onChange={(e) => setSelectedUser(e.target.value)}
-                                >
-                                    <option value="">-- Choisir parmi {filteredUsers.length} comptes --</option>
-                                    <option value="all">🌍 VUE GLOBALE (NATIONAL)</option>
-                                    {filteredUsers.map(u => (
-                                        <option key={u.username} value={u.username}>
-                                            {u.shop_name} ({u.username})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Filtrer (Nom / Adhérent)</label><div className="relative"><Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/><input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all" placeholder="Ex: 12345 ou Optic 2000..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div></div>
+                            <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Sélectionner un compte</label><select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}><option value="">-- Choisir parmi {filteredUsers.length} comptes --</option>{filteredUsers.map(u => (<option key={u.username} value={u.username}>{u.shop_name} ({u.username})</option>))}</select></div>
                         </div>
                     </div>
-
                     {loading && <div className="text-center py-10"><Activity className="w-8 h-8 animate-spin mx-auto text-purple-500"/></div>}
-
                     {stats && !loading && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {/* KPI & TOGGLE MODE */}
                             <div className="flex flex-col md:flex-row gap-6 mb-8 items-stretch">
-                                <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-lg flex-1">
-                                    <div className="text-sm font-bold opacity-80 mb-1">VENTES TOTALES</div>
-                                    <div className="text-4xl font-black mb-2">{stats.total_sales}</div>
-                                    <div className="text-xs opacity-60">Dossiers créés</div>
-                                </div>
-                                <div className="bg-emerald-600 text-white p-6 rounded-2xl shadow-lg flex-1">
-                                    <div className="text-sm font-bold opacity-80 mb-1">CHIFFRE D'AFFAIRES (EST.)</div>
-                                    <div className="text-4xl font-black mb-2">{stats.total_revenue.toLocaleString()} €</div>
-                                    <div className="text-xs opacity-60">Basé sur les prix de vente configurés</div>
-                                </div>
-                                
-                                {/* SELECTEUR MODE */}
-                                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-center min-w-[200px]">
-                                    <span className="text-xs font-bold text-slate-400 uppercase mb-3">MODE D'AFFICHAGE</span>
-                                    <div className="flex bg-slate-100 p-1 rounded-xl w-full">
-                                        <button 
-                                            onClick={() => setViewMode('volume')}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'volume' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                        >
-                                            VOLUME
-                                        </button>
-                                        <button 
-                                            onClick={() => setViewMode('value')}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'value' ? 'bg-white shadow text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                        >
-                                            VALEUR (€)
-                                        </button>
-                                    </div>
-                                </div>
+                                <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-lg flex-1"><div className="text-sm font-bold opacity-80 mb-1">VENTES TOTALES</div><div className="text-4xl font-black mb-2">{stats.total_sales}</div><div className="text-xs opacity-60">Dossiers créés</div></div>
+                                <div className="bg-emerald-600 text-white p-6 rounded-2xl shadow-lg flex-1"><div className="text-sm font-bold opacity-80 mb-1">CHIFFRE D'AFFAIRES (EST.)</div><div className="text-4xl font-black mb-2">{stats.total_revenue.toLocaleString()} €</div><div className="text-xs opacity-60">Basé sur les prix de vente configurés</div></div>
+                                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-center min-w-[200px]"><span className="text-xs font-bold text-slate-400 uppercase mb-3">MODE D'AFFICHAGE</span><div className="flex bg-slate-100 p-1 rounded-xl w-full"><button onClick={() => setViewMode('volume')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'volume' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>VOLUME</button><button onClick={() => setViewMode('value')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'value' ? 'bg-white shadow text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>VALEUR (€)</button></div></div>
                             </div>
-
-                            {/* GRAPHIQUES DETAILS */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
                                 <StatWidget title="Réseaux de Soin" data={stats.breakdown.network} />
                                 <StatWidget title="Géométries" data={stats.breakdown.geometry} />
@@ -351,8 +235,6 @@ const Hypervisor = ({ onClose }) => {
                                 <StatWidget title="Traitements" data={stats.breakdown.coating} />
                                 <StatWidget title="Flux Commercial" data={stats.breakdown.commercial_flow} />
                             </div>
-
-                            {/* PODIUMS TOP 3 */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <Top3Widget title="TOP 3 - UNIFOCAUX" data={stats.tops?.UNIFOCAL} />
                                 <Top3Widget title="TOP 3 - PROGRESSIFS" data={stats.tops?.PROGRESSIF} />
@@ -792,22 +674,35 @@ function App() {
   const [showPricingConfig, setShowPricingConfig] = useState(false); // État pour la modale plein écran
   const [showHypervisor, setShowHypervisor] = useState(false); // AJOUT: État Hyperviseur
 
+  // Gestion Persistance Logo et Thème
   const [userSettings, setUserSettings] = useState(() => {
     try { 
         const p = safeJSONParse("optique_user_settings", null); 
-        // Fusion profonde pour garantir la présence des nouvelles clés
+        // Fusion des paramètres locaux avec les défauts
         return p ? { 
             ...DEFAULT_SETTINGS, 
             ...p, 
+            // On s'assure que shopName vient toujours de l'utilisateur connecté ou d'un fallback, 
+            // mais on ne le laisse pas être écrasé par le localStorage si vide
             pricing: { ...DEFAULT_SETTINGS.pricing, ...(p.pricing || {}) },
             perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(p.perLensConfig || {}) },
             disabledBrands: Array.isArray(p.disabledBrands) ? p.disabledBrands : [] 
         } : DEFAULT_SETTINGS; 
     } catch { return DEFAULT_SETTINGS; }
   });
-  useEffect(() => { localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); }, [userSettings]);
 
-  const currentSettings = { ...userSettings, shopName: user?.shop_name || userSettings.shopName };
+  // Sauvegarde automatique des préférences locales
+  useEffect(() => { 
+      localStorage.setItem("optique_user_settings", JSON.stringify(userSettings)); 
+  }, [userSettings]);
+
+  // Calcul des paramètres actuels (Fusion User BDD + Préférences Locales)
+  const currentSettings = { 
+      ...userSettings, 
+      shopName: user?.shop_name || "MON OPTICIEN", // Priorité au nom venant du login (BDD)
+      // Le logo et les couleurs viennent de userSettings (localStorage)
+  };
+
   const [formData, setFormData] = useState(() => {
       // Suppression de sphere, cylinder, addition de l'état initial
       try { 
@@ -835,9 +730,22 @@ function App() {
   const SAVE_URL = `${baseBackendUrl}/offers`;
 
   useEffect(() => { if (window.location.hostname.includes("localhost")) return; const pingInterval = setInterval(() => { axios.get(API_URL, { params: { pocketLimit: -1 } }).catch(() => {}); }, 30 * 60 * 1000); return () => clearInterval(pingInterval); }, [API_URL]);
-  useEffect(() => { const root = document.documentElement; if (userSettings.themeColor === 'custom') { const rgb = hexToRgb(userSettings.customColor); root.style.setProperty('--theme-primary', userSettings.customColor); } else { root.style.removeProperty('--theme-primary'); } }, [userSettings.themeColor, userSettings.customColor]);
+  
+  // Application du thème personnalisé
+  useEffect(() => { 
+      const root = document.documentElement; 
+      if (currentSettings.themeColor === 'custom') { 
+          const rgb = hexToRgb(currentSettings.customColor); 
+          root.style.setProperty('--theme-primary', currentSettings.customColor); 
+      } else { 
+          root.style.removeProperty('--theme-primary'); 
+      } 
+  }, [currentSettings.themeColor, currentSettings.customColor]);
 
-  const bgClass = userSettings.bgColor || "bg-slate-50"; const isDarkTheme = bgClass.includes("900") || bgClass.includes("black"); const textClass = isDarkTheme ? "text-white" : "text-slate-800"; const currentTheme = { primary: userSettings.themeColor === 'custom' ? 'bg-[var(--theme-primary)]' : 'bg-blue-700' };
+  const bgClass = currentSettings.bgColor || "bg-slate-50"; 
+  const isDarkTheme = bgClass.includes("900") || bgClass.includes("black"); 
+  const textClass = isDarkTheme ? "text-white" : "text-slate-800"; 
+  const currentTheme = { primary: currentSettings.themeColor === 'custom' ? 'bg-[var(--theme-primary)]' : 'bg-blue-700' };
 
   useEffect(() => { fetchData(); }, [formData.brand, formData.network, formData.type]); 
   useEffect(() => { sessionStorage.setItem("optique_client", JSON.stringify(client)); }, [client]);
@@ -1100,8 +1008,6 @@ function App() {
           </div>
       </div>
       
-      {/* ... (Reste de l'interface header, sidebar, main identiques à v5.25) ... */}
-      {/* Je réinclus le reste du rendu principal pour que le fichier soit complet et fonctionnel */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-4 lg:px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 w-full lg:w-auto overflow-x-auto">
@@ -1142,7 +1048,7 @@ function App() {
 
       {selectedLens && (<div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 p-4 animate-in slide-in-from-bottom-10 text-slate-800"><div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Glasses className="w-6 h-6"/></div><div><div className="text-[10px] font-bold text-slate-400 mt-1">RÉFÉRENCE DE COMMANDE</div><div className="font-mono text-xs bg-slate-100 p-1 rounded cursor-pointer hover:bg-blue-100 transition-colors select-all" onClick={() => { navigator.clipboard.writeText(selectedLens.commercial_code); alert("Référence copiée !"); }} title="Cliquer pour copier">{selectedLens.commercial_code || "N/A"}</div><div className="font-bold text-slate-800 text-sm leading-tight mt-1">{selectedLens.name}</div></div></div><div className="flex items-center gap-8 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100"><div className="text-center"><div className="text-[9px] font-bold text-slate-400">UNITAIRE</div><div className="font-bold text-lg text-slate-700">{parseFloat(selectedLens.sellingPrice).toFixed(2)} €</div></div><div className="text-slate-300 text-xl">x 2</div><div className="text-center"><div className="text-[9px] font-bold text-blue-600">TOTAL PAIRE</div><div className="font-bold text-2xl text-blue-700">{totalPair.toFixed(2)} €</div></div></div><div className="flex items-center gap-4"><div className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-xl border border-orange-100"><Coins className="w-4 h-4 text-orange-500"/><div className="flex flex-col"><span className="text-[8px] font-bold text-orange-400">2ÈME PAIRE</span><input type="number" value={secondPairPrice} onChange={(e) => setSecondPairPrice(safeNum(e.target.value))} onFocus={(e) => e.target.select()} className="w-16 bg-transparent font-bold text-orange-700 outline-none text-sm" placeholder="0" min="0"/></div></div><div className="flex flex-col items-end"><div className="text-[10px] font-bold text-slate-400">RESTE À CHARGE CLIENT</div><div className={`text-3xl font-black ${remainder > 0 ? 'text-slate-800' : 'text-green-600'}`}>{remainder.toFixed(2)} €</div></div><button onClick={saveOffer} className="ml-4 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-green-200 transition-all"><CheckCircle className="w-5 h-5"/> VALIDER L'OFFRE</button></div></div></div>)}
 
-      {showSettings && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}><div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>{user?.role === 'admin' && (<div className="bg-orange-50 p-4 rounded-xl border border-orange-200 mb-6"><h3 className="text-xs font-bold text-orange-700 mb-3 flex items-center gap-2"><Lock className="w-3 h-3"/> ADMINISTRATION</h3><div className="mb-4"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER UTILISATEURS</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUserFile(e.target.files[0])} className="flex-1 text-xs bg-white"/><button onClick={triggerUserUpload} disabled={syncLoading} className="bg-orange-600 text-white px-4 py-2 rounded text-xs font-bold">{syncLoading ? "..." : "ENVOYER"}</button></div></div><div className="mb-4"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER CATALOGUE VERRES</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUploadFile(e.target.files[0])} className="flex-1 text-xs bg-white"/><button onClick={triggerFileUpload} disabled={syncLoading} className="bg-orange-600 text-white px-4 py-2 rounded text-xs font-bold">{syncLoading ? "..." : "ENVOYER"}</button></div></div><div className="flex justify-between items-center"><span className="text-xs">État Base de Données</span><button onClick={checkDatabase} className="bg-white border border-orange-300 px-3 py-1 rounded text-xs font-bold text-orange-700">VÉRIFIER</button></div></div>)}<div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(b.id)} className={`px-3 py-2 rounded-lg text-xs font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-blue-600 text-white border-blue-600'}`}>{isDisabled ? <Square className="w-3 h-3 inline mr-1"/> : <CheckSquare className="w-3 h-3 inline mr-1"/>}{b.label}</button>); })}</div></div><div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={userSettings.shopName} onChange={(e) => handleSettingChange('branding', 'shopName', e.target.value)} className="w-full p-2 border rounded"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div><div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div><div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="mb-6 flex gap-4 p-1 bg-slate-100 rounded-xl"><button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'linear' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'linear' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>FORMULE (Ax + B)</button><button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'per_lens' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'per_lens' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>MANUEL (AU VERRE)</button></div>{userSettings.pricingMode === 'linear' ? (<div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-4"><div className="flex items-center justify-between bg-indigo-50 p-2 rounded border border-indigo-100"><span className="text-xs font-bold text-indigo-700">SUPPLÉMENT CALISIZE (€)</span><input type="number" step="1" value={safePricing.calisize?.price ?? 10} onChange={(e) => handlePriceRuleChange('calisize', 'price', e.target.value)} className="w-16 p-1 border rounded text-center text-xs font-bold text-indigo-700"/></div><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div></div>) : (<div className="bg-blue-50 p-6 rounded-xl border border-blue-200 text-center animate-in fade-in slide-in-from-right-4"><ListFilter className="w-10 h-10 text-blue-500 mx-auto mb-3"/><h3 className="font-bold text-blue-900 mb-2">Configuration Manuelle</h3><p className="text-xs text-blue-700 mb-6">Définissez vos prix de vente et la disponibilité des verres ligne par ligne.</p><button onClick={() => setShowPricingConfig(true)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"><Settings className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR</button></div>)}</div><button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button></div></div>)}
+      {showSettings && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowSettings(false); }}><div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><h2 className="font-bold text-xl mb-4">PARAMÈTRES</h2>{user?.role === 'admin' && (<div className="bg-orange-50 p-4 rounded-xl border border-orange-200 mb-6"><h3 className="text-xs font-bold text-orange-700 mb-3 flex items-center gap-2"><Lock className="w-3 h-3"/> ADMINISTRATION</h3><div className="mb-4"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER UTILISATEURS</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUserFile(e.target.files[0])} className="flex-1 text-xs bg-white"/><button onClick={triggerUserUpload} disabled={syncLoading} className="bg-orange-600 text-white px-4 py-2 rounded text-xs font-bold">{syncLoading ? "..." : "ENVOYER"}</button></div></div><div className="mb-4"><label className="block text-xs font-bold text-slate-600 mb-2">IMPORTER CATALOGUE VERRES</label><div className="flex gap-2"><input type="file" accept=".xlsx" onChange={(e) => setUploadFile(e.target.files[0])} className="flex-1 text-xs bg-white"/><button onClick={triggerFileUpload} disabled={syncLoading} className="bg-orange-600 text-white px-4 py-2 rounded text-xs font-bold">{syncLoading ? "..." : "ENVOYER"}</button></div></div><div className="flex justify-between items-center"><span className="text-xs">État Base de Données</span><button onClick={checkDatabase} className="bg-white border border-orange-300 px-3 py-1 rounded text-xs font-bold text-orange-700">VÉRIFIER</button></div></div>)}<div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">MARQUES VISIBLES</h4><div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(b.id)} className={`px-3 py-2 rounded-lg text-xs font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-blue-600 text-white border-blue-600'}`}>{isDisabled ? <Square className="w-3 h-3 inline mr-1"/> : <CheckSquare className="w-3 h-3 inline mr-1"/>}{b.label}</button>); })}</div></div><div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">IDENTITÉ</h4><div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-slate-600 mb-1">NOM</label><input type="text" value={currentSettings.shopName} disabled className="w-full p-2 border rounded bg-slate-100 text-slate-500 cursor-not-allowed"/></div><div><label className="block text-xs font-bold text-slate-600 mb-1">LOGO</label><input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, 'shop')} className="w-full text-xs"/></div></div></div><div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100"><h4 className="text-xs font-bold text-slate-400 mb-4">APPARENCE</h4><div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-slate-600 mb-2">FOND</label><div className="grid grid-cols-2 gap-2"><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-slate-50')} className="p-3 bg-slate-50 border rounded text-xs font-bold text-slate-600">Gris Clair</button><button onClick={() => handleSettingChange('branding', 'bgColor', 'bg-gray-900')} className="p-3 bg-gray-900 border rounded text-xs font-bold text-white">Noir / Gris</button></div></div><div><label className="block text-xs font-bold text-slate-600 mb-2">BULLES</label><input type="color" value={userSettings.customColor} onChange={(e) => { handleSettingChange('branding', 'customColor', e.target.value); handleSettingChange('branding', 'themeColor', 'custom'); }} className="w-full h-10 cursor-pointer rounded"/></div></div></div><div className="mb-6"><h4 className="text-sm font-bold text-slate-600 mb-4 border-b pb-2">PRIX MARCHÉ LIBRE</h4><div className="mb-6 flex gap-4 p-1 bg-slate-100 rounded-xl"><button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'linear' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'linear' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>FORMULE (Ax + B)</button><button onClick={() => setUserSettings(prev => ({ ...prev, pricingMode: 'per_lens' }))} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userSettings.pricingMode === 'per_lens' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>MANUEL (AU VERRE)</button></div>{userSettings.pricingMode === 'linear' ? (<div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-4"><div className="flex items-center justify-between bg-indigo-50 p-2 rounded border border-indigo-100"><span className="text-xs font-bold text-indigo-700">SUPPLÉMENT CALISIZE (€)</span><input type="number" step="1" value={safePricing.calisize?.price ?? 10} onChange={(e) => handlePriceRuleChange('calisize', 'price', e.target.value)} className="w-16 p-1 border rounded text-center text-xs font-bold text-indigo-700"/></div><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL STOCK</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniStock?.x ?? 2.5} onChange={(e) => handlePriceRuleChange('uniStock', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniStock?.b ?? 20} onChange={(e) => handlePriceRuleChange('uniStock', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">UNIFOCAL FAB</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.uniFab?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('uniFab', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.uniFab?.b ?? 30} onChange={(e) => handlePriceRuleChange('uniFab', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">PROGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.prog?.x ?? 3.2} onChange={(e) => handlePriceRuleChange('prog', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.prog?.b ?? 50} onChange={(e) => handlePriceRuleChange('prog', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">DÉGRESSIF</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.degressif?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('degressif', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.degressif?.b ?? 40} onChange={(e) => handlePriceRuleChange('degressif', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">INTÉRIEUR</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.interieur?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('interieur', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.interieur?.b ?? 40} onChange={(e) => handlePriceRuleChange('interieur', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div><div className="flex items-center justify-between"><span className="text-xs font-bold">MULTIFOCAL</span><div className="flex gap-2"><input type="number" step="0.1" value={safePricing.multifocal?.x ?? 3.0} onChange={(e) => handlePriceRuleChange('multifocal', 'x', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/><input type="number" step="1" value={safePricing.multifocal?.b ?? 40} onChange={(e) => handlePriceRuleChange('multifocal', 'b', e.target.value)} className="w-12 p-1 border rounded text-center text-xs"/></div></div></div>) : (<div className="bg-blue-50 p-6 rounded-xl border border-blue-200 text-center animate-in fade-in slide-in-from-right-4"><ListFilter className="w-10 h-10 text-blue-500 mx-auto mb-3"/><h3 className="font-bold text-blue-900 mb-2">Configuration Manuelle</h3><p className="text-xs text-blue-700 mb-6">Définissez vos prix de vente et la disponibilité des verres ligne par ligne.</p><button onClick={() => setShowPricingConfig(true)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"><Settings className="w-4 h-4"/> OUVRIR LE CONFIGURATEUR</button></div>)}</div><button onClick={() => setShowSettings(false)} className="w-full py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600">FERMER</button></div></div>)}
       {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div><div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div></div></div><div className="text-right"><div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div><div className="font-bold text-slate-800">{offer.lens?.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div></div><div className="flex items-center gap-2"><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div><button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button></div></div>))}</div></div></div>)}
     </div>
   );
