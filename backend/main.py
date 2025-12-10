@@ -41,10 +41,9 @@ if DATABASE_URL:
         DATABASE_URL += f"{separator}sslmode=require"
 
     try:
-        # pool_pre_ping=True est vital pour la stabilité sur le cloud
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         with engine.begin() as conn:
-            # Table Utilisateurs (Auth)
+            # Table Utilisateurs
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS users (
                     username VARCHAR(100) PRIMARY KEY,
@@ -56,27 +55,35 @@ if DATABASE_URL:
                 );
             """))
             
-            # --- INITIALISATION ADMIN PAR DÉFAUT (Si table vide) ---
+            # Admin par défaut
             try:
                 user_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
                 if user_count == 0:
-                    print("⚠️ Base utilisateurs vide : Création de l'admin par défaut...")
                     conn.execute(text("""
                         INSERT INTO users (username, shop_name, password, email, role, is_first_login) 
                         VALUES ('admin', 'ADMINISTRATION', 'admin', 'admin@podium.optique', 'admin', FALSE)
                     """))
-                    print("✅ Utilisateur 'admin' créé (Mdp: admin)")
-            except Exception as e:
-                print(f"⚠️ Info: Impossible de vérifier/créer admin par défaut : {e}")
+            except Exception as e: print(f"Info Admin: {e}")
 
-            # Table Dossiers Clients
+            # Table Dossiers Clients (Mise à jour structure pour Hyperviseur)
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS client_offers (
                     id SERIAL PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    encrypted_identity TEXT, lens_details JSONB, financials JSONB
+                    username VARCHAR(100), -- Lien vers l'opticien
+                    encrypted_identity TEXT, 
+                    lens_details JSONB, 
+                    financials JSONB,
+                    tags JSONB -- Stockage structuré pour stats
                 );
             """))
-            # Table Catalogue Verres
+            
+            # MIGRATION AUTOMATIQUE : Ajout des colonnes si elles manquent (pour DB existante)
+            try:
+                conn.execute(text("ALTER TABLE client_offers ADD COLUMN IF NOT EXISTS username VARCHAR(100);"))
+                conn.execute(text("ALTER TABLE client_offers ADD COLUMN IF NOT EXISTS tags JSONB;"))
+            except Exception as e: print(f"Info Migration: {e}")
+
+            # Table Catalogue
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS lenses (
                     id SERIAL PRIMARY KEY, brand TEXT, name TEXT, commercial_code TEXT,
@@ -130,7 +137,12 @@ def get_col_idx(headers, candidates):
 # --- MODELES ---
 class LoginRequest(BaseModel): username: str; password: str
 class PasswordUpdate(BaseModel): username: str; new_password: str
-class OfferRequest(BaseModel): client: dict; lens: dict; finance: dict
+class OfferRequest(BaseModel): 
+    username: str # Ajouté pour lier l'offre
+    client: dict
+    lens: dict
+    finance: dict
+    tags: dict # Ajouté pour l'hyperviseur
 
 # --- ROUTES AUTHENTIFICATION ---
 @app.post("/auth/login")
@@ -142,127 +154,120 @@ def login(creds: LoginRequest):
             if not result: raise HTTPException(401, "Utilisateur inconnu")
             user = result._mapping
             if user['password'] != creds.password: raise HTTPException(401, "Mot de passe incorrect")
-            
             role = user['role'] if 'role' in user else 'user'
-            
             return {
                 "status": "success",
-                "user": {
-                    "username": user['username'], "shop_name": user['shop_name'],
-                    "email": user['email'], "role": role, "is_first_login": user['is_first_login']
-                }
+                "user": { "username": user['username'], "shop_name": user['shop_name'], "email": user['email'], "role": role, "is_first_login": user['is_first_login'] }
             }
-    except Exception as e:
-        if isinstance(e, HTTPException): raise e
-        print(f"Login Error: {e}")
-        raise HTTPException(500, str(e))
+    except Exception as e: raise HTTPException(500, str(e))
 
 @app.post("/auth/update-password")
 def update_password(data: PasswordUpdate):
     if not engine: raise HTTPException(500, "Pas de BDD")
     try:
         with engine.begin() as conn:
-            conn.execute(text("UPDATE users SET password = :p, is_first_login = FALSE WHERE username = :u"), 
-                         {"p": data.new_password, "u": data.username})
+            conn.execute(text("UPDATE users SET password = :p, is_first_login = FALSE WHERE username = :u"), {"p": data.new_password, "u": data.username})
         return {"status": "success"}
     except Exception as e: raise HTTPException(500, str(e))
 
 @app.post("/upload-users")
 def upload_users(file: UploadFile = File(...)):
-    print("🚀 Début upload USERS (Mode UPSERT)...", flush=True)
+    print("🚀 Upload USERS (Upsert)...", flush=True)
     if not engine: raise HTTPException(500, "Pas de BDD")
-    
     temp = f"/tmp/users_{int(time.time())}.xlsx"
     try:
         with open(temp, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
-        
-        print("📖 Lecture Excel Users...", flush=True)
         wb = openpyxl.load_workbook(temp, data_only=True)
         sheet = wb.active
-        
         rows = list(sheet.iter_rows(values_only=True))
-        if not rows: raise Exception("Fichier vide")
+        if not rows: raise Exception("Vide")
 
-        # --- SCAN INTELLIGENT EN-TÊTES ---
         header_idx = -1
         headers = []
-        
         for i, row in enumerate(rows[:20]):
             row_str = [str(c).upper() for c in row if c]
-            if any(k in s for s in row_str for k in ["IDENTIFIANT", "USERNAME", "LOGIN", "ID CLIENT"]):
-                headers = row
-                header_idx = i
-                print(f"   ✅ En-têtes trouvés ligne {i+1}: {headers}", flush=True)
-                break
+            if any(k in s for s in row_str for k in ["IDENTIFIANT", "USERNAME", "LOGIN"]):
+                headers, header_idx = row, i; break
         
-        if header_idx == -1:
-             headers = rows[0]
-             header_idx = 0
-             print(f"   ⚠️ Pas d'en-tête évident, essai ligne 1: {headers}", flush=True)
+        if header_idx == -1: headers, header_idx = rows[0], 0
 
-        # Mapping Intelligent
-        c_id = get_col_idx(headers, ['IDENTIFIANT', 'ID', 'USERNAME', 'LOGIN'])
-        c_shop = get_col_idx(headers, ['MAGASIN', 'SHOP', 'RAISON SOCIALE', 'NOM'])
-        c_pass = get_col_idx(headers, ['PASSWORD', 'MOT DE PASSE', 'MDP'])
-        c_mail = get_col_idx(headers, ['MAIL', 'EMAIL', 'COURRIEL'])
-        c_role = get_col_idx(headers, ['ROLE', 'TYPE', 'DROIT'])
+        c_id = get_col_idx(headers, ['IDENTIFIANT', 'ID', 'USERNAME'])
+        c_shop = get_col_idx(headers, ['MAGASIN', 'SHOP'])
+        c_pass = get_col_idx(headers, ['PASSWORD', 'MOT DE PASSE'])
+        c_mail = get_col_idx(headers, ['MAIL', 'EMAIL'])
+        c_role = get_col_idx(headers, ['ROLE', 'TYPE'])
         
-        if c_id == -1:
-            raise Exception(f"Colonne 'IDENTIFIANT' introuvable. En-têtes analysés : {headers}")
+        if c_id == -1: raise Exception("Colonne Identifiant manquante")
 
         users_to_insert = []
-        
         for row in rows[header_idx+1:]:
             if not row[c_id]: continue 
-            
             u_id = str(row[c_id]).strip()
             u_shop = str(row[c_shop]).strip() if c_shop != -1 and row[c_shop] else "Opticien"
             u_pass = str(row[c_pass]).strip() if c_pass != -1 and row[c_pass] else "1234"
             u_mail = str(row[c_mail]).strip() if c_mail != -1 and row[c_mail] else ""
+            u_role = "admin" if (c_role != -1 and row[c_role] and "admin" in str(row[c_role]).lower()) else "user"
             
-            u_role = "user"
-            if c_role != -1 and row[c_role]:
-                val_role = str(row[c_role]).lower().strip()
-                if "admin" in val_role: u_role = "admin"
-            
-            users_to_insert.append({
-                "u": u_id, "s": u_shop, "p": u_pass, "e": u_mail, "r": u_role
-            })
-            
-        print(f"✅ {len(users_to_insert)} utilisateurs prêts pour traitement.", flush=True)
+            users_to_insert.append({"u": u_id, "s": u_shop, "p": u_pass, "e": u_mail, "r": u_role})
             
         if users_to_insert:
             with engine.begin() as conn:
-                print("💾 Sauvegarde en base (UPSERT)...", flush=True)
-                # UPSERT POSTGRES : INSERT ... ON CONFLICT DO UPDATE
-                # On ne met à jour le mot de passe QUE lors de l'insertion initiale.
-                # Si l'user existe, on met à jour shop_name, email, role, mais on GARDE le password actuel et is_first_login.
-                
-                query = text("""
+                conn.execute(text("""
                     INSERT INTO users (username, shop_name, password, email, role, is_first_login)
                     VALUES (:u, :s, :p, :e, :r, TRUE)
                     ON CONFLICT (username) DO UPDATE SET
                         shop_name = EXCLUDED.shop_name,
                         email = EXCLUDED.email,
                         role = EXCLUDED.role;
-                """)
-                
-                conn.execute(query, users_to_insert)
-                
-        return {"status": "success", "count": len(users_to_insert), "mode": "upsert_safe"}
-
-    except Exception as e: 
-        error_msg = traceback.format_exc()
-        print(f"❌ ERREUR UPLOAD USERS: {error_msg}", flush=True)
-        raise HTTPException(500, f"Erreur technique: {str(e)}")
+                """), users_to_insert)
+        return {"status": "success", "count": len(users_to_insert)}
+    except Exception as e: raise HTTPException(500, f"Erreur: {str(e)}")
     finally:
         if os.path.exists(temp): os.remove(temp)
 
-# --- ROUTES GLOBALES ---
-@app.get("/")
-def read_root(): return {"status": "online", "version": "4.08", "msg": "UPSERT Logic Enabled"}
-@app.head("/")
-def read_root_head(): return read_root()
+# --- ROUTES ADMIN / HYPERVISEUR ---
+@app.get("/admin/users")
+def get_all_users():
+    if not engine: return []
+    try:
+        with engine.connect() as conn:
+            res = conn.execute(text("SELECT username, shop_name FROM users ORDER BY shop_name"))
+            return [dict(r._mapping) for r in res]
+    except: return []
+
+@app.get("/admin/stats")
+def get_user_stats(username: str = Query(...)):
+    if not engine: return {}
+    try:
+        with engine.connect() as conn:
+            # Récupération des tags pour un utilisateur spécifique
+            # On utilise JSONB pour l'aggrégation si dispo, sinon on fait en python
+            # Postgres 9.4+ supporte jsonb_each_text
+            
+            # On récupère toutes les offres de l'user
+            res = conn.execute(text("SELECT tags FROM client_offers WHERE username = :u AND tags IS NOT NULL"), {"u": username})
+            rows = res.fetchall()
+            
+            # Aggrégation Python (plus simple et portable que SQL complexe ici)
+            stats = {
+                "network": {}, "geometry": {}, "design": {}, 
+                "index": {}, "material": {}, "coating": {}, "commercial_flow": {}
+            }
+            
+            total_sales = 0
+            for r in rows:
+                tags = r.tags
+                if not tags: continue
+                total_sales += 1
+                for key in stats.keys():
+                    val = tags.get(key, "N/A")
+                    if val:
+                        stats[key][val] = stats[key].get(val, 0) + 1
+            
+            return {"total": total_sales, "breakdown": stats}
+    except Exception as e: 
+        print(f"Stats Error: {e}")
+        return {}
 
 # --- ROUTES DOSSIERS ---
 @app.post("/offers")
@@ -270,13 +275,20 @@ def save_offer(offer: OfferRequest):
     if not engine: raise HTTPException(500, "Pas de connexion BDD")
     try:
         with engine.begin() as conn:
-            # Extraction correction si présente
             lens_data = offer.lens
-            if hasattr(offer, 'correction') and offer.correction:
-                 lens_data['correction_data'] = offer.correction
+            if hasattr(offer, 'correction') and offer.correction: lens_data['correction_data'] = offer.correction
             
-            conn.execute(text("INSERT INTO client_offers (encrypted_identity, lens_details, financials) VALUES (:ident, :lens, :fin)"), 
-                {"ident": encrypt_dict(offer.client), "lens": json.dumps(lens_data), "fin": json.dumps(offer.finance)})
+            # On enregistre l'utilisateur (username) et les tags stats
+            conn.execute(text("""
+                INSERT INTO client_offers (username, encrypted_identity, lens_details, financials, tags) 
+                VALUES (:u, :ident, :lens, :fin, :tags)
+            """), {
+                "u": offer.username,
+                "ident": encrypt_dict(offer.client), 
+                "lens": json.dumps(lens_data), 
+                "fin": json.dumps(offer.finance),
+                "tags": json.dumps(offer.tags)
+            })
         return {"status": "success"}
     except Exception as e: raise HTTPException(500, str(e))
 
@@ -292,12 +304,9 @@ def get_offers():
                     lens_data = r.lens_details
                     correction = lens_data.get('correction_data', None)
                     results.append({
-                        "id": r.id,
-                        "date": r.created_at.strftime("%d/%m/%Y %H:%M"),
+                        "id": r.id, "date": r.created_at.strftime("%d/%m/%Y %H:%M"),
                         "client": decrypt_dict(r.encrypted_identity),
-                        "lens": lens_data,
-                        "finance": r.financials,
-                        "correction": correction
+                        "lens": lens_data, "finance": r.financials, "correction": correction
                     })
                 except: continue
             return results
@@ -308,8 +317,8 @@ def delete_offer(offer_id: int):
     if not engine: raise HTTPException(500, "Pas de BDD")
     try:
         with engine.begin() as conn:
-            result = conn.execute(text("DELETE FROM client_offers WHERE id = :id"), {"id": offer_id})
-            if result.rowcount == 0: raise HTTPException(404, "Introuvable")
+            if conn.execute(text("DELETE FROM client_offers WHERE id = :id"), {"id": offer_id}).rowcount == 0:
+                raise HTTPException(404, "Introuvable")
         return {"status": "success"}
     except Exception as e: raise HTTPException(500, str(e))
 
@@ -319,8 +328,12 @@ def get_lenses(type: str = Query(None), brand: str = Query(None), limit: int = Q
     if not engine: return []
     try:
         with engine.connect() as conn:
-            cols = "id, brand, name, commercial_code, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair"
-            sql = f"SELECT {cols} FROM lenses WHERE 1=1"
+            cols = "id, brand, name, commercial_code, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, purchase_price_bonifie, purchase_price_super_bonifie, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair"
+            # Note: Ajout des colonnes bonifiées dans le SELECT si elles existent, sinon NULL via try/except SQL si besoin, 
+            # mais ici on suppose qu'elles ont été créées ou que la table supporte le schéma. 
+            # Pour la sécurité, on utilise * ou on gère les colonnes manquantes.
+            # Simplification: SELECT * pour compatibilité max.
+            sql = f"SELECT * FROM lenses WHERE 1=1"
             params = {}
             if brand: sql += " AND brand ILIKE :brand"; params["brand"] = brand
             if type: 
@@ -338,47 +351,37 @@ def get_lenses(type: str = Query(None), brand: str = Query(None), limit: int = Q
             return [row._mapping for row in rows]
     except: return []
 
-# --- UPLOAD CATALOGUE COMPLET (Turbo Mode) ---
 @app.post("/upload-catalog")
 def upload_catalog(file: UploadFile = File(...)):
-    print("🚀 Début requête upload (Threaded)...", flush=True)
+    print("🚀 Upload Catalogue...", flush=True)
     if not engine: raise HTTPException(500, "Serveur BDD déconnecté")
-    
     temp_file = f"/tmp/upload_{int(datetime.now().timestamp())}.xlsx"
-    print(f"📥 Réception fichier : {file.filename}", flush=True)
-    
     try:
-        with open(temp_file, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        print("📖 Lecture Excel...", flush=True)
+        with open(temp_file, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
         wb = openpyxl.load_workbook(temp_file, data_only=True, read_only=True)
         
+        # MIGRATION TABLE LENSES : S'assurer que les colonnes bonifiées existent
         with engine.begin() as conn:
             print("♻️  Vidage table...", flush=True)
+            # Ajout colonnes si manquantes
+            conn.execute(text("ALTER TABLE lenses ADD COLUMN IF NOT EXISTS purchase_price_bonifie DECIMAL(10,2) DEFAULT 0;"))
+            conn.execute(text("ALTER TABLE lenses ADD COLUMN IF NOT EXISTS purchase_price_super_bonifie DECIMAL(10,2) DEFAULT 0;"))
             conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY CASCADE;"))
         
         total_inserted = 0
-        
         with engine.connect() as conn:
             for sheet_name in wb.sheetnames:
-                sheet = wb[sheet_name]
-                sheet_brand = sheet_name.strip().upper()
-                print(f"   🔹 Traitement {sheet_brand}...", flush=True)
-
+                sheet, sheet_brand = wb[sheet_name], sheet_name.strip().upper()
+                print(f"   🔹 {sheet_brand}...", flush=True)
                 row_iterator = sheet.iter_rows(values_only=True)
-                header_idx = -1
-                headers = []
-                
+                header_idx, headers = -1, []
                 current_row_idx = 0
                 for row in row_iterator:
                     current_row_idx += 1
                     if current_row_idx > 30: break
                     row_str = [str(c).upper() for c in row if c]
-                    if any(k in s for s in row_str for k in ["MODELE", "MODÈLE", "LIBELLE", "NAME", "PRIX", "PURCHASE_PRICE"]):
-                        headers = row
-                        header_idx = current_row_idx
-                        break
+                    if any(k in s for s in row_str for k in ["MODELE", "LIBELLE", "NAME"]):
+                        headers, header_idx = row, current_row_idx; break
                 
                 if not headers: continue
 
@@ -386,38 +389,38 @@ def upload_catalog(file: UploadFile = File(...)):
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
                 c_edi = get_col_idx(headers, ['CODE EDI', 'EDI'])
                 c_code = get_col_idx(headers, ['CODE COMMERCIAL', 'COMMERCIAL_CODE'])
-                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE', 'GEOMETRY'])
+                c_geo = get_col_idx(headers, ['GÉOMETRIE', 'GEOMETRIE', 'TYPE'])
                 c_design = get_col_idx(headers, ['DESIGN', 'GAMME'])
-                c_idx = get_col_idx(headers, ['INDICE', 'INDEX', 'INDEX_MAT'])
+                c_idx = get_col_idx(headers, ['INDICE', 'INDEX'])
                 c_mat = get_col_idx(headers, ['MATIERE', 'MATIÈRE', 'MATERIAL'])
                 c_coat = get_col_idx(headers, ['TRAITEMENT', 'COATING'])
                 c_flow = get_col_idx(headers, ['FLUX', 'COMMERCIAL_FLOW'])
                 c_color = get_col_idx(headers, ['COULEUR', 'COLOR'])
                 c_buy = get_col_idx(headers, ['PRIX 2*NETS', 'PRIX', 'ACHAT', 'PURCHASE_PRICE'])
+                # NOUVEAUX PRIX ALTERNANCE
+                c_buy_bonif = get_col_idx(headers, ['PRIX BONIFIE', 'ACHAT BONIFIE', 'BONIFIE'])
+                c_buy_super = get_col_idx(headers, ['PRIX SUPER BONIFIE', 'SUPER BONIFIE', 'SUPER'])
                 
-                c_kal = get_col_idx(headers, ['KALIXIA', 'SELL_KALIXIA'])
-                c_ite = get_col_idx(headers, ['ITELIS', 'SELL_ITELIS'])
-                c_cb = get_col_idx(headers, ['CARTE BLANCHE', 'SELL_CARTEBLANCHE'])
-                c_sev = get_col_idx(headers, ['SEVEANE', 'SELL_SEVEANE'])
-                c_sant = get_col_idx(headers, ['SANTECLAIRE', 'SANTECLAIR', 'SELL_SANTECLAIR'])
+                c_kal = get_col_idx(headers, ['KALIXIA'])
+                c_ite = get_col_idx(headers, ['ITELIS'])
+                c_cb = get_col_idx(headers, ['CARTE BLANCHE'])
+                c_sev = get_col_idx(headers, ['SEVEANE'])
+                c_sant = get_col_idx(headers, ['SANTECLAIR'])
 
                 if c_nom == -1: continue
-
-                batch = []
-                BATCH_SIZE = 2000 
+                batch, BATCH_SIZE = [], 2000 
 
                 for row in row_iterator:
                     if not row[c_nom]: continue
-                    
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
+                    buy_bonif = clean_price(row[c_buy_bonif]) if c_buy_bonif != -1 else 0
+                    buy_super = clean_price(row[c_buy_super]) if c_buy_super != -1 else 0
                     
                     brand = clean_text(row[c_marque]) if c_marque != -1 else sheet_brand
                     if not brand or brand == "None": brand = sheet_brand
-                    
                     name = clean_text(row[c_nom])
                     mat = clean_text(row[c_mat]) if c_mat != -1 else ""
                     if any(x in mat.upper() for x in ['TRANS', 'GEN', 'SOLA', 'SUN']): name += f" {mat}"
-                    
                     geo_raw = clean_text(row[c_geo]).upper() if c_geo != -1 else ""
                     design_val = clean_text(row[c_design]) if c_design != -1 else "STANDARD"
                     code = clean_text(row[c_code]) if c_code != -1 else ""
@@ -432,10 +435,7 @@ def upload_catalog(file: UploadFile = File(...)):
                     if 'PROXEO' in full_search: ltype = 'DEGRESSIF'
                     if 'MYPROXI' in full_search: ltype = 'PROGRESSIF_INTERIEUR'
 
-                    if buy <= 0:
-                         buy = clean_price(row[c_kal]) if c_kal != -1 else 0
-                    
-                    if buy <= 0: buy = 0.01
+                    if buy <= 0: buy = clean_price(row[c_kal]) if c_kal != -1 else 0.01
 
                     batch.append({
                         "brand": brand[:100], "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
@@ -444,37 +444,30 @@ def upload_catalog(file: UploadFile = File(...)):
                         "mat": mat, "coat": clean_text(row[c_coat]) if c_coat != -1 else "DURCI",
                         "flow": clean_text(row[c_flow]) if c_flow != -1 else "FAB",
                         "color": clean_text(row[c_color]) if c_color != -1 else "",
-                        "buy": buy,
+                        "buy": buy, "buy_bonif": buy_bonif, "buy_super": buy_super,
                         "selling": clean_price(row[c_kal]) if c_kal != -1 else 0,
-                        "kal": clean_price(row[c_kal]) if c_kal != -1 else 0,
-                        "ite": clean_price(row[c_ite]) if c_ite != -1 else 0,
-                        "cb": clean_price(row[c_cb]) if c_cb != -1 else 0,
-                        "sev": clean_price(row[c_sev]) if c_sev != -1 else 0,
+                        "kal": clean_price(row[c_kal]) if c_kal != -1 else 0, "ite": clean_price(row[c_ite]) if c_ite != -1 else 0,
+                        "cb": clean_price(row[c_cb]) if c_cb != -1 else 0, "sev": clean_price(row[c_sev]) if c_sev != -1 else 0,
                         "sant": clean_price(row[c_sant]) if c_sant != -1 else 0,
                     })
 
                     if len(batch) >= BATCH_SIZE:
                         with conn.begin():
                             conn.execute(text("""
-                                INSERT INTO lenses (brand, edi_code, commercial_code, name, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair)
-                                VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
+                                INSERT INTO lenses (brand, edi_code, commercial_code, name, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, purchase_price_bonifie, purchase_price_super_bonifie, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair)
+                                VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :buy_bonif, :buy_super, :selling, :kal, :ite, :cb, :sev, :sant)
                             """), batch)
-                        total_inserted += len(batch)
-                        batch = []
-                        gc.collect()
-                        time.sleep(0.01)
+                        total_inserted += len(batch); batch = []; gc.collect(); time.sleep(0.01)
                 
                 if batch:
                     with conn.begin():
                         conn.execute(text("""
-                            INSERT INTO lenses (brand, edi_code, commercial_code, name, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair)
-                            VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :selling, :kal, :ite, :cb, :sev, :sant)
+                            INSERT INTO lenses (brand, edi_code, commercial_code, name, geometry, design, index_mat, material, coating, commercial_flow, color, purchase_price, purchase_price_bonifie, purchase_price_super_bonifie, selling_price, sell_kalixia, sell_itelis, sell_carteblanche, sell_seveane, sell_santeclair)
+                            VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :buy_bonif, :buy_super, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
-                    total_inserted += len(batch)
-                    gc.collect()
+                    total_inserted += len(batch); gc.collect()
 
         return {"status": "success", "count": total_inserted}
-
     except Exception as e:
         print(f"❌ ERREUR: {traceback.format_exc()}", flush=True)
         raise HTTPException(500, f"Erreur: {str(e)}")
