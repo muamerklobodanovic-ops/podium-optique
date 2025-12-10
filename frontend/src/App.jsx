@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.25"; // Indices Dynamiques (index_mat)
+const APP_VERSION = "5.24"; // Ajout Marque ALTERNANCE
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS = {
     themeColor: "blue", 
     bgColor: "bg-slate-50",
     customColor: "#2563eb",
-    brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "" },
+    brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "", ALTERNANCE: "" },
     disabledBrands: [],
     pricingMode: 'linear', 
     perLensConfig: {
@@ -42,13 +42,20 @@ const CALISIZE_NETWORK_PRICES = {
 const DEMO_LENSES = [
   { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", material: "ORMA 1.5", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
   { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", material: "ORG 1.5", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
-  { id: 109, name: "MONO 1.6 STOCK", brand: "CODIR", commercial_code: "M16-ST", type: "UNIFOCAL", index_mat: "1.60", material: "ORG 1.6", design: "ECO", coating: "HMC", purchase_price: 12, sellingPrice: 65, margin: 53, commercial_flow: "STOCK" },
 ];
 
-const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
+const BRANDS = [ 
+    { id: '', label: 'TOUTES' }, 
+    { id: 'HOYA', label: 'HOYA' }, 
+    { id: 'ZEISS', label: 'ZEISS' }, 
+    { id: 'SEIKO', label: 'SEIKO' }, 
+    { id: 'CODIR', label: 'CODIR' }, 
+    { id: 'ORUS', label: 'ORUS' },
+    { id: 'ALTERNANCE', label: 'ALTERNANCE' } // AJOUT ICI
+];
 const NETWORKS = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
 const LENS_TYPES = [ { id: '', label: 'TOUS' }, { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF_INTERIEUR", label: "PROG. INTÉRIEUR" } ];
-// SUPPRESSION DE LA LISTE STATIQUE INDICES
+// Ancienne constante INDICES supprimée car remplacée dynamiquement
 const COATINGS = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
 
 const hexToRgb = (hex) => { if (!hex || typeof hex !== 'string') return "0 0 0"; const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0"; };
