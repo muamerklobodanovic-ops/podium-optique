@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.20"; // Ajout Filtre Type de Verre (Blanc/Photo/Teinté)
+const APP_VERSION = "5.21"; // Filtre dynamique sur colonne 'material'
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -40,14 +40,14 @@ const CALISIZE_NETWORK_PRICES = {
 };
 
 const DEMO_LENSES = [
-  { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
-  { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
+  { id: 101, name: "VARILUX COMFORT MAX", brand: "ESSILOR", commercial_code: "VCM-15", type: "PROGRESSIF", index_mat: "1.50", material: "ORMA 1.5", design: "PREMIUM", coating: "CRIZAL SAPPHIRE", purchase_price: 95, sellingPrice: 285, margin: 190, commercial_flow: "FAB" },
+  { id: 108, name: "MONO 1.5 STOCK", brand: "CODIR", commercial_code: "M15-ST", type: "UNIFOCAL", index_mat: "1.50", material: "ORG 1.5", design: "ECO", coating: "HMC", purchase_price: 8, sellingPrice: 45, margin: 37, commercial_flow: "STOCK" },
 ];
 
 const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
 const NETWORKS = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
 const LENS_TYPES = [ { id: '', label: 'TOUS' }, { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF_INTERIEUR", label: "PROG. INTÉRIEUR" } ];
-const INDICES = ['1.50', '1.58', '1.60', '1.67', '1.74'];
+// Ancienne constante INDICES supprimée car remplacée dynamiquement
 const COATINGS = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
 
 const hexToRgb = (hex) => { if (!hex || typeof hex !== 'string') return "0 0 0"; const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0"; };
@@ -104,7 +104,9 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
         <div className="pt-8 border-b border-slate-50 pb-6 mb-6">
           <p className="text-[10px] font-mono text-slate-400 mb-2 tracking-widest uppercase">{lens.commercial_code || "REF-UNK"}</p>
           <h3 className="font-bold text-2xl text-slate-800 mb-2 leading-tight">{lens.name || "Nom Indisponible"}</h3>
-          <div className="flex flex-wrap gap-2 mt-3"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">{lens.brand || "?"}</span><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">{lens.design || "STANDARD"}</span><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">INDICE {lens.index_mat || "?"}</span></div>
+          <div className="flex flex-wrap gap-2 mt-3"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">{lens.brand || "?"}</span><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">{lens.design || "STANDARD"}</span>
+          {/* AFFICHE LA MATIÈRE AU LIEU DE L'INDICE SEUL SI DISPO */}
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">{lens.material || `INDICE ${lens.index_mat}`}</span></div>
         </div>
         <div className="flex-1">
           {showMargins ? (<><div className="grid grid-cols-2 gap-4 mb-4"><div className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"><span className="block text-[10px] text-slate-400 font-bold mb-1">ACHAT HT</span><span className="block text-slate-400 line-through font-bold text-lg">{pPrice.toFixed(2)} €</span></div><div className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"><span className="block text-[10px] text-slate-400 font-bold mb-1">VENTE TTC</span><span className="block text-slate-800 font-bold text-2xl">{sPrice.toFixed(2)} €</span></div></div><div className="pt-2"><div className="flex justify-between items-end mb-2"><span className="text-xs font-bold text-green-700 tracking-wide">MARGE NETTE</span><span className="text-xs font-bold text-green-700 bg-green-100 px-3 py-1 rounded-lg">{displayMargin}%</span></div><div className="bg-green-50 p-4 rounded-2xl border border-green-100 flex items-center justify-between"><div className="text-4xl font-bold text-green-700 tracking-tight">+{mVal.toFixed(2)} €</div><Trophy className="w-8 h-8 text-green-200" /></div></div></>) : (<div className="flex flex-col h-full justify-center"><div className="bg-green-50 p-6 rounded-2xl border border-green-100 text-center mb-4 flex-1 flex flex-col justify-center items-center"><span className="block text-xs font-bold text-green-600 mb-2 uppercase tracking-wider">PRIX CONSEILLÉ (UNITAIRE)</span><span className="text-5xl font-bold text-green-600 tracking-tighter">{sPrice.toFixed(2)} €</span></div><div className="flex justify-between items-center px-2"><span className="text-[10px] font-mono text-slate-300 tracking-widest">REF-{lens.commercial_code || "---"}</span>{lens.commercial_flow && <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${cleanText(lens.commercial_flow).includes('STOCK') ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>{lens.commercial_flow}</span>}</div></div>)}
@@ -503,6 +505,7 @@ function App() {
 
   // --- ETATS ---
   const [lenses, setLenses] = useState([]); const [filteredLenses, setFilteredLenses] = useState([]); const [availableDesigns, setAvailableDesigns] = useState([]); const [availableCoatings, setAvailableCoatings] = useState([]);
+  const [availableMaterials, setAvailableMaterials] = useState([]); // AJOUT State Matières
   const [loading, setLoading] = useState(false); const [error, setError] = useState(null); const [isOnline, setIsOnline] = useState(true); 
   const [showSettings, setShowSettings] = useState(false); const [showMargins, setShowMargins] = useState(false); const [selectedLens, setSelectedLens] = useState(null); const [isSidebarOpen, setIsSidebarOpen] = useState(true); const [comparisonLens, setComparisonLens] = useState(null); const [showHistory, setShowHistory] = useState(false); const [savedOffers, setSavedOffers] = useState([]); 
   const [syncLoading, setSyncLoading] = useState(false); const [syncStatus, setSyncStatus] = useState(null); const [sheetsUrl, setSheetsUrl] = useState(localStorage.getItem("optique_sheets_url") || "");
@@ -540,8 +543,9 @@ function App() {
               }
               return parsed;
           }
-          return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, variant: 'BLANC', calisize: false }; 
-      } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, variant: 'BLANC', calisize: false }; }
+          // MODIFICATION: Ajout 'material' dans l'état initial
+          return { network: 'HORS_RESEAU', brand: '', type: '', design: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, variant: 'BLANC', calisize: false }; 
+      } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, variant: 'BLANC', calisize: false }; }
   });
   
   const [serverUrl, setServerUrl] = useState(PROD_API_URL);
@@ -668,11 +672,17 @@ function App() {
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
-       if (formData.materialIndex && formData.materialIndex !== '') {
-           workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
+       // --- 1. CALCUL DES MATIÈRES DISPONIBLES (Avant le filtre matière lui-même) ---
+       // On récupère toutes les matières possibles pour la marque et le type sélectionnés
+       const distinctMaterials = [...new Set(workingList.map(l => l.material).filter(Boolean))].sort();
+       setAvailableMaterials(distinctMaterials);
+
+       // --- 2. FILTRAGE PAR MATIÈRE (Si une sélection existe) ---
+       if (formData.material && formData.material !== '') {
+           workingList = workingList.filter(l => cleanText(l.material) === cleanText(formData.material));
        }
 
-       // --- NOUVELLE LOGIQUE FILTRE TYPE (BLANC / PHOTO / TEINTÉ) ---
+       // --- 3. FILTRE VARIANT (BLANC / PHOTO / TEINTÉ) ---
        const isPhoto = (item) => { 
            const text = cleanText((item.name || "") + " " + (item.material || "") + " " + (item.coating || "") + " " + (item.design || "")); 
            return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR"); 
@@ -685,7 +695,7 @@ function App() {
        if (formData.variant === 'PHOTO') { 
            workingList = workingList.filter(l => isPhoto(l)); 
        } else if (formData.variant === 'TEINTE') {
-           workingList = workingList.filter(l => isSun(l) && !isPhoto(l)); // Exclure photochromiques des solaires purs si besoin, ou inclure selon préférence
+           workingList = workingList.filter(l => isSun(l) && !isPhoto(l)); // Exclure photochromiques des solaires purs si besoin
        } else { 
            // BLANC par défaut
            workingList = workingList.filter(l => !isPhoto(l) && !isSun(l)); 
@@ -720,7 +730,7 @@ function App() {
           sessionStorage.clear();
           setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
           setSecondPairPrice(0);
-          setFormData({ ...formData, variant: 'BLANC', calisize: false }); // Reset avec variant
+          setFormData({ ...formData, variant: 'BLANC', material: '', calisize: false }); // Reset complet
           setSelectedLens(null);
       }
   };
@@ -789,7 +799,7 @@ function App() {
         return { ...prev, pricing };
       });
   };
-  const handleTypeChange = (newType) => { setFormData(prev => ({ ...prev, type: newType, design: '', coating: '' })); };
+  const handleTypeChange = (newType) => { setFormData(prev => ({ ...prev, type: newType, design: '', coating: '', material: '' })); };
   const handleDesignChange = (newDesign) => { setFormData(prev => ({ ...prev, design: newDesign })); };
   const handleCoatingChange = (newCoating) => { setFormData(prev => ({ ...prev, coating: newCoating })); };
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
@@ -858,14 +868,11 @@ function App() {
                 <div className="lg:hidden flex justify-end mb-4"><button onClick={toggleSidebar}><X className="w-6 h-6"/></button></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
                 
-                {/* SECTION CORRECTION SUPPRIMÉE ICI */}
-                
                 {/* CALISIZE */}
                 <div className="mb-4"><button onClick={() => setFormData(prev => ({ ...prev, calisize: !prev.calisize }))} className={`w-full py-3 rounded-xl flex items-center justify-between px-4 border transition-all ${formData.calisize ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}><span className="text-xs font-bold flex items-center gap-2"><ScanLine className="w-4 h-4"/> OPTION PRÉCAL (CALISIZE)</span>{formData.calisize ? <CheckCircle className="w-4 h-4"/> : <div className="w-4 h-4 border-2 border-slate-300 rounded-full"></div>}</button></div>
 
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{LENS_TYPES.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
-                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{INDICES.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>))}</div></div>
                 
                 {/* NOUVEAU FILTRE TYPE DE VERRE */}
                 <div>
@@ -881,6 +888,24 @@ function App() {
                                 {v === 'PHOTO' ? 'PHOTOCH.' : (v === 'TEINTE' ? 'SOLAIRE' : v)}
                             </button>
                         ))}
+                    </div>
+                </div>
+
+                {/* FILTRE MATIÈRE (REMPLACE INDICE) */}
+                <div>
+                    <label className="text-[10px] font-bold opacity-50 mb-2 block">MATIÈRE / TEINTE</label>
+                    <div className="flex gap-1 flex-wrap">
+                        <button onClick={() => setFormData({...formData, material: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.material === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.material === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>
+                        {availableMaterials.length > 0 ? availableMaterials.map(m => (
+                            <button 
+                                key={m} 
+                                onClick={() => setFormData({...formData, material: m})} 
+                                className={`flex-1 min-w-[60px] py-2 rounded border text-[10px] font-bold ${formData.material === m ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} 
+                                style={formData.material === m ? {backgroundColor: userSettings.customColor} : {}}
+                            >
+                                {m}
+                            </button>
+                        )) : <div className="text-[10px] opacity-50 italic px-2">Aucune matière trouvée</div>}
                     </div>
                 </div>
 
