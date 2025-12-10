@@ -293,6 +293,7 @@ const Hypervisor = ({ onClose }) => {
                                     onChange={(e) => setSelectedUser(e.target.value)}
                                 >
                                     <option value="">-- Choisir parmi {filteredUsers.length} comptes --</option>
+                                    <option value="all">🌍 VUE GLOBALE (NATIONAL)</option>
                                     {filteredUsers.map(u => (
                                         <option key={u.username} value={u.username}>
                                             {u.shop_name} ({u.username})
@@ -1099,6 +1100,8 @@ function App() {
           </div>
       </div>
       
+      {/* ... (Reste de l'interface header, sidebar, main identiques à v5.25) ... */}
+      {/* Je réinclus le reste du rendu principal pour que le fichier soit complet et fonctionnel */}
       <header className={`${isDarkTheme ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-4 lg:px-6 py-4 shadow-sm z-40`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 w-full lg:w-auto overflow-x-auto">
