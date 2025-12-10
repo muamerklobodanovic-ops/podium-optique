@@ -285,7 +285,12 @@ def get_user_stats(username: str = Query(...)):
     try:
         with engine.connect() as conn:
             # On récupère tags ET détails financiers pour calculs avancés
-            res = conn.execute(text("SELECT tags, lens_details, financials FROM client_offers WHERE username = :u AND tags IS NOT NULL"), {"u": username})
+            # MODIFICATION: Gestion du paramètre 'all'
+            if username == "all":
+                res = conn.execute(text("SELECT tags, lens_details, financials FROM client_offers WHERE tags IS NOT NULL"))
+            else:
+                res = conn.execute(text("SELECT tags, lens_details, financials FROM client_offers WHERE username = :u AND tags IS NOT NULL"), {"u": username})
+            
             rows = res.fetchall()
             
             # Structure de base pour les stats catégorielles (Volume & Valeur)
