@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart, Medal
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
@@ -146,7 +146,10 @@ const Hypervisor = ({ onClose }) => {
         setLoading(true);
         axios.get(`${PROD_API_URL}/admin/stats`, { params: { username: selectedUser } })
             .then(res => setStats(res.data))
-            .catch(err => console.error(err))
+            .catch(err => {
+                console.error(err);
+                setStats(null); // Protection contre erreur API
+            })
             .finally(() => setLoading(false));
     }, [selectedUser]);
 
@@ -215,30 +218,49 @@ const Hypervisor = ({ onClose }) => {
                     <div className="mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Filtrer (Nom / Adhérent)</label><div className="relative"><Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/><input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all" placeholder="Ex: 12345 ou Optic 2000..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div></div>
-                            <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Sélectionner un compte</label><select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}><option value="">-- Choisir parmi {filteredUsers.length} comptes --</option>{filteredUsers.map(u => (<option key={u.username} value={u.username}>{u.shop_name} ({u.username})</option>))}</select></div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Sélectionner un compte</label>
+                                <select 
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all" 
+                                    value={selectedUser} 
+                                    onChange={(e) => setSelectedUser(e.target.value)}
+                                >
+                                    <option value="">-- Choisir parmi {filteredUsers.length} comptes --</option>
+                                    <option value="all" className="font-bold text-purple-600">🌍 VUE GLOBALE (TOUS)</option>
+                                    {filteredUsers.map(u => (<option key={u.username} value={u.username}>{u.shop_name} ({u.username})</option>))}
+                                </select>
+                            </div>
                         </div>
                     </div>
                     {loading && <div className="text-center py-10"><Activity className="w-8 h-8 animate-spin mx-auto text-purple-500"/></div>}
-                    {stats && !loading && (
+                    
+                    {/* Protection contre l'écran blanc : vérification de stats && stats.breakdown */}
+                    {stats && stats.breakdown && !loading && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <div className="flex flex-col md:flex-row gap-6 mb-8 items-stretch">
                                 <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-lg flex-1"><div className="text-sm font-bold opacity-80 mb-1">VENTES TOTALES</div><div className="text-4xl font-black mb-2">{stats.total_sales}</div><div className="text-xs opacity-60">Dossiers créés</div></div>
-                                <div className="bg-emerald-600 text-white p-6 rounded-2xl shadow-lg flex-1"><div className="text-sm font-bold opacity-80 mb-1">CHIFFRE D'AFFAIRES (EST.)</div><div className="text-4xl font-black mb-2">{stats.total_revenue.toLocaleString()} €</div><div className="text-xs opacity-60">Basé sur les prix de vente configurés</div></div>
+                                <div className="bg-emerald-600 text-white p-6 rounded-2xl shadow-lg flex-1"><div className="text-sm font-bold opacity-80 mb-1">CHIFFRE D'AFFAIRES (EST.)</div><div className="text-4xl font-black mb-2">{(stats.total_revenue || 0).toLocaleString()} €</div><div className="text-xs opacity-60">Basé sur les prix de vente configurés</div></div>
                                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-center min-w-[200px]"><span className="text-xs font-bold text-slate-400 uppercase mb-3">MODE D'AFFICHAGE</span><div className="flex bg-slate-100 p-1 rounded-xl w-full"><button onClick={() => setViewMode('volume')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'volume' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>VOLUME</button><button onClick={() => setViewMode('value')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'value' ? 'bg-white shadow text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>VALEUR (€)</button></div></div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-                                <StatWidget title="Réseaux de Soin" data={stats.breakdown.network} />
-                                <StatWidget title="Géométries" data={stats.breakdown.geometry} />
-                                <StatWidget title="Indices" data={stats.breakdown.index} />
-                                <StatWidget title="Matières" data={stats.breakdown.material} />
-                                <StatWidget title="Designs" data={stats.breakdown.design} />
-                                <StatWidget title="Traitements" data={stats.breakdown.coating} />
-                                <StatWidget title="Flux Commercial" data={stats.breakdown.commercial_flow} />
+                                <StatWidget title="Réseaux de Soin" data={stats.breakdown?.network} />
+                                <StatWidget title="Géométries" data={stats.breakdown?.geometry} />
+                                <StatWidget title="Indices" data={stats.breakdown?.index} />
+                                <StatWidget title="Matières" data={stats.breakdown?.material} />
+                                <StatWidget title="Designs" data={stats.breakdown?.design} />
+                                <StatWidget title="Traitements" data={stats.breakdown?.coating} />
+                                <StatWidget title="Flux Commercial" data={stats.breakdown?.commercial_flow} />
                             </div>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <Top3Widget title="TOP 3 - UNIFOCAUX" data={stats.tops?.UNIFOCAL} />
                                 <Top3Widget title="TOP 3 - PROGRESSIFS" data={stats.tops?.PROGRESSIF} />
                             </div>
+                        </div>
+                    )}
+                    
+                    {(!stats || !stats.breakdown) && !loading && selectedUser && (
+                        <div className="text-center py-10 text-slate-400 font-bold">
+                            Aucune donnée disponible pour cette sélection.
                         </div>
                     )}
                 </div>
