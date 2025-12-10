@@ -44,14 +44,14 @@ if DATABASE_URL:
         # pool_pre_ping=True est vital pour la stabilité sur le cloud
         engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         with engine.begin() as conn:
-            # Table Utilisateurs (Auth) - Mise à jour structure
+            # Table Utilisateurs (Auth)
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS users (
                     username VARCHAR(100) PRIMARY KEY,
                     shop_name TEXT,
                     password TEXT,
                     email TEXT,
-                    role VARCHAR(50) DEFAULT 'user',  -- Nouvelle colonne Role
+                    role VARCHAR(50) DEFAULT 'user',
                     is_first_login BOOLEAN DEFAULT TRUE
                 );
             """))
@@ -67,7 +67,7 @@ if DATABASE_URL:
                     """))
                     print("✅ Utilisateur 'admin' créé (Mdp: admin)")
             except Exception as e:
-                print(f"⚠️ Info: Impossible de vérifier/créer admin par défaut (Table peut-être en cours de modif): {e}")
+                print(f"⚠️ Info: Impossible de vérifier/créer admin par défaut : {e}")
 
             # Table Dossiers Clients
             conn.execute(text("""
@@ -79,7 +79,13 @@ if DATABASE_URL:
             # Table Catalogue Verres
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS lenses (
-                    id SERIAL PRIMARY KEY, brand TEXT, name TEXT, purchase_price DECIMAL(10,2)
+                    id SERIAL PRIMARY KEY, brand TEXT, name TEXT, commercial_code TEXT,
+                    geometry TEXT, design TEXT, index_mat TEXT, material TEXT, coating TEXT, 
+                    commercial_flow TEXT, color TEXT, 
+                    purchase_price DECIMAL(10,2), selling_price DECIMAL(10,2),
+                    sell_kalixia DECIMAL(10,2), sell_itelis DECIMAL(10,2), 
+                    sell_carteblanche DECIMAL(10,2), sell_seveane DECIMAL(10,2), 
+                    sell_santeclair DECIMAL(10,2)
                 );
             """))
     except Exception as e:
@@ -137,7 +143,6 @@ def login(creds: LoginRequest):
             user = result._mapping
             if user['password'] != creds.password: raise HTTPException(401, "Mot de passe incorrect")
             
-            # On gère le cas où la colonne role n'existerait pas encore (ancien user)
             role = user['role'] if 'role' in user else 'user'
             
             return {
@@ -164,7 +169,7 @@ def update_password(data: PasswordUpdate):
 
 @app.post("/upload-users")
 def upload_users(file: UploadFile = File(...)):
-    print("🚀 Début upload USERS (Smart Scan)...", flush=True)
+    print("🚀 Début upload USERS (Mode UPSERT)...", flush=True)
     if not engine: raise HTTPException(500, "Pas de BDD")
     
     temp = f"/tmp/users_{int(time.time())}.xlsx"
@@ -175,7 +180,6 @@ def upload_users(file: UploadFile = File(...)):
         wb = openpyxl.load_workbook(temp, data_only=True)
         sheet = wb.active
         
-        # Lecture de tous les rangs
         rows = list(sheet.iter_rows(values_only=True))
         if not rows: raise Exception("Fichier vide")
 
@@ -183,7 +187,6 @@ def upload_users(file: UploadFile = File(...)):
         header_idx = -1
         headers = []
         
-        # On cherche la ligne qui contient "IDENTIFIANT" ou "ID" ou "USERNAME"
         for i, row in enumerate(rows[:20]):
             row_str = [str(c).upper() for c in row if c]
             if any(k in s for s in row_str for k in ["IDENTIFIANT", "USERNAME", "LOGIN", "ID CLIENT"]):
@@ -193,7 +196,6 @@ def upload_users(file: UploadFile = File(...)):
                 break
         
         if header_idx == -1:
-             # Fallback ligne 1 si pas trouvé, pour voir l'erreur
              headers = rows[0]
              header_idx = 0
              print(f"   ⚠️ Pas d'en-tête évident, essai ligne 1: {headers}", flush=True)
@@ -205,22 +207,19 @@ def upload_users(file: UploadFile = File(...)):
         c_mail = get_col_idx(headers, ['MAIL', 'EMAIL', 'COURRIEL'])
         c_role = get_col_idx(headers, ['ROLE', 'TYPE', 'DROIT'])
         
-        # Vérification critique
         if c_id == -1:
             raise Exception(f"Colonne 'IDENTIFIANT' introuvable. En-têtes analysés : {headers}")
 
         users_to_insert = []
         
-        # Parcours des données APRES la ligne d'en-tête
         for row in rows[header_idx+1:]:
-            if not row[c_id]: continue # Pas d'identifiant
+            if not row[c_id]: continue 
             
             u_id = str(row[c_id]).strip()
             u_shop = str(row[c_shop]).strip() if c_shop != -1 and row[c_shop] else "Opticien"
             u_pass = str(row[c_pass]).strip() if c_pass != -1 and row[c_pass] else "1234"
             u_mail = str(row[c_mail]).strip() if c_mail != -1 and row[c_mail] else ""
             
-            # Gestion Rôle
             u_role = "user"
             if c_role != -1 and row[c_role]:
                 val_role = str(row[c_role]).lower().strip()
@@ -230,31 +229,27 @@ def upload_users(file: UploadFile = File(...)):
                 "u": u_id, "s": u_shop, "p": u_pass, "e": u_mail, "r": u_role
             })
             
-        print(f"✅ {len(users_to_insert)} utilisateurs prêts à insérer.", flush=True)
+        print(f"✅ {len(users_to_insert)} utilisateurs prêts pour traitement.", flush=True)
             
         if users_to_insert:
             with engine.begin() as conn:
-                print("♻️  Recréation table USERS...", flush=True)
-                # On force la suppression pour s'assurer que la colonne 'role' existe bien
-                conn.execute(text("DROP TABLE IF EXISTS users CASCADE;"))
-                conn.execute(text("""
-                    CREATE TABLE users (
-                        username VARCHAR(100) PRIMARY KEY,
-                        shop_name TEXT,
-                        password TEXT,
-                        email TEXT,
-                        role VARCHAR(50) DEFAULT 'user',
-                        is_first_login BOOLEAN DEFAULT TRUE
-                    );
-                """))
+                print("💾 Sauvegarde en base (UPSERT)...", flush=True)
+                # UPSERT POSTGRES : INSERT ... ON CONFLICT DO UPDATE
+                # On ne met à jour le mot de passe QUE lors de l'insertion initiale.
+                # Si l'user existe, on met à jour shop_name, email, role, mais on GARDE le password actuel et is_first_login.
                 
-                print("💾 Insertion...", flush=True)
-                conn.execute(text("""
+                query = text("""
                     INSERT INTO users (username, shop_name, password, email, role, is_first_login)
                     VALUES (:u, :s, :p, :e, :r, TRUE)
-                """), users_to_insert)
+                    ON CONFLICT (username) DO UPDATE SET
+                        shop_name = EXCLUDED.shop_name,
+                        email = EXCLUDED.email,
+                        role = EXCLUDED.role;
+                """)
                 
-        return {"status": "success", "count": len(users_to_insert)}
+                conn.execute(query, users_to_insert)
+                
+        return {"status": "success", "count": len(users_to_insert), "mode": "upsert_safe"}
 
     except Exception as e: 
         error_msg = traceback.format_exc()
@@ -265,7 +260,7 @@ def upload_users(file: UploadFile = File(...)):
 
 # --- ROUTES GLOBALES ---
 @app.get("/")
-def read_root(): return {"status": "online", "version": "4.07", "msg": "Smart User Import"}
+def read_root(): return {"status": "online", "version": "4.08", "msg": "UPSERT Logic Enabled"}
 @app.head("/")
 def read_root_head(): return read_root()
 
@@ -275,7 +270,7 @@ def save_offer(offer: OfferRequest):
     if not engine: raise HTTPException(500, "Pas de connexion BDD")
     try:
         with engine.begin() as conn:
-            # Extraction correction si présente dans 'correction_data' ou ailleurs
+            # Extraction correction si présente
             lens_data = offer.lens
             if hasattr(offer, 'correction') and offer.correction:
                  lens_data['correction_data'] = offer.correction
