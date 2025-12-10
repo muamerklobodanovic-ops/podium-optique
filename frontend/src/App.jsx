@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.18"; // AJOUT : Affichage Live Marges dans Configurateur
+const APP_VERSION = "5.19"; // Simplification : Retrait Correction
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -25,10 +25,10 @@ const DEFAULT_SETTINGS = {
         prices: {} 
     },
     pricing: {
-        uniStock: { x: 2.5, b: 20 },   
-        uniFab: { x: 3.0, b: 30 },     
-        prog: { x: 3.2, b: 50 },       
-        degressif: { x: 3.0, b: 40 },  
+        uniStock: { x: 2.5, b: 20 },    
+        uniFab: { x: 3.0, b: 30 },      
+        prog: { x: 3.2, b: 50 },        
+        degressif: { x: 3.0, b: 40 },   
         interieur: { x: 3.0, b: 40 },
         multifocal: { x: 3.0, b: 40 },
         calisize: { price: 10 }
@@ -118,12 +118,11 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   );
 };
 
-// --- CORRECTIF : CONFIGURATEUR TARIFAIRE ROBUSTE ---
+// --- CONFIGURATEUR TARIFAIRE ---
 const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
-    const [filterPhoto, setFilterPhoto] = useState('all'); // 'all', 'white', 'photo'
-    const [filterBrand, setFilterBrand] = useState(''); // Filtre Marque (Vide = Tous)
+    const [filterPhoto, setFilterPhoto] = useState('all'); 
+    const [filterBrand, setFilterBrand] = useState('');
 
-    // 1. Sécurisation et Détection Photochromique & Marque & Extraction Dynamique
     const availableAttributes = useMemo(() => {
         const filteredLenses = filterBrand 
             ? lenses.filter(l => cleanText(l.brand) === cleanText(filterBrand))
@@ -163,7 +162,6 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
         return BRANDS.filter(b => b.id === '' || brands.has(cleanText(b.id)));
     }, [lenses]);
 
-    // 2. Sécurisation : Valeurs par défaut
     const [localConfig, setLocalConfig] = useState(() => {
         const safeConfig = JSON.parse(JSON.stringify(config || {}));
         if (!safeConfig.disabledAttributes) safeConfig.disabledAttributes = { designs: [], indices: [], coatings: [] };
@@ -209,36 +207,27 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose }) => {
     const [filterText, setFilterText] = useState("");
 
     const filteredRows = uniqueCombinations.filter(row => {
-        // Filtres globaux (Sidebar)
         if ((localConfig.disabledAttributes.designs || []).includes(row.design)) return false;
         if ((localConfig.disabledAttributes.indices || []).includes(row.index_mat)) return false;
         if ((localConfig.disabledAttributes.coatings || []).includes(row.coating)) return false;
         
-        // Filtre Marque (Nouveau)
         if (filterBrand && filterBrand !== '' && row.brand !== cleanText(filterBrand)) return false;
 
-        // Filtre Photochromique
         if (filterPhoto === 'white' && row.isPhoto) return false;
         if (filterPhoto === 'photo' && !row.isPhoto) return false;
 
-        // Filtre Recherche
         return (row.type + row.design + row.coating).toLowerCase().includes(filterText.toLowerCase());
     });
 
-    // --- LOGIQUE DE REMISE À ZÉRO SÉCURISÉE ---
     const handleResetFiltered = () => {
         if (filteredRows.length === 0) return alert("Aucun verre affiché à réinitialiser.");
-        
-        // Validation 1 : Alerte simple
         if (window.confirm(`⚠️ ATTENTION : Vous allez remettre à 0€ les ${filteredRows.length} lignes actuellement affichées.\n\nCette action affecte uniquement la sélection visible (Filtres + Recherche).\n\nVoulez-vous continuer ?`)) {
-            // Validation 2 : Confirmation explicite
             if (window.confirm("🔴 DOUBLE CONFIRMATION REQUISE\n\nÊtes-vous ABSOLUMENT sûr de vouloir supprimer ces tarifs ?\nCette action est irréversible.")) {
                 const newPrices = { ...localConfig.prices };
                 filteredRows.forEach(row => {
                     newPrices[row.key] = 0;
                 });
                 setLocalConfig(prev => ({ ...prev, prices: newPrices }));
-                // Pas d'alerte de succès pour fluidité, ou optionnel
             }
         }
     };
@@ -540,7 +529,8 @@ function App() {
 
   const currentSettings = { ...userSettings, shopName: user?.shop_name || userSettings.shopName };
   const [formData, setFormData] = useState(() => {
-      try { const saved = sessionStorage.getItem("optique_form_data"); return saved ? JSON.parse(saved) : { network: 'HORS_RESEAU', brand: '', type: '', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false }; } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', sphere: 0.00, cylinder: 0.00, addition: 0.00, materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false }; }
+      // Suppression de sphere, cylinder, addition de l'état initial
+      try { const saved = sessionStorage.getItem("optique_form_data"); return saved ? JSON.parse(saved) : { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false }; } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, photochromic: false, calisize: false }; }
   });
   
   const [serverUrl, setServerUrl] = useState(PROD_API_URL);
@@ -637,20 +627,20 @@ function App() {
               // MODE CLASSIQUE LINEAIRE (Ax + B)
               const pRules = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
               workingList = workingList.map(lens => {
-                 let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
-                 const lensType = cleanText(lens.type || lens.geometry);
-                 
-                 if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
-                 else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
-                 else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
-                 else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
-                 const pPrice = parseFloat(lens.purchase_price || 0);
-                 
-                 let newSelling = (pPrice * rule.x) + rule.b;
-                 newSelling += calisizeAddon; 
+                  let rule = pRules.prog || DEFAULT_PRICING_CONFIG; 
+                  const lensType = cleanText(lens.type || lens.geometry);
+                  
+                  if (lensType.includes('UNIFOCAL')) { const isStock = cleanText(lens.commercial_flow).includes('STOCK') || cleanText(lens.name).includes(' ST') || cleanText(lens.name).includes('_ST'); rule = isStock ? (pRules.uniStock || DEFAULT_PRICING_CONFIG) : (pRules.uniFab || DEFAULT_PRICING_CONFIG); } 
+                  else if (lensType.includes('DEGRESSIF')) { rule = pRules.degressif || DEFAULT_PRICING_CONFIG; } 
+                  else if (lensType.includes('INTERIEUR')) { rule = pRules.interieur || DEFAULT_PRICING_CONFIG; }
+                  else if (lensType.includes('MULTIFOCAL')) { rule = pRules.multifocal || DEFAULT_PRICING_CONFIG; }
+                  const pPrice = parseFloat(lens.purchase_price || 0);
+                  
+                  let newSelling = (pPrice * rule.x) + rule.b;
+                  newSelling += calisizeAddon; 
     
-                 const newMargin = newSelling - pPrice;
-                 return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
+                  const newMargin = newSelling - pPrice;
+                  return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
               });
           }
           workingList.sort((a, b) => b.margin - a.margin);
@@ -702,7 +692,7 @@ function App() {
           sessionStorage.clear();
           setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
           setSecondPairPrice(0);
-          setFormData({ ...formData, sphere: 0, cylinder: 0, addition: 0, calisize: false });
+          setFormData({ ...formData, calisize: false }); // Reset simplifié
           setSelectedLens(null);
       }
   };
@@ -716,14 +706,16 @@ function App() {
   };
 
   const fetchHistory = () => { axios.get(SAVE_URL).then(res => setSavedOffers(res.data)).catch(err => console.error("Erreur historique", err)); };
+  
   const saveOffer = () => {
       if (!selectedLens || !client.name) return alert("Nom client obligatoire !");
       const totalPair = selectedLens.sellingPrice * 2;
       const remainder = (totalPair + secondPairPrice) - client.reimbursement;
-      const lensWithCorrection = { ...selectedLens, correction_data: { sphere: formData.sphere, cylinder: formData.cylinder, addition: formData.addition, index: formData.materialIndex } };
-      const payload = { client: client, lens: lensWithCorrection, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
+      // Retrait de l'objet correction_data
+      const payload = { client: client, lens: selectedLens, finance: { reimbursement: client.reimbursement, total: totalPair + secondPairPrice, remainder: remainder } };
       axios.post(SAVE_URL, payload, { headers: { 'Content-Type': 'application/json' } }).then(res => alert("Dossier sauvegardé !")).catch(err => alert("Erreur"));
   };
+  
   const deleteOffer = (id) => {
       if (window.confirm("⚠️ ATTENTION: Cette action est irréversible. Supprimer ce dossier ?")) {
           axios.delete(`${SAVE_URL}/${id}`).then(() => { alert("Dossier supprimé."); fetchHistory(); }).catch(err => { const msg = err.response ? `Erreur ${err.response.status}` : err.message; alert(`Erreur lors de la suppression : ${msg}`); });
@@ -786,7 +778,6 @@ function App() {
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
-  const isAdditionDisabled = formData.type === 'UNIFOCAL' || formData.type === 'DEGRESSIF';
   const safePricing = { ...DEFAULT_SETTINGS.pricing, ...(userSettings.pricing || {}) };
   const lensPrice = selectedLens ? parseFloat(selectedLens.sellingPrice) : 0;
   const totalPair = lensPrice * 2;
@@ -839,15 +830,7 @@ function App() {
                 <div className="lg:hidden flex justify-end mb-4"><button onClick={toggleSidebar}><X className="w-6 h-6"/></button></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
                 
-                {/* CORRECTION */}
-                <div>
-                    <label className="text-[10px] font-bold opacity-50 mb-2 block">CORRECTION</label>
-                    <div className="grid grid-cols-1 gap-2 mb-2">
-                        <div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">SPH</span><div className="relative flex-1"><input type="number" step="0.25" name="sphere" value={formData.sphere} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
-                        <div className="flex items-center gap-2"><span className="text-[10px] font-bold w-6 opacity-50 text-right">CYL</span><div className="relative flex-1"><input type="number" step="0.25" name="cylinder" value={formData.cylinder} onChange={handleChange} onFocus={(e) => e.target.select()} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
-                    </div>
-                    <div className={`flex items-center gap-2 transition-opacity ${isAdditionDisabled ? 'opacity-50' : ''}`}><span className="text-[10px] font-bold w-6 opacity-50 text-right">ADD</span><div className="relative flex-1"><input type="number" step="0.25" name="addition" value={formData.addition} onChange={handleChange} onFocus={(e) => e.target.select()} disabled={isAdditionDisabled} className={`w-full p-2 pl-3 border rounded-lg font-bold text-sm bg-transparent outline-none ${isDarkTheme ? 'border-slate-600 text-white' : 'border-slate-200 text-slate-800'}`} placeholder="0.00"/><span className="absolute right-2 top-2 text-[10px] opacity-50">D</span></div></div>
-                </div>
+                {/* SECTION CORRECTION SUPPRIMÉE ICI */}
                 
                 {/* CALISIZE */}
                 <div className="mb-4"><button onClick={() => setFormData(prev => ({ ...prev, calisize: !prev.calisize }))} className={`w-full py-3 rounded-xl flex items-center justify-between px-4 border transition-all ${formData.calisize ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}><span className="text-xs font-bold flex items-center gap-2"><ScanLine className="w-4 h-4"/> OPTION PRÉCAL (CALISIZE)</span>{formData.calisize ? <CheckCircle className="w-4 h-4"/> : <div className="w-4 h-4 border-2 border-slate-300 rounded-full"></div>}</button></div>
@@ -971,7 +954,7 @@ function App() {
         </div>
       )}
 
-      {/* MODALE HISTORIQUE (AFFICHE LA CORRECTION) */}
+      {/* MODALE HISTORIQUE (SANS CORRECTION) */}
       {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
       <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (
         <div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors">
@@ -980,14 +963,6 @@ function App() {
             <div>
                 <div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div>
                 <div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>
-                {/* AFFICHAGE CORRECTION */}
-                {(offer.correction || (offer.lens && offer.lens.correction_data)) && (
-                    <div className="text-xs bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-flex gap-3 border border-yellow-200 font-mono">
-                        <span>SPH: {(offer.correction || offer.lens.correction_data).sphere || "0"}</span>
-                        <span>CYL: {(offer.correction || offer.lens.correction_data).cylinder || "0"}</span>
-                        <span>ADD: {(offer.correction || offer.lens.correction_data).addition || "0"}</span>
-                    </div>
-                )}
             </div>
           </div>
           <div className="text-right">
