@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.23"; // Suppression Filtre Photo (Géré par Material)
+const APP_VERSION = "5.24"; // Restauration Indices & Logos
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -47,7 +47,7 @@ const DEMO_LENSES = [
 const BRANDS = [ { id: '', label: 'TOUTES' }, { id: 'HOYA', label: 'HOYA' }, { id: 'ZEISS', label: 'ZEISS' }, { id: 'SEIKO', label: 'SEIKO' }, { id: 'CODIR', label: 'CODIR' }, { id: 'ORUS', label: 'ORUS' } ];
 const NETWORKS = ['HORS_RESEAU', 'KALIXIA', 'SANTECLAIR', 'CARTEBLANCHE', 'ITELIS', 'SEVEANE'];
 const LENS_TYPES = [ { id: '', label: 'TOUS' }, { id: 'UNIFOCAL', label: 'UNIFOCAL' }, { id: 'PROGRESSIF', label: 'PROGRESSIF' }, { id: 'DEGRESSIF', label: 'DÉGRESSIF' }, { id: 'MULTIFOCAL', label: 'MULTIFOCAL' }, { id: "PROGRESSIF_INTERIEUR", label: "PROG. INTÉRIEUR" } ];
-// Ancienne constante INDICES supprimée car remplacée dynamiquement
+const INDICES = ['1.50', '1.58', '1.60', '1.67', '1.74'];
 const COATINGS = [ { id: 'MISTRAL', label: 'MISTRAL' }, { id: 'E_PROTECT', label: 'E-PROTECT' }, { id: 'QUATTRO_UV', label: 'QUATTRO UV' }, { id: 'B_PROTECT', label: 'B-PROTECT' }, { id: 'QUATTRO_UV_CLEAN', label: 'QUATTRO UV CLEAN' }, { id: 'B_PROTECT_CLEAN', label: 'B-PROTECT CLEAN' } ];
 
 const hexToRgb = (hex) => { if (!hex || typeof hex !== 'string') return "0 0 0"; const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); return result ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` : "0 0 0"; };
@@ -105,7 +105,6 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
           <p className="text-[10px] font-mono text-slate-400 mb-2 tracking-widest uppercase">{lens.commercial_code || "REF-UNK"}</p>
           <h3 className="font-bold text-2xl text-slate-800 mb-2 leading-tight">{lens.name || "Nom Indisponible"}</h3>
           <div className="flex flex-wrap gap-2 mt-3"><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">{lens.brand || "?"}</span><span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">{lens.design || "STANDARD"}</span>
-          {/* AFFICHE LA MATIÈRE AU LIEU DE L'INDICE SEUL SI DISPO */}
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">{lens.material || `INDICE ${lens.index_mat}`}</span></div>
         </div>
         <div className="flex-1">
@@ -540,11 +539,13 @@ function App() {
               // Clean ancien filtre
               delete parsed.photochromic; 
               delete parsed.variant;
+              // Ensure materialIndex exists
+              if(!parsed.materialIndex) parsed.materialIndex = '';
               return parsed;
           }
-          // MODIFICATION: Suppression photochromic et variant
-          return { network: 'HORS_RESEAU', brand: '', type: '', design: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; 
-      } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; }
+          // MODIFICATION: Retour à la version simple avec materialIndex
+          return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; 
+      } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; }
   });
   
   const [serverUrl, setServerUrl] = useState(PROD_API_URL);
@@ -671,19 +672,10 @@ function App() {
            workingList.sort((a, b) => b.margin - a.margin);
        }
 
-       // --- 1. CALCUL DES MATIÈRES DISPONIBLES (Avant le filtre matière lui-même) ---
-       // On récupère toutes les matières possibles pour la marque et le type sélectionnés
-       const distinctMaterials = [...new Set(workingList.map(l => l.material).filter(Boolean))].sort();
-       setAvailableMaterials(distinctMaterials);
-
-       // --- 2. FILTRAGE PAR MATIÈRE (Si une sélection existe) ---
-       if (formData.material && formData.material !== '') {
-           workingList = workingList.filter(l => cleanText(l.material) === cleanText(formData.material));
+       // --- RESTAURATION LOGIQUE FILTRE INDICE ---
+       if (formData.materialIndex && formData.materialIndex !== '') {
+           workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
        }
-
-       // --- 3. RETRAIT FILTRE PHOTOCHROMIQUE ---
-       // Le filtre spécifique "PHOTOCHROMIQUE" est supprimé.
-       // La distinction se fait désormais uniquement via la sélection de la matière (ex: "ORMA TRANSITIONS")
 
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
@@ -714,7 +706,7 @@ function App() {
           sessionStorage.clear();
           setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
           setSecondPairPrice(0);
-          setFormData({ ...formData, material: '', calisize: false }); // Reset complet
+          setFormData({ ...formData, materialIndex: '', calisize: false }); // Reset complet
           setSelectedLens(null);
       }
   };
@@ -783,7 +775,7 @@ function App() {
         return { ...prev, pricing };
       });
   };
-  const handleTypeChange = (newType) => { setFormData(prev => ({ ...prev, type: newType, design: '', coating: '', material: '' })); };
+  const handleTypeChange = (newType) => { setFormData(prev => ({ ...prev, type: newType, design: '', coating: '', materialIndex: '' })); };
   const handleDesignChange = (newDesign) => { setFormData(prev => ({ ...prev, design: newDesign })); };
   const handleCoatingChange = (newCoating) => { setFormData(prev => ({ ...prev, coating: newCoating })); };
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
@@ -858,21 +850,21 @@ function App() {
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{LENS_TYPES.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
                 {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
                 
-                {/* FILTRE MATIÈRE (REMPLACE INDICE) */}
+                {/* FILTRE INDICE (RESTAURÉ) */}
                 <div>
-                    <label className="text-[10px] font-bold opacity-50 mb-2 block">MATIÈRE / TEINTE</label>
-                    <div className="flex gap-1 flex-wrap">
-                        <button onClick={() => setFormData({...formData, material: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.material === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.material === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>
-                        {availableMaterials.length > 0 ? availableMaterials.map(m => (
+                    <label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label>
+                    <div className="flex gap-1">
+                        <button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>
+                        {INDICES.map(i => (
                             <button 
-                                key={m} 
-                                onClick={() => setFormData({...formData, material: m})} 
-                                className={`flex-1 min-w-[60px] py-2 rounded border text-[10px] font-bold ${formData.material === m ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} 
-                                style={formData.material === m ? {backgroundColor: userSettings.customColor} : {}}
+                                key={i} 
+                                onClick={() => setFormData({...formData, materialIndex: i})} 
+                                className={`flex-1 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} 
+                                style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}
                             >
-                                {m}
+                                {i}
                             </button>
-                        )) : <div className="text-[10px] opacity-50 italic px-2">Aucune matière trouvée</div>}
+                        ))}
                     </div>
                 </div>
 
