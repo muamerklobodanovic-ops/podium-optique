@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart, Medal, Filter
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart, Medal, Filter, Hexagon
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.37.2"; // Fix: Suppression doublon showPasswordModal
+const APP_VERSION = "5.39.2"; // Fix: Suppression doublon state showPasswordModal
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -20,7 +20,8 @@ const DEFAULT_SETTINGS = {
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "", ALTERNANCE: "" },
     disabledBrands: [],
     disabledNetworks: [], 
-    disabledDesigns: [], // AJOUT: Liste des designs masqués globalement
+    disabledDesigns: [], 
+    disabledMaterials: [], // Liste des matières masquées
     pricingMode: 'linear', 
     perLensConfig: {
         disabledAttributes: { designs: [], indices: [], coatings: [] }, 
@@ -75,7 +76,6 @@ const checkIsPhoto = (item) => {
 const getDesignsByGeometry = (lenses) => {
     const map = {};
     lenses.forEach(l => {
-        // Normalisation de la géométrie pour correspondre aux types principaux
         let geo = cleanText(l.geometry || l.type);
         if (geo.includes("PROGRESSIF_INTERIEUR") || geo.includes("INTERIEUR")) geo = "PROG. INTERIEUR";
         else if (geo.includes("PROGRESSIF")) geo = "PROGRESSIF";
@@ -801,7 +801,8 @@ function App() {
             perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(p.perLensConfig || {}) },
             disabledBrands: Array.isArray(p.disabledBrands) ? p.disabledBrands : [],
             disabledNetworks: Array.isArray(p.disabledNetworks) ? p.disabledNetworks : [],
-            disabledDesigns: Array.isArray(p.disabledDesigns) ? p.disabledDesigns : [] // NOUVEAU
+            disabledDesigns: Array.isArray(p.disabledDesigns) ? p.disabledDesigns : [], 
+            disabledMaterials: Array.isArray(p.disabledMaterials) ? p.disabledMaterials : [] // NOUVEAU
         } : DEFAULT_SETTINGS; 
     } catch { return DEFAULT_SETTINGS; }
   });
@@ -829,6 +830,17 @@ function App() {
               ? currentDisabled.filter(d => d !== design) 
               : [...currentDisabled, design];
           return { ...prev, disabledDesigns: newDisabled };
+      });
+  };
+
+  // FONCTION TOGGLE MATIERE
+  const toggleMaterialVisibility = (mat) => {
+      setUserSettings(prev => {
+          const currentDisabled = Array.isArray(prev.disabledMaterials) ? prev.disabledMaterials : [];
+          const newDisabled = currentDisabled.includes(mat) 
+              ? currentDisabled.filter(m => m !== mat) 
+              : [...currentDisabled, mat];
+          return { ...prev, disabledMaterials: newDisabled };
       });
   };
 
@@ -898,9 +910,13 @@ function App() {
        let workingList = safeLenses.map(l => { return {...l}; }); 
 
        // 1. FILTRE GLOBAL (PARAMÈTRES) - Designs Masqués
-       // Appliqué en premier pour être effectif partout
        if (Array.isArray(userSettings.disabledDesigns) && userSettings.disabledDesigns.length > 0) {
            workingList = workingList.filter(l => !userSettings.disabledDesigns.includes(cleanText(l.design)));
+       }
+
+       // 2. FILTRE GLOBAL (PARAMÈTRES) - Matières Masquées
+       if (Array.isArray(userSettings.disabledMaterials) && userSettings.disabledMaterials.length > 0) {
+           workingList = workingList.filter(l => !userSettings.disabledMaterials.includes(cleanText(l.material)));
        }
 
        if (formData.brand && formData.brand !== '') { 
@@ -1021,7 +1037,7 @@ function App() {
        if (formData.design && formData.design !== '') { setFilteredLenses(workingList.filter(l => cleanText(l.design) === cleanText(formData.design))); } else { setFilteredLenses(workingList); }
        setStats({ total: lenses.length, filtered: workingList.length });
     } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
-  }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.disabledNetworks, userSettings.disabledDesigns, userSettings.pricingMode, userSettings.perLensConfig]);
+  }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.disabledNetworks, userSettings.disabledDesigns, userSettings.disabledMaterials, userSettings.pricingMode, userSettings.perLensConfig]);
 
   const fetchData = () => {
     setLoading(true); setError(null); 
@@ -1179,6 +1195,9 @@ function App() {
       // Ajoutons une recherche sur l'ID de l'offre ou d'autres champs si dispo
       return clientName.includes(search) || clientFirstname.includes(search) || String(offer.id).includes(search);
   });
+
+  // Calcul des matières uniques (pour le filtre de paramètres)
+  const allMaterials = [...new Set(lenses.map(l => cleanText(l.material)).filter(Boolean))].sort();
 
   return (
     <div className={`min-h-screen flex flex-col ${bgClass} ${textClass} relative font-['Poppins'] uppercase transition-colors duration-300`}>
@@ -1363,22 +1382,45 @@ function App() {
                     </div>
                 </div>
 
-                {/* GESTION DES DESIGNS (NOUVEAU) */}
+                {/* GESTION DES DESIGNS & MATIÈRES (NOUVEAU) */}
                 <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <h4 className="text-xs font-bold text-slate-400 mb-4">GÉOMÉTRIES & DESIGNS</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                        {Object.keys(designsByGeometry).map(geo => (
-                            <button 
-                                key={geo} 
-                                onClick={() => setDesignModalGeometry(geo)}
-                                className="px-3 py-2 rounded-lg text-xs font-bold border bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-all flex items-center justify-between"
-                            >
-                                <span>{geo}</span>
-                                <span className="bg-slate-100 text-[9px] px-1.5 py-0.5 rounded text-slate-400">{designsByGeometry[geo].length}</span>
-                            </button>
-                        ))}
+                    <h4 className="text-xs font-bold text-slate-400 mb-4">FILTRES AVANCÉS (DESIGNS & MATIÈRES)</h4>
+                    
+                    {/* SELECTION PAR GEOMETRIE */}
+                    <div className="mb-4">
+                        <label className="text-[10px] font-bold text-slate-400 mb-2 block">PAR GÉOMÉTRIE (Designs)</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {Object.keys(designsByGeometry).map(geo => (
+                                <button 
+                                    key={geo} 
+                                    onClick={() => setDesignModalGeometry(geo)}
+                                    className="px-3 py-2 rounded-lg text-xs font-bold border bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-all flex items-center justify-between"
+                                >
+                                    <span>{geo}</span>
+                                    <span className="bg-slate-100 text-[9px] px-1.5 py-0.5 rounded text-slate-400">{designsByGeometry[geo].length}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-2 italic">Cliquez sur une géométrie pour filtrer les designs associés.</p>
+
+                    {/* SELECTION MATIERES VISIBLES */}
+                    <div>
+                        <label className="text-[10px] font-bold text-slate-400 mb-2 block">MATIÈRES VISIBLES</label>
+                        <div className="flex flex-wrap gap-2">
+                            {allMaterials.map(mat => {
+                                const isDisabled = userSettings.disabledMaterials?.includes(mat);
+                                return (
+                                    <button 
+                                        key={mat}
+                                        onClick={() => toggleMaterialVisibility(mat)}
+                                        className={`px-2 py-1 rounded text-[10px] font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-white text-indigo-600 border-indigo-200'}`}
+                                    >
+                                        {mat}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
@@ -1428,9 +1470,7 @@ function App() {
           </div>
       )}
       
-      {/* MODALE HISTORIQUE DES DOSSIERS
-          - Ajout de la recherche (Nom / Code Client)
-      */}
+      {/* MODALE HISTORIQUE DES DOSSIERS */}
       {showHistory && (
           <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}>
             <div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800">
@@ -1453,7 +1493,7 @@ function App() {
                     </div>
                 )}
                 
-                {/* BARRE DE RECHERCHE LOCALE DANS L'HISTORIQUE (NOUVEAU) */}
+                {/* BARRE DE RECHERCHE LOCALE */}
                 <div className="mb-4 relative">
                     <Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/>
                     <input 
