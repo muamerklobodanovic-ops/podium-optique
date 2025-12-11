@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.35"; // Gestion visibilité Réseaux
+const APP_VERSION = "5.36"; // Correction Doublon Variable
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -696,6 +696,7 @@ function App() {
   const [userFile, setUserFile] = useState(null);
   const [showPricingConfig, setShowPricingConfig] = useState(false); // État pour la modale plein écran
   const [showHypervisor, setShowHypervisor] = useState(false); // AJOUT: État Hyperviseur
+  const [showPasswordModal, setShowPasswordModal] = useState(false); // AJOUT: Modal Mot de Passe
 
   // Gestion Persistance Logo et Thème
   const [userSettings, setUserSettings] = useState(() => {
@@ -1025,6 +1026,7 @@ function App() {
   
   // --- CHANGEMENT MOT DE PASSE (FRONTEND) ---
   const [passData, setPassData] = useState({ old: '', new: '', confirm: '' });
+  
   const validateStrongPassword = (pwd) => {
     // Min 8 chars, 1 upper, 1 lower, 1 number, 1 special
     const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -1044,6 +1046,7 @@ function App() {
         });
         alert("✅ Mot de passe mis à jour avec succès !");
         setPassData({ old: '', new: '', confirm: '' });
+        setShowPasswordModal(false);
     } catch (err) {
         alert("❌ Erreur : " + (err.response?.data?.detail || err.message));
     }
@@ -1073,6 +1076,36 @@ function App() {
       
       {/* MODALE PLEIN ÉCRAN HYPERVISEUR */}
       {showHypervisor && <Hypervisor onClose={() => setShowHypervisor(false)} />}
+      
+      {/* MODALE CHANGEMENT MOT DE PASSE */}
+      {showPasswordModal && (
+            <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+                <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+                    <h3 className="font-bold text-lg text-slate-800 mb-1">Changer de mot de passe</h3>
+                    <p className="text-xs text-slate-500 mb-6">Sécurisez votre compte avec un mot de passe fort.</p>
+                    
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Ancien mot de passe</label>
+                            <input type="password" value={passData.old} onChange={(e) => setPassData({...passData, old: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" autoFocus />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nouveau mot de passe</label>
+                            <input type="password" value={passData.new} onChange={(e) => setPassData({...passData, new: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Confirmer le nouveau</label>
+                            <input type="password" value={passData.confirm} onChange={(e) => setPassData({...passData, confirm: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 mt-8">
+                        <button onClick={() => { setShowPasswordModal(false); setPassData({old:'', new:'', confirm:''}); }} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition-colors">ANNULER</button>
+                        <button onClick={handleChangePassword} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-lg shadow-blue-200 transition-all">VALIDER</button>
+                    </div>
+                </div>
+            </div>
+        )}
 
       {/* MODALE CONFIGURATEUR */}
       {showPricingConfig && (
@@ -1172,14 +1205,17 @@ function App() {
                     </div>
                 )}
                 
-                <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <h4 className="text-xs font-bold text-slate-400 mb-4">SÉCURITÉ</h4>
-                    <div className="grid grid-cols-1 gap-4">
-                        <div><label className="block text-xs font-bold text-slate-600 mb-1">ANCIEN MOT DE PASSE</label><input type="password" value={passData.old} onChange={(e) => setPassData({...passData, old: e.target.value})} className="w-full p-2 border rounded"/></div>
-                        <div><label className="block text-xs font-bold text-slate-600 mb-1">NOUVEAU MOT DE PASSE</label><input type="password" value={passData.new} onChange={(e) => setPassData({...passData, new: e.target.value})} className="w-full p-2 border rounded"/></div>
-                        <div><label className="block text-xs font-bold text-slate-600 mb-1">CONFIRMER NOUVEAU</label><input type="password" value={passData.confirm} onChange={(e) => setPassData({...passData, confirm: e.target.value})} className="w-full p-2 border rounded"/></div>
-                        <button onClick={handleChangePassword} className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl mt-2 flex items-center justify-center gap-2"><Lock className="w-4 h-4"/> CHANGER MOT DE PASSE</button>
+                <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-red-100 rounded-lg text-red-600"><Lock className="w-5 h-5" /></div>
+                        <div>
+                            <h4 className="text-xs font-bold text-slate-700 uppercase">Sécurité du compte</h4>
+                            <p className="text-[10px] text-slate-500">Mot de passe et accès</p>
+                        </div>
                     </div>
+                    <button onClick={() => setShowPasswordModal(true)} className="px-4 py-2 bg-white border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold transition-all">
+                        MODIFIER LE MOT DE PASSE
+                    </button>
                 </div>
 
                 <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
