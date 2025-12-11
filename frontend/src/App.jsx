@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart, Medal
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart, Medal, Filter
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.36"; // Correction Doublon Variable
+const APP_VERSION = "5.37.2"; // Fix: Suppression doublon showPasswordModal
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -19,7 +19,8 @@ const DEFAULT_SETTINGS = {
     customColor: "#2563eb",
     brandLogos: { HOYA: "", ZEISS: "", SEIKO: "", CODIR: "", ORUS: "", ALTERNANCE: "" },
     disabledBrands: [],
-    disabledNetworks: [], // AJOUT : Liste des réseaux masqués
+    disabledNetworks: [], 
+    disabledDesigns: [], // AJOUT: Liste des designs masqués globalement
     pricingMode: 'linear', 
     perLensConfig: {
         disabledAttributes: { designs: [], indices: [], coatings: [] }, 
@@ -69,6 +70,32 @@ const checkIsPhoto = (item) => {
     const text = cleanText((item.name || "") + " " + (item.material || "") + " " + (item.coating || "") + " " + (item.design || ""));
     return text.includes("TRANS") || text.includes("GEN S") || text.includes("SOLACTIVE") || text.includes("TGNS") || text.includes("SABR") || text.includes("SAGR") || text.includes("SUN");
 };
+
+// Helper pour extraire les designs par géométrie
+const getDesignsByGeometry = (lenses) => {
+    const map = {};
+    lenses.forEach(l => {
+        // Normalisation de la géométrie pour correspondre aux types principaux
+        let geo = cleanText(l.geometry || l.type);
+        if (geo.includes("PROGRESSIF_INTERIEUR") || geo.includes("INTERIEUR")) geo = "PROG. INTERIEUR";
+        else if (geo.includes("PROGRESSIF")) geo = "PROGRESSIF";
+        else if (geo.includes("DEGRESSIF")) geo = "DEGRESSIF";
+        else if (geo.includes("UNIFOCAL")) geo = "UNIFOCAL";
+        else if (geo.includes("MULTIFOCAL")) geo = "MULTIFOCAL";
+
+        const design = cleanText(l.design);
+        if (design) {
+            if (!map[geo]) map[geo] = new Set();
+            map[geo].add(design);
+        }
+    });
+    const result = {};
+    Object.keys(map).sort().forEach(geo => {
+        result[geo] = Array.from(map[geo]).sort();
+    });
+    return result;
+};
+
 
 // --- COMPOSANTS UI ---
 const BrandLogo = ({ brand, className = "h-full w-auto" }) => {
@@ -679,6 +706,65 @@ const LoginScreen = ({ onLogin }) => {
     );
 };
 
+// --- NOUVEAU COMPOSANT : MODALE SELECTION DESIGNS ---
+const DesignSelectionModal = ({ geometry, availableDesigns, disabledDesigns, onToggle, onClose }) => {
+    // Filtrage simple pour la recherche
+    const [search, setSearch] = useState("");
+    const filtered = availableDesigns.filter(d => d.toLowerCase().includes(search.toLowerCase()));
+
+    return (
+        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
+            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[80vh]">
+                <div className="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-2xl">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Layers className="w-5 h-5 text-indigo-600"/> 
+                        DESIGNS : {geometry}
+                    </h3>
+                    <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
+                </div>
+                
+                <div className="p-4 border-b">
+                     <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/>
+                        <input 
+                            type="text" 
+                            className="w-full pl-9 pr-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
+                            placeholder="Rechercher un design..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                     </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {filtered.length === 0 ? (
+                        <div className="text-center text-slate-400 text-xs py-8">Aucun design trouvé.</div>
+                    ) : (
+                        filtered.map(design => {
+                            const isHidden = disabledDesigns.includes(design);
+                            return (
+                                <button 
+                                    key={design}
+                                    onClick={() => onToggle(design)}
+                                    className={`w-full p-3 rounded-xl flex items-center justify-between transition-all border ${isHidden ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-indigo-50 border-indigo-200'}`}
+                                >
+                                    <span className={`text-sm font-bold ${isHidden ? 'text-slate-500' : 'text-indigo-800'}`}>{design}</span>
+                                    {isHidden ? <Square className="w-5 h-5 text-slate-400"/> : <CheckSquare className="w-5 h-5 text-indigo-600"/>}
+                                </button>
+                            )
+                        })
+                    )}
+                </div>
+                
+                <div className="p-4 border-t bg-slate-50 rounded-b-2xl flex justify-between items-center">
+                    <span className="text-xs text-slate-500 font-bold">{filtered.length} designs visibles</span>
+                    <button onClick={onClose} className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition-colors">TERMINER</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- APP PRINCIPALE ---
 function App() {
   const [user, setUser] = useState(() => { try { const s = sessionStorage.getItem("optique_user"); return s ? JSON.parse(s) : null; } catch { return null; } });
@@ -697,6 +783,9 @@ function App() {
   const [showPricingConfig, setShowPricingConfig] = useState(false); // État pour la modale plein écran
   const [showHypervisor, setShowHypervisor] = useState(false); // AJOUT: État Hyperviseur
   const [showPasswordModal, setShowPasswordModal] = useState(false); // AJOUT: Modal Mot de Passe
+  
+  // NOUVEAUX ETATS POUR GESTION DESIGNS
+  const [designModalGeometry, setDesignModalGeometry] = useState(null); // 'UNIFOCAL', 'PROGRESSIF', etc. ou null
 
   // Gestion Persistance Logo et Thème
   const [userSettings, setUserSettings] = useState(() => {
@@ -711,7 +800,8 @@ function App() {
             pricing: { ...DEFAULT_SETTINGS.pricing, ...(p.pricing || {}) },
             perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(p.perLensConfig || {}) },
             disabledBrands: Array.isArray(p.disabledBrands) ? p.disabledBrands : [],
-            disabledNetworks: Array.isArray(p.disabledNetworks) ? p.disabledNetworks : [] 
+            disabledNetworks: Array.isArray(p.disabledNetworks) ? p.disabledNetworks : [],
+            disabledDesigns: Array.isArray(p.disabledDesigns) ? p.disabledDesigns : [] // NOUVEAU
         } : DEFAULT_SETTINGS; 
     } catch { return DEFAULT_SETTINGS; }
   });
@@ -726,6 +816,20 @@ function App() {
       ...userSettings, 
       shopName: user?.shop_name || "MON OPTICIEN", // Priorité au nom venant du login (BDD)
       // Le logo et les couleurs viennent de userSettings (localStorage)
+  };
+
+  // CALCUL DESIGNS DISPONIBLES PAR GEOMETRIE
+  const designsByGeometry = useMemo(() => getDesignsByGeometry(lenses), [lenses]);
+
+  // FONCTION TOGGLE DESIGN
+  const toggleDesignVisibility = (design) => {
+      setUserSettings(prev => {
+          const currentDisabled = Array.isArray(prev.disabledDesigns) ? prev.disabledDesigns : [];
+          const newDisabled = currentDisabled.includes(design) 
+              ? currentDisabled.filter(d => d !== design) 
+              : [...currentDisabled, design];
+          return { ...prev, disabledDesigns: newDisabled };
+      });
   };
 
   const [formData, setFormData] = useState(() => {
@@ -792,6 +896,12 @@ function App() {
     const safeLenses = lenses || [];
     if (safeLenses.length > 0) {
        let workingList = safeLenses.map(l => { return {...l}; }); 
+
+       // 1. FILTRE GLOBAL (PARAMÈTRES) - Designs Masqués
+       // Appliqué en premier pour être effectif partout
+       if (Array.isArray(userSettings.disabledDesigns) && userSettings.disabledDesigns.length > 0) {
+           workingList = workingList.filter(l => !userSettings.disabledDesigns.includes(cleanText(l.design)));
+       }
 
        if (formData.brand && formData.brand !== '') { 
            workingList = workingList.filter(l => cleanText(l.brand) === cleanText(formData.brand)); 
@@ -911,7 +1021,7 @@ function App() {
        if (formData.design && formData.design !== '') { setFilteredLenses(workingList.filter(l => cleanText(l.design) === cleanText(formData.design))); } else { setFilteredLenses(workingList); }
        setStats({ total: lenses.length, filtered: workingList.length });
     } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
-  }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.disabledNetworks, userSettings.pricingMode, userSettings.perLensConfig]);
+  }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.disabledNetworks, userSettings.disabledDesigns, userSettings.pricingMode, userSettings.perLensConfig]);
 
   const fetchData = () => {
     setLoading(true); setError(null); 
@@ -1107,6 +1217,17 @@ function App() {
             </div>
         )}
 
+      {/* MODALE SELECTION DESIGN */}
+      {designModalGeometry && (
+          <DesignSelectionModal 
+             geometry={designModalGeometry}
+             availableDesigns={designsByGeometry[designModalGeometry] || []}
+             disabledDesigns={userSettings.disabledDesigns}
+             onToggle={toggleDesignVisibility}
+             onClose={() => setDesignModalGeometry(null)}
+          />
+      )}
+
       {/* MODALE CONFIGURATEUR */}
       {showPricingConfig && (
           <div className="fixed inset-0 z-[200] bg-gray-50 flex flex-col">
@@ -1223,7 +1344,6 @@ function App() {
                     <div className="flex flex-wrap gap-2">{BRANDS.filter(b => b.id !== '').map(b => { const isDisabled = userSettings.disabledBrands?.includes(b.id); return (<button key={b.id} onClick={() => toggleBrand(b.id)} className={`px-3 py-2 rounded-lg text-xs font-bold border ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-blue-600 text-white border-blue-600'}`}>{isDisabled ? <Square className="w-3 h-3 inline mr-1"/> : <CheckSquare className="w-3 h-3 inline mr-1"/>}{b.label}</button>); })}</div>
                 </div>
 
-                {/* RESEAUX VISIBLES - NOUVELLE SECTION */}
                 <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
                     <h4 className="text-xs font-bold text-slate-400 mb-4">RÉSEAUX VISIBLES</h4>
                     <div className="flex flex-wrap gap-2">
@@ -1241,6 +1361,24 @@ function App() {
                             );
                         })}
                     </div>
+                </div>
+
+                {/* GESTION DES DESIGNS (NOUVEAU) */}
+                <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <h4 className="text-xs font-bold text-slate-400 mb-4">GÉOMÉTRIES & DESIGNS</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                        {Object.keys(designsByGeometry).map(geo => (
+                            <button 
+                                key={geo} 
+                                onClick={() => setDesignModalGeometry(geo)}
+                                className="px-3 py-2 rounded-lg text-xs font-bold border bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-all flex items-center justify-between"
+                            >
+                                <span>{geo}</span>
+                                <span className="bg-slate-100 text-[9px] px-1.5 py-0.5 rounded text-slate-400">{designsByGeometry[geo].length}</span>
+                            </button>
+                        ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2 italic">Cliquez sur une géométrie pour filtrer les designs associés.</p>
                 </div>
 
                 <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
