@@ -74,14 +74,15 @@ if DATABASE_URL:
                 CREATE TABLE IF NOT EXISTS client_offers (
                     id SERIAL PRIMARY KEY, 
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    username VARCHAR(100),
+                    username VARCHAR(100), -- Identifiant de l'adhérent
                     encrypted_identity TEXT, 
                     lens_details JSONB, 
                     financials JSONB,
-                    tags JSONB
+                    tags JSONB -- Stockage structuré pour stats
                 );
             """))
             
+            # Migration automatique
             try:
                 conn.execute(text("ALTER TABLE client_offers ADD COLUMN IF NOT EXISTS username VARCHAR(100);"))
                 conn.execute(text("ALTER TABLE client_offers ADD COLUMN IF NOT EXISTS tags JSONB;"))
@@ -94,7 +95,7 @@ if DATABASE_URL:
                     geometry TEXT, design TEXT, index_mat TEXT, material TEXT, coating TEXT, 
                     commercial_flow TEXT, color TEXT, 
                     purchase_price DECIMAL(10,2), 
-                    purchase_price_bonifie DECIMAL(10,2),
+                    purchase_price_bonifie DECIMAL(10,2), 
                     purchase_price_super_bonifie DECIMAL(10,2),
                     selling_price DECIMAL(10,2),
                     sell_kalixia DECIMAL(10,2), sell_itelis DECIMAL(10,2), 
@@ -103,6 +104,7 @@ if DATABASE_URL:
                 );
             """))
             
+            # Migration automatique
             try:
                 conn.execute(text("ALTER TABLE lenses ADD COLUMN IF NOT EXISTS purchase_price_bonifie DECIMAL(10,2) DEFAULT 0;"))
                 conn.execute(text("ALTER TABLE lenses ADD COLUMN IF NOT EXISTS purchase_price_super_bonifie DECIMAL(10,2) DEFAULT 0;"))
@@ -149,18 +151,13 @@ def get_col_idx(headers, candidates):
 
 # --- MODELES ---
 class LoginRequest(BaseModel): username: str; password: str
-# MISE A JOUR : Ajout du champ old_password
-class PasswordUpdate(BaseModel): 
-    username: str
-    old_password: str 
-    new_password: str
-
+class PasswordUpdate(BaseModel): username: str; old_password: str; new_password: str
 class OfferRequest(BaseModel): 
-    username: str
+    username: str # Identifiant de l'adhérent
     client: dict
     lens: dict
     finance: dict
-    tags: dict
+    tags: dict 
 
 # --- ROUTES AUTHENTIFICATION ---
 @app.post("/auth/login")
@@ -182,23 +179,15 @@ def login(creds: LoginRequest):
         print(f"Login Error: {e}")
         raise HTTPException(500, str(e))
 
-# MISE A JOUR : Vérification de l'ancien mot de passe
 @app.post("/auth/update-password")
 def update_password(data: PasswordUpdate):
     if not engine: raise HTTPException(500, "Pas de BDD")
     try:
         with engine.begin() as conn:
-            # 1. Vérifier l'ancien mot de passe
             current_user = conn.execute(text("SELECT password FROM users WHERE username = :u"), {"u": data.username}).fetchone()
-            if not current_user:
-                raise HTTPException(404, "Utilisateur introuvable")
-            
-            if current_user.password != data.old_password:
-                raise HTTPException(403, "L'ancien mot de passe est incorrect")
-
-            # 2. Mise à jour
-            conn.execute(text("UPDATE users SET password = :p, is_first_login = FALSE WHERE username = :u"), 
-                         {"p": data.new_password, "u": data.username})
+            if not current_user: raise HTTPException(404, "Utilisateur introuvable")
+            if current_user.password != data.old_password: raise HTTPException(403, "L'ancien mot de passe est incorrect")
+            conn.execute(text("UPDATE users SET password = :p, is_first_login = FALSE WHERE username = :u"), {"p": data.new_password, "u": data.username})
         return {"status": "success"}
     except Exception as e: 
         if isinstance(e, HTTPException): raise e
@@ -206,36 +195,27 @@ def update_password(data: PasswordUpdate):
 
 @app.post("/upload-users")
 def upload_users(file: UploadFile = File(...)):
-    print("🚀 Début upload USERS (Mode UPSERT)...", flush=True)
+    print("🚀 Upload USERS (Mode UPSERT)...", flush=True)
     if not engine: raise HTTPException(500, "Pas de BDD")
-    
     temp = f"/tmp/users_{int(time.time())}.xlsx"
     try:
         with open(temp, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
-        
-        print("📖 Lecture Excel Users...", flush=True)
         wb = openpyxl.load_workbook(temp, data_only=True)
         sheet = wb.active
         rows = list(sheet.iter_rows(values_only=True))
         if not rows: raise Exception("Fichier vide")
-
-        header_idx = -1
-        headers = []
+        header_idx = -1; headers = []
         for i, row in enumerate(rows[:20]):
             row_str = [str(c).upper() for c in row if c]
             if any(k in s for s in row_str for k in ["IDENTIFIANT", "USERNAME", "LOGIN", "ID CLIENT"]):
                 headers, header_idx = row, i; break
-        
         if header_idx == -1: headers, header_idx = rows[0], 0
-
         c_id = get_col_idx(headers, ['IDENTIFIANT', 'ID', 'USERNAME', 'LOGIN'])
         c_shop = get_col_idx(headers, ['MAGASIN', 'SHOP', 'RAISON SOCIALE', 'NOM'])
         c_pass = get_col_idx(headers, ['PASSWORD', 'MOT DE PASSE', 'MDP'])
         c_mail = get_col_idx(headers, ['MAIL', 'EMAIL', 'COURRIEL'])
         c_role = get_col_idx(headers, ['ROLE', 'TYPE', 'DROIT'])
-        
-        if c_id == -1: raise Exception("Colonne 'IDENTIFIANT' introuvable.")
-
+        if c_id == -1: raise Exception("Colonne Identifiant manquante")
         users_to_insert = []
         for row in rows[header_idx+1:]:
             if not row[c_id]: continue 
@@ -247,30 +227,25 @@ def upload_users(file: UploadFile = File(...)):
             if c_role != -1 and row[c_role]:
                 val_role = str(row[c_role]).lower().strip()
                 if "admin" in val_role: u_role = "admin"
-            
             users_to_insert.append({ "u": u_id, "s": u_shop, "p": u_pass, "e": u_mail, "r": u_role })
-            
         if users_to_insert:
             with engine.begin() as conn:
-                query = text("""
+                conn.execute(text("""
                     INSERT INTO users (username, shop_name, password, email, role, is_first_login)
                     VALUES (:u, :s, :p, :e, :r, TRUE)
                     ON CONFLICT (username) DO UPDATE SET
                         shop_name = EXCLUDED.shop_name,
                         email = EXCLUDED.email,
                         role = EXCLUDED.role;
-                """)
-                conn.execute(query, users_to_insert)
-                
+                """), users_to_insert)
         return {"status": "success", "count": len(users_to_insert), "mode": "upsert_safe"}
-
     except Exception as e: 
-        print(f"❌ ERREUR UPLOAD USERS: {traceback.format_exc()}", flush=True)
-        raise HTTPException(500, f"Erreur technique: {str(e)}")
+        print(f"❌ ERREUR: {traceback.format_exc()}", flush=True)
+        raise HTTPException(500, f"Erreur: {str(e)}")
     finally:
         if os.path.exists(temp): os.remove(temp)
 
-# --- ROUTES ADMIN / HYPERVISEUR ---
+# --- ROUTES ADMIN ---
 @app.get("/admin/users")
 def get_all_users():
     if not engine: return []
@@ -290,13 +265,11 @@ def get_user_stats(username: str = Query(...)):
             else:
                 res = conn.execute(text("SELECT tags, lens_details, financials FROM client_offers WHERE username = :u AND tags IS NOT NULL"), {"u": username})
             rows = res.fetchall()
-            
             categories = ["network", "geometry", "design", "index", "material", "coating", "commercial_flow"]
             stats = {cat: {} for cat in categories}
             top_data = { "UNIFOCAL": {}, "PROGRESSIF": {} }
             total_sales = 0
             total_revenue = 0.0
-            
             for r in rows:
                 tags = r.tags
                 if not tags: continue
@@ -306,28 +279,23 @@ def get_user_stats(username: str = Query(...)):
                     unit_buy = float(r.lens_details.get('purchase_price', 0))
                     margin = (unit_sell - unit_buy) * 2
                 except: price = 0.0; margin = 0.0
-
                 total_sales += 1
                 total_revenue += price
-                
                 for cat in categories:
                     val = tags.get(cat, "N/A") or "N/A"
                     if val not in stats[cat]: stats[cat][val] = {"volume": 0, "value": 0.0}
                     stats[cat][val]["volume"] += 1
                     stats[cat][val]["value"] += price
-                
                 geo_raw = str(tags.get('geometry', '')).upper()
                 design_name = str(tags.get('design', 'INCONNU'))
                 target_geo = None
                 if 'UNIFOCAL' in geo_raw: target_geo = "UNIFOCAL"
                 elif 'PROGRESSIF' in geo_raw or 'INTERIEUR' in geo_raw: target_geo = "PROGRESSIF"
-                
                 if target_geo:
                     if design_name not in top_data[target_geo]: top_data[target_geo][design_name] = {"volume": 0, "value": 0.0, "margin": 0.0}
                     top_data[target_geo][design_name]["volume"] += 1
                     top_data[target_geo][design_name]["value"] += price
                     top_data[target_geo][design_name]["margin"] += margin
-
             final_tops = {"UNIFOCAL": {}, "PROGRESSIF": {}}
             for geo in ["UNIFOCAL", "PROGRESSIF"]:
                 items = [{"name": k, **v} for k, v in top_data[geo].items()]
@@ -336,12 +304,10 @@ def get_user_stats(username: str = Query(...)):
                     "by_value": sorted(items, key=lambda x: x['value'], reverse=True)[:3],
                     "by_margin": sorted(items, key=lambda x: x['margin'], reverse=True)[:3]
                 }
-
             return { "total_sales": total_sales, "total_revenue": total_revenue, "breakdown": stats, "tops": final_tops }
-    except Exception as e: 
-        print(f"Stats Error: {e}"); traceback.print_exc(); return {}
+    except: return {}
 
-# --- ROUTES DOSSIERS ---
+# --- ROUTES DOSSIERS (SÉCURISÉE) ---
 @app.post("/offers")
 def save_offer(offer: OfferRequest):
     if not engine: raise HTTPException(500, "Pas de connexion BDD")
@@ -349,27 +315,61 @@ def save_offer(offer: OfferRequest):
         with engine.begin() as conn:
             lens_data = offer.lens
             if hasattr(offer, 'correction') and offer.correction: lens_data['correction_data'] = offer.correction
+            # On enregistre l'identifiant adhérent (username)
             conn.execute(text("INSERT INTO client_offers (username, encrypted_identity, lens_details, financials, tags) VALUES (:u, :ident, :lens, :fin, :tags)"), {
                 "u": offer.username, "ident": encrypt_dict(offer.client), "lens": json.dumps(lens_data), "fin": json.dumps(offer.finance), "tags": json.dumps(offer.tags)
             })
         return {"status": "success"}
     except Exception as e: raise HTTPException(500, str(e))
 
+# MISE A JOUR CRITIQUE : FILTRE PAR ADHÉRENT / CLOISONNEMENT
 @app.get("/offers")
-def get_offers():
+def get_offers(username: str = Query(...), target_user: str = Query(None)):
     if not engine: return []
     try:
         with engine.connect() as conn:
-            res = conn.execute(text("SELECT * FROM client_offers ORDER BY created_at DESC LIMIT 50"))
+            # 1. Identifier le rôle de l'utilisateur qui fait la demande
+            user_row = conn.execute(text("SELECT role FROM users WHERE username = :u"), {"u": username}).fetchone()
+            if not user_row: return [] # Utilisateur inconnu = pas de données
+            
+            is_admin = user_row.role == 'admin'
+            
+            # 2. Filtrer
+            if is_admin:
+                if target_user:
+                     # Admin veut voir un utilisateur spécifique
+                     sql = "SELECT * FROM client_offers WHERE username = :t ORDER BY created_at DESC LIMIT 100"
+                     params = {"t": target_user}
+                else:
+                     # Admin veut voir tout (par défaut)
+                     sql = "SELECT * FROM client_offers ORDER BY created_at DESC LIMIT 100"
+                     params = {}
+            else:
+                # Utilisateur standard : Voit UNIQUEMENT ses dossiers
+                sql = "SELECT * FROM client_offers WHERE username = :u ORDER BY created_at DESC LIMIT 100"
+                params = {"u": username}
+            
+            res = conn.execute(text(sql), params)
+            
             results = []
             for r in res.fetchall():
                 try:
                     lens_data = r.lens_details
                     correction = lens_data.get('correction_data', None)
-                    results.append({ "id": r.id, "date": r.created_at.strftime("%d/%m/%Y %H:%M"), "client": decrypt_dict(r.encrypted_identity), "lens": lens_data, "finance": r.financials, "correction": correction })
+                    results.append({
+                        "id": r.id, 
+                        "date": r.created_at.strftime("%d/%m/%Y %H:%M"), 
+                        "client": decrypt_dict(r.encrypted_identity), 
+                        "lens": lens_data, 
+                        "finance": r.financials, 
+                        "correction": correction,
+                        "owner": r.username # Utile pour l'admin
+                    })
                 except: continue
             return results
-    except: return []
+    except Exception as e: 
+        print(f"Erreur get_offers: {e}")
+        return []
 
 @app.delete("/offers/{offer_id}")
 def delete_offer(offer_id: int):
@@ -414,7 +414,6 @@ def upload_catalog(file: UploadFile = File(...)):
             conn.execute(text("ALTER TABLE lenses ADD COLUMN IF NOT EXISTS purchase_price_bonifie DECIMAL(10,2) DEFAULT 0;"))
             conn.execute(text("ALTER TABLE lenses ADD COLUMN IF NOT EXISTS purchase_price_super_bonifie DECIMAL(10,2) DEFAULT 0;"))
             conn.execute(text("TRUNCATE TABLE lenses RESTART IDENTITY CASCADE;"))
-        
         total_inserted = 0
         with engine.connect() as conn:
             for sheet_name in wb.sheetnames:
@@ -428,7 +427,6 @@ def upload_catalog(file: UploadFile = File(...)):
                     row_str = [str(c).upper() for c in row if c]
                     if any(k in s for s in row_str for k in ["MODELE", "LIBELLE", "NAME"]):
                         headers, header_idx = row, current_row_idx; break
-                
                 if not headers: continue
                 c_nom = get_col_idx(headers, ['MODELE COMMERCIAL', 'MODELE', 'LIBELLE', 'NAME'])
                 c_marque = get_col_idx(headers, ['MARQUE', 'BRAND'])
@@ -449,10 +447,8 @@ def upload_catalog(file: UploadFile = File(...)):
                 c_cb = get_col_idx(headers, ['CARTE BLANCHE'])
                 c_sev = get_col_idx(headers, ['SEVEANE'])
                 c_sant = get_col_idx(headers, ['SANTECLAIR'])
-
                 if c_nom == -1: continue
                 batch, BATCH_SIZE = [], 2000 
-
                 for row in row_iterator:
                     if not row[c_nom]: continue
                     buy = clean_price(row[c_buy]) if c_buy != -1 else 0
@@ -475,7 +471,6 @@ def upload_catalog(file: UploadFile = File(...)):
                     if 'PROXEO' in full_search: ltype = 'DEGRESSIF'
                     if 'MYPROXI' in full_search: ltype = 'PROGRESSIF_INTERIEUR'
                     if buy <= 0: buy = clean_price(row[c_kal]) if c_kal != -1 else 0.01
-
                     batch.append({
                         "brand": brand[:100], "edi": clean_text(row[c_edi]) if c_edi != -1 else "",
                         "code": code, "name": name, "geo": ltype, "design": design_val,
@@ -489,7 +484,6 @@ def upload_catalog(file: UploadFile = File(...)):
                         "cb": clean_price(row[c_cb]) if c_cb != -1 else 0, "sev": clean_price(row[c_sev]) if c_sev != -1 else 0,
                         "sant": clean_price(row[c_sant]) if c_sant != -1 else 0,
                     })
-
                     if len(batch) >= BATCH_SIZE:
                         with conn.begin():
                             conn.execute(text("""
@@ -497,7 +491,6 @@ def upload_catalog(file: UploadFile = File(...)):
                                 VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :buy_bonif, :buy_super, :selling, :kal, :ite, :cb, :sev, :sant)
                             """), batch)
                         total_inserted += len(batch); batch = []; gc.collect(); time.sleep(0.01)
-                
                 if batch:
                     with conn.begin():
                         conn.execute(text("""
@@ -505,7 +498,6 @@ def upload_catalog(file: UploadFile = File(...)):
                             VALUES (:brand, :edi, :code, :name, :geo, :design, :idx, :mat, :coat, :flow, :color, :buy, :buy_bonif, :buy_super, :selling, :kal, :ite, :cb, :sev, :sant)
                         """), batch)
                     total_inserted += len(batch); gc.collect()
-
         return {"status": "success", "count": total_inserted}
     except Exception as e:
         print(f"❌ ERREUR: {traceback.format_exc()}", flush=True)
