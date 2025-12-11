@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.39.2"; // Fix: Suppression doublon state showPasswordModal
+const APP_VERSION = "5.39.2"; // Sync Backend des Paramètres
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";

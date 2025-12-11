@@ -52,9 +52,15 @@ if DATABASE_URL:
                     password TEXT,
                     email TEXT,
                     role VARCHAR(50) DEFAULT 'user',
-                    is_first_login BOOLEAN DEFAULT TRUE
+                    is_first_login BOOLEAN DEFAULT TRUE,
+                    settings JSONB -- Stockage des préférences (Filtres, Thème, etc.)
                 );
             """))
+            
+            # Migration auto: Ajout colonne settings si manquante
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS settings JSONB;"))
+            except Exception as e: print(f"Info Migration Users: {e}")
             
             # Initialisation Admin par défaut
             try:
@@ -152,6 +158,7 @@ def get_col_idx(headers, candidates):
 # --- MODELES ---
 class LoginRequest(BaseModel): username: str; password: str
 class PasswordUpdate(BaseModel): username: str; old_password: str; new_password: str
+class SettingsUpdate(BaseModel): username: str; settings: dict # NOUVEAU
 class OfferRequest(BaseModel): 
     username: str # Identifiant de l'adhérent
     client: dict
@@ -170,9 +177,20 @@ def login(creds: LoginRequest):
             user = result._mapping
             if user['password'] != creds.password: raise HTTPException(401, "Mot de passe incorrect")
             role = user['role'] if 'role' in user else 'user'
+            
+            # On renvoie aussi les settings sauvegardés
+            settings = user['settings'] if 'settings' in user and user['settings'] else {}
+            
             return {
                 "status": "success",
-                "user": { "username": user['username'], "shop_name": user['shop_name'], "email": user['email'], "role": role, "is_first_login": user['is_first_login'] }
+                "user": { 
+                    "username": user['username'], 
+                    "shop_name": user['shop_name'], 
+                    "email": user['email'], 
+                    "role": role, 
+                    "is_first_login": user['is_first_login'],
+                    "settings": settings # INCLUSION DES SETTINGS
+                }
             }
     except Exception as e:
         if isinstance(e, HTTPException): raise e
@@ -191,6 +209,20 @@ def update_password(data: PasswordUpdate):
         return {"status": "success"}
     except Exception as e: 
         if isinstance(e, HTTPException): raise e
+        raise HTTPException(500, str(e))
+
+# NOUVELLE ROUTE : SAUVEGARDE DES PARAMÈTRES
+@app.post("/user/update-settings")
+def update_user_settings(data: SettingsUpdate):
+    if not engine: raise HTTPException(500, "Pas de BDD")
+    try:
+        with engine.begin() as conn:
+            # On met à jour la colonne settings (JSONB)
+            conn.execute(text("UPDATE users SET settings = :s WHERE username = :u"), 
+                         {"s": json.dumps(data.settings), "u": data.username})
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Settings Save Error: {e}")
         raise HTTPException(500, str(e))
 
 @app.post("/upload-users")
@@ -322,48 +354,34 @@ def save_offer(offer: OfferRequest):
         return {"status": "success"}
     except Exception as e: raise HTTPException(500, str(e))
 
-# MISE A JOUR CRITIQUE : FILTRE PAR ADHÉRENT / CLOISONNEMENT
 @app.get("/offers")
 def get_offers(username: str = Query(...), target_user: str = Query(None)):
     if not engine: return []
     try:
         with engine.connect() as conn:
-            # 1. Identifier le rôle de l'utilisateur qui fait la demande
             user_row = conn.execute(text("SELECT role FROM users WHERE username = :u"), {"u": username}).fetchone()
-            if not user_row: return [] # Utilisateur inconnu = pas de données
-            
+            if not user_row: return [] 
             is_admin = user_row.role == 'admin'
-            
-            # 2. Filtrer
             if is_admin:
                 if target_user:
-                     # Admin veut voir un utilisateur spécifique
                      sql = "SELECT * FROM client_offers WHERE username = :t ORDER BY created_at DESC LIMIT 100"
                      params = {"t": target_user}
                 else:
-                     # Admin veut voir tout (par défaut)
                      sql = "SELECT * FROM client_offers ORDER BY created_at DESC LIMIT 100"
                      params = {}
             else:
-                # Utilisateur standard : Voit UNIQUEMENT ses dossiers
                 sql = "SELECT * FROM client_offers WHERE username = :u ORDER BY created_at DESC LIMIT 100"
                 params = {"u": username}
-            
             res = conn.execute(text(sql), params)
-            
             results = []
             for r in res.fetchall():
                 try:
                     lens_data = r.lens_details
                     correction = lens_data.get('correction_data', None)
                     results.append({
-                        "id": r.id, 
-                        "date": r.created_at.strftime("%d/%m/%Y %H:%M"), 
-                        "client": decrypt_dict(r.encrypted_identity), 
-                        "lens": lens_data, 
-                        "finance": r.financials, 
-                        "correction": correction,
-                        "owner": r.username # Utile pour l'admin
+                        "id": r.id, "date": r.created_at.strftime("%d/%m/%Y %H:%M"), 
+                        "client": decrypt_dict(r.encrypted_identity), "lens": lens_data, 
+                        "finance": r.financials, "correction": correction, "owner": r.username 
                     })
                 except: continue
             return results
