@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.33"; // Filtre Historique Admin + Cloisonnement
+const APP_VERSION = "5.34"; // Recherche Adhérent (Historique & Hyperviseur)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -217,7 +217,7 @@ const Hypervisor = ({ onClose }) => {
                 <div className="max-w-7xl mx-auto">
                     <div className="mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Filtrer (Nom / Adhérent)</label><div className="relative"><Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/><input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all" placeholder="Ex: 12345 ou Optic 2000..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div></div>
+                            <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Filtrer (Nom / Adhérent)</label><div className="relative"><Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/><input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-purple-200 transition-all" placeholder="Code client ou Raison sociale" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div></div>
                             <div>
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Sélectionner un compte</label>
                                 <select 
@@ -937,6 +937,8 @@ function App() {
 
   // MISE A JOUR : Filtre historique pour admin
   const [adminHistoryFilter, setAdminHistoryFilter] = useState("");
+  // Ajout d'un état pour la recherche textuelle
+  const [adminHistorySearch, setAdminHistorySearch] = useState("");
   // Charge la liste des users si admin (pour le filtre historique)
   const [adminUsersList, setAdminUsersList] = useState([]);
 
@@ -1207,23 +1209,8 @@ function App() {
       )}
       
       {showHistory && (<div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4" onClick={(e) => { if(e.target === e.currentTarget) setShowHistory(false); }}><div className="bg-white w-full max-w-4xl rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto text-slate-800"><div className="flex justify-between items-center mb-8"><h2 className="font-bold text-2xl flex items-center gap-3"><FolderOpen className="w-8 h-8 text-blue-600"/> DOSSIERS CLIENTS</h2><button onClick={() => setShowHistory(false)}><X className="w-6 h-6 text-slate-400"/></button></div>
-      {/* SECTION FILTRE ADMIN (DANS L'HISTORIQUE) */}
-      {user.role === 'admin' && (
-          <div className="mb-6 p-4 bg-purple-50 border border-purple-100 rounded-xl flex items-center gap-4">
-              <span className="text-xs font-bold text-purple-700 uppercase">FILTRER PAR ADHÉRENT :</span>
-              <select 
-                  className="flex-1 p-2 rounded-lg border border-purple-200 text-sm font-bold text-purple-900 outline-none"
-                  value={adminHistoryFilter}
-                  onChange={(e) => setAdminHistoryFilter(e.target.value)}
-              >
-                  <option value="">-- TOUS LES ADHÉRENTS --</option>
-                  {adminUsersList.map(u => (
-                      <option key={u.username} value={u.username}>{u.shop_name} ({u.username})</option>
-                  ))}
-              </select>
-          </div>
-      )}
-      <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>{/* AJOUT: Affichage du propriétaire pour l'admin */}{user.role === 'admin' && offer.owner && <div className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded mt-1 inline-block font-bold">PAR: {offer.owner}</div>}</div></div><div className="text-right"><div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div><div className="font-bold text-slate-800">{offer.lens?.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div></div><div className="flex items-center gap-2"><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div><button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button></div></div>))}</div></div></div>)}
+      {user.role === 'admin' && (<div className="mb-6 p-4 bg-purple-50 border border-purple-100 rounded-xl flex flex-col gap-2"><div className="flex items-center gap-2"><Search className="w-4 h-4 text-purple-500"/><span className="text-xs font-bold text-purple-700 uppercase">RECHERCHER UN ADHÉRENT :</span></div><div className="flex gap-4"><input type="text" className="flex-1 p-2 rounded-lg border border-purple-200 text-sm font-bold text-purple-900 outline-none placeholder:text-purple-300" placeholder="Code client ou Raison sociale" value={adminHistorySearch} onChange={(e) => setAdminHistorySearch(e.target.value)} /><select className="flex-1 p-2 rounded-lg border border-purple-200 text-sm font-bold text-purple-900 outline-none" value={adminHistoryFilter} onChange={(e) => setAdminHistoryFilter(e.target.value)}><option value="">-- TOUS LES ADHÉRENTS --</option>{adminUsersList.filter(u => u.username.toLowerCase().includes(adminHistorySearch.toLowerCase()) || (u.shop_name && u.shop_name.toLowerCase().includes(adminHistorySearch.toLowerCase()))).map(u => (<option key={u.username} value={u.username}>{u.shop_name} ({u.username})</option>))}</select></div></div>)}
+      <div className="grid grid-cols-1 gap-4">{savedOffers.length === 0 ? <div className="text-center text-slate-400 py-10 font-bold">AUCUN DOSSIER ENREGISTRÉ</div> : savedOffers.map(offer => (<div key={offer.id} className="p-4 border rounded-xl flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User className="w-5 h-5"/></div><div><div className="font-bold text-lg">{offer.client.name || "Donnée Illisible"} {offer.client.firstname}</div><div className="text-xs text-slate-500 font-mono flex items-center gap-2"><Calendar className="w-3 h-3"/> NÉ(E) LE {offer.client.dob || "?"} • {offer.date}</div>{user.role === 'admin' && offer.owner && <div className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded mt-1 inline-block font-bold">PAR: {offer.owner}</div>}</div></div><div className="text-right"><div className="text-xs font-mono bg-slate-100 px-1 rounded text-slate-500 mb-1 select-all">{offer.lens?.commercial_code || "REF-N/A"}</div><div className="font-bold text-slate-800">{offer.lens?.name}</div><div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded inline-block mt-1">RESTE À CHARGE : {parseFloat(offer.finance?.remainder).toFixed(2)} €</div></div><div className="flex items-center gap-2"><div className="text-xs text-green-600 font-bold flex items-center gap-1"><Lock className="w-3 h-3"/> CHIFFRÉ</div><button onClick={() => deleteOffer(offer.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-full transition-colors" title="Supprimer"><Trash2 className="w-4 h-4"/></button></div></div>))}</div></div></div>)}
     </div>
   );
 }
