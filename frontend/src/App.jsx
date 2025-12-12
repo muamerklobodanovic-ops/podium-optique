@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.40"; // Ajout Bouton Sauvegarde Filtres Avancés
+const APP_VERSION = "5.41"; // Fix: Restauration Préférences au Login
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -1074,7 +1074,24 @@ function App() {
       }
   };
 
-  const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); };
+  const handleLogin = (u) => { 
+      setUser(u); 
+      sessionStorage.setItem("optique_user", JSON.stringify(u)); 
+      
+      // Restauration des préférences sauvegardées si elles existent
+      if (u.settings && Object.keys(u.settings).length > 0) {
+          const mergedSettings = {
+              ...DEFAULT_SETTINGS,
+              ...u.settings,
+              pricing: { ...DEFAULT_SETTINGS.pricing, ...(u.settings.pricing || {}) },
+              perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(u.settings.perLensConfig || {}) }
+          };
+          setUserSettings(mergedSettings);
+          // On force la sauvegarde locale immédiate pour éviter les race conditions
+          localStorage.setItem("optique_user_settings", JSON.stringify(mergedSettings));
+      }
+  };
+
   const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); };
   
   const handlePricingConfigSave = (newConfig) => {
