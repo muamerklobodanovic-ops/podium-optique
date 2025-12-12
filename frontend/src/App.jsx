@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.39.2"; // Sync Backend des Paramètres
+const APP_VERSION = "5.40"; // Ajout Bouton Sauvegarde Filtres Avancés
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -843,6 +843,24 @@ function App() {
           return { ...prev, disabledMaterials: newDisabled };
       });
   };
+  
+  // AJOUT : Fonction de sauvegarde des paramètres vers le backend
+  const saveSettingsToBackend = async () => {
+      if (!user) return;
+      try {
+          // On suppose que l'endpoint existe côté backend comme discuté précédemment
+          await axios.post(`${PROD_API_URL}/user/update-settings`, {
+              username: user.username,
+              settings: userSettings
+          });
+          alert("✅ Préférences de filtres sauvegardées !");
+      } catch (err) {
+          console.error("Erreur sauvegarde settings", err);
+          // Fallback local si l'API n'est pas encore prête ou erreur
+          localStorage.setItem("optique_user_settings", JSON.stringify(userSettings));
+          alert("⚠️ Sauvegarde locale effectuée (Erreur Serveur).");
+      }
+  };
 
   const [formData, setFormData] = useState(() => {
       // Suppression de sphere, cylinder, addition de l'état initial
@@ -1384,7 +1402,16 @@ function App() {
 
                 {/* GESTION DES DESIGNS & MATIÈRES (NOUVEAU) */}
                 <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <h4 className="text-xs font-bold text-slate-400 mb-4">FILTRES AVANCÉS (DESIGNS & MATIÈRES)</h4>
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-xs font-bold text-slate-400">FILTRES AVANCÉS (DESIGNS & MATIÈRES)</h4>
+                        {/* BOUTON SAUVEGARDE AJOUTÉ ICI */}
+                        <button 
+                            onClick={saveSettingsToBackend}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-lg transition-colors shadow-sm"
+                        >
+                            <Save className="w-3 h-3" /> SAUVEGARDER
+                        </button>
+                    </div>
                     
                     {/* SELECTION PAR GEOMETRIE */}
                     <div className="mb-4">
