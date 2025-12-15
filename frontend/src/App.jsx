@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.42"; // Multi-sélection & Filtre RX/Stock
+const APP_VERSION = "5.42.1"; // Fix: Suppression doublon showPasswordModal
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -705,65 +705,6 @@ const LoginScreen = ({ onLogin }) => {
     );
 };
 
-// --- NOUVEAU COMPOSANT : MODALE SELECTION DESIGNS ---
-const DesignSelectionModal = ({ geometry, availableDesigns, disabledDesigns, onToggle, onClose }) => {
-    // Filtrage simple pour la recherche
-    const [search, setSearch] = useState("");
-    const filtered = availableDesigns.filter(d => d.toLowerCase().includes(search.toLowerCase()));
-
-    return (
-        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
-            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[80vh]">
-                <div className="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-2xl">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                        <Layers className="w-5 h-5 text-indigo-600"/> 
-                        DESIGNS : {geometry}
-                    </h3>
-                    <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
-                </div>
-                
-                <div className="p-4 border-b">
-                     <div className="relative">
-                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/>
-                        <input 
-                            type="text" 
-                            className="w-full pl-9 pr-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
-                            placeholder="Rechercher un design..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                     </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {filtered.length === 0 ? (
-                        <div className="text-center text-slate-400 text-xs py-8">Aucun design trouvé.</div>
-                    ) : (
-                        filtered.map(design => {
-                            const isHidden = disabledDesigns.includes(design);
-                            return (
-                                <button 
-                                    key={design}
-                                    onClick={() => onToggle(design)}
-                                    className={`w-full p-3 rounded-xl flex items-center justify-between transition-all border ${isHidden ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-indigo-50 border-indigo-200'}`}
-                                >
-                                    <span className={`text-sm font-bold ${isHidden ? 'text-slate-500' : 'text-indigo-800'}`}>{design}</span>
-                                    {isHidden ? <Square className="w-5 h-5 text-slate-400"/> : <CheckSquare className="w-5 h-5 text-indigo-600"/>}
-                                </button>
-                            )
-                        })
-                    )}
-                </div>
-                
-                <div className="p-4 border-t bg-slate-50 rounded-b-2xl flex justify-between items-center">
-                    <span className="text-xs text-slate-500 font-bold">{filtered.length} designs visibles</span>
-                    <button onClick={onClose} className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition-colors">TERMINER</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // --- APP PRINCIPALE ---
 function App() {
   const [user, setUser] = useState(() => { try { const s = sessionStorage.getItem("optique_user"); return s ? JSON.parse(s) : null; } catch { return null; } });
@@ -1181,10 +1122,8 @@ function App() {
   const handleLogoUpload = (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); reader.readAsDataURL(file); } };
   const handleSettingChange = (section, field, value) => { if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); } };
   const handlePriceRuleChange = (category, field, value) => { setUserSettings(prev => { const pricing = { ...(prev.pricing || {}) }; if (category === 'calisize') { pricing.calisize = { price: parseFloat(value) || 0 }; } else { pricing[category] = { ...pricing[category], [field]: parseFloat(value) || 0 }; } return { ...prev, pricing }; }); };
-  const handleTypeChange = (newType) => { 
-      // Reset des filtres spécifiques au type lors du changement
-      setFormData(prev => ({ ...prev, type: newType, design: [], coating: '', materialIndex: '', material: [], flow: [] })); 
-  };
+  const handleTypeChange = (newType) => { setFormData(prev => ({ ...prev, type: newType, design: '', coating: '', materialIndex: '', material: '' })); };
+  const handleDesignChange = (newDesign) => { setFormData(prev => ({ ...prev, design: newDesign })); };
   const handleCoatingChange = (newCoating) => { setFormData(prev => ({ ...prev, coating: newCoating })); };
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
