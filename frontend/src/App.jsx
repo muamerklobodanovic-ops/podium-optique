@@ -6,12 +6,13 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.42.1"; // Fix: Suppression doublon showPasswordModal
+const APP_VERSION = "5.42.2"; // Fix: Suppression doublon showPasswordModal
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
 const DEFAULT_SETTINGS = {
+    // shopName retiré des defaults car géré par l'user connecté
     shopLogo: "", 
     themeColor: "blue", 
     bgColor: "bg-slate-50",
