@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.42.2"; // Fix: Suppression doublon showPasswordModal
+const APP_VERSION = "5.42.3"; // Fix: Suppression doublon showPasswordModal (Final)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
@@ -1133,7 +1133,6 @@ function App() {
   
   // --- CHANGEMENT MOT DE PASSE (FRONTEND) ---
   const [passData, setPassData] = useState({ old: '', new: '', confirm: '' });
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   const validateStrongPassword = (pwd) => {
     // Min 8 chars, 1 upper, 1 lower, 1 number, 1 special
