@@ -6,13 +6,12 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.42.3"; // Fix: Suppression doublon showPasswordModal (Final)
+const APP_VERSION = "5.43"; // Fix: Crash Ecran Blanc (Compatibilité types formData)
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
 const DEFAULT_SETTINGS = {
-    // shopName retiré des defaults car géré par l'user connecté
     shopLogo: "", 
     themeColor: "blue", 
     bgColor: "bg-slate-50",
@@ -814,12 +813,14 @@ function App() {
               delete parsed.variant;
               // Ensure materialIndex exists
               if(!parsed.materialIndex) parsed.materialIndex = '';
-              if(!parsed.material) parsed.material = '';
+              if(!parsed.material) parsed.material = []; // Force array
+              if(!parsed.design) parsed.design = []; // Force array
+              if(!parsed.flow) parsed.flow = []; // Force array
               return parsed;
           }
           // MODIFICATION: Retour à la version simple avec materialIndex et material
-          return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; 
-      } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: '', materialIndex: '', material: '', coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false }; }
+          return { network: 'HORS_RESEAU', brand: '', type: '', design: [], materialIndex: '', material: [], coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false, flow: [] }; 
+      } catch { return { network: 'HORS_RESEAU', brand: '', type: '', design: [], materialIndex: '', material: [], coating: '', cleanOption: false, myopiaControl: false, uvOption: true, calisize: false, flow: [] }; }
   });
   
   const [serverUrl, setServerUrl] = useState(PROD_API_URL);
@@ -974,7 +975,7 @@ function App() {
        setAvailableMaterials(distinctMaterials);
 
        // --- 2. FILTRAGE PAR MATIÈRE (Si une sélection existe) ---
-       if (formData.material && formData.material.length > 0) {
+       if (formData.material && Array.isArray(formData.material) && formData.material.length > 0) {
            workingList = workingList.filter(l => formData.material.includes(cleanText(l.material)));
        }
 
@@ -988,7 +989,7 @@ function App() {
        }
        
        // --- 5. FILTRE RX / STOCK ---
-       if (formData.type === 'UNIFOCAL' && formData.flow && formData.flow.length > 0) {
+       if (formData.type === 'UNIFOCAL' && formData.flow && Array.isArray(formData.flow) && formData.flow.length > 0) {
            workingList = workingList.filter(l => {
                const isStock = cleanText(l.commercial_flow).includes('STOCK') || cleanText(l.name).includes(' ST');
                // Si 'STOCK' sélectionné, on garde si c'est du stock
@@ -1006,7 +1007,7 @@ function App() {
        if (formData.myopiaControl) { workingList = workingList.filter(l => cleanText(l.name).includes("MIYO")); }
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
-       if (formData.design && formData.design.length > 0) { 
+       if (formData.design && Array.isArray(formData.design) && formData.design.length > 0) { 
            workingList = workingList.filter(l => formData.design.includes(cleanText(l.design))); 
        }
        
@@ -1123,7 +1124,7 @@ function App() {
   const handleLogoUpload = (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); reader.readAsDataURL(file); } };
   const handleSettingChange = (section, field, value) => { if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); } };
   const handlePriceRuleChange = (category, field, value) => { setUserSettings(prev => { const pricing = { ...(prev.pricing || {}) }; if (category === 'calisize') { pricing.calisize = { price: parseFloat(value) || 0 }; } else { pricing[category] = { ...pricing[category], [field]: parseFloat(value) || 0 }; } return { ...prev, pricing }; }); };
-  const handleTypeChange = (newType) => { setFormData(prev => ({ ...prev, type: newType, design: '', coating: '', materialIndex: '', material: '' })); };
+  const handleTypeChange = (newType) => { setFormData(prev => ({ ...prev, type: newType, design: [], coating: '', materialIndex: '', material: [], flow: [] })); };
   const handleDesignChange = (newDesign) => { setFormData(prev => ({ ...prev, design: newDesign })); };
   const handleCoatingChange = (newCoating) => { setFormData(prev => ({ ...prev, coating: newCoating })); };
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
