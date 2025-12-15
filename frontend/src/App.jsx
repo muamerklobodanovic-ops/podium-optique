@@ -6,12 +6,13 @@ import {
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.43"; // Fix: Crash Ecran Blanc (Compatibilité types formData)
+const APP_VERSION = "5.45"; // Fix: Suppression doublon showPasswordModal & Finalisation
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
 const DEFAULT_SETTINGS = {
+    // shopName retiré des defaults car géré par l'user connecté
     shopLogo: "", 
     themeColor: "blue", 
     bgColor: "bg-slate-50",
@@ -130,7 +131,10 @@ const LensCard = ({ lens, index, currentTheme, showMargins, onSelect, isSelected
   const sPrice = safeNum(lens.sellingPrice);
   const pPrice = safeNum(lens.purchase_price);
   const mVal = safeNum(lens.margin);
-  const displayMargin = (sPrice > 0) ? ((mVal / sPrice) * 100).toFixed(0) : "0";
+  
+  // Calculs sur le HT pour l'affichage du %
+  const sPriceHT = sPrice / 1.2;
+  const displayMargin = (sPriceHT > 0) ? ((mVal / sPriceHT) * 100).toFixed(0) : "0";
   
   return (
     <div onClick={() => onSelect && onSelect(lens)} className={`group bg-white rounded-3xl border-2 p-6 flex flex-col relative cursor-pointer transition-all duration-300 ${activeStyle.border} ${!isSelected && !isReference ? 'hover:-translate-y-2' : ''}`}>
@@ -609,8 +613,10 @@ const PricingConfigurator = ({ lenses, config, onSave, onClose, filterBrand }) =
                                     {filteredRows.map((row) => {
                                         const price = localConfig.prices[row.key] || 0;
                                         const purchase = safeNum(row.avg_purchase);
-                                        const margin = price - purchase;
-                                        const marginPercent = price > 0 ? (margin / price) * 100 : 0;
+                                        // Calculs avec TVA 20%
+                                        const priceHT = price / 1.2;
+                                        const margin = priceHT - purchase;
+                                        const marginPercent = priceHT > 0 ? (margin / priceHT) * 100 : 0;
 
                                         return (
                                             <tr key={row.key} className="hover:bg-slate-50">
@@ -700,6 +706,65 @@ const LoginScreen = ({ onLogin }) => {
                     <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2">{loading ? <Activity className="w-5 h-5 animate-spin"/> : <Lock className="w-5 h-5"/>} SE CONNECTER</button>
                 </form>
                 <div className="mt-8 text-center text-[10px] text-slate-300">V{APP_VERSION} • Accès Sécurisé</div>
+            </div>
+        </div>
+    );
+};
+
+// --- NOUVEAU COMPOSANT : MODALE SELECTION DESIGNS ---
+const DesignSelectionModal = ({ geometry, availableDesigns, disabledDesigns, onToggle, onClose }) => {
+    // Filtrage simple pour la recherche
+    const [search, setSearch] = useState("");
+    const filtered = availableDesigns.filter(d => d.toLowerCase().includes(search.toLowerCase()));
+
+    return (
+        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
+            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[80vh]">
+                <div className="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-2xl">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Layers className="w-5 h-5 text-indigo-600"/> 
+                        DESIGNS : {geometry}
+                    </h3>
+                    <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
+                </div>
+                
+                <div className="p-4 border-b">
+                     <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"/>
+                        <input 
+                            type="text" 
+                            className="w-full pl-9 pr-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
+                            placeholder="Rechercher un design..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                     </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {filtered.length === 0 ? (
+                        <div className="text-center text-slate-400 text-xs py-8">Aucun design trouvé.</div>
+                    ) : (
+                        filtered.map(design => {
+                            const isHidden = disabledDesigns.includes(design);
+                            return (
+                                <button 
+                                    key={design}
+                                    onClick={() => onToggle(design)}
+                                    className={`w-full p-3 rounded-xl flex items-center justify-between transition-all border ${isHidden ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-indigo-50 border-indigo-200'}`}
+                                >
+                                    <span className={`text-sm font-bold ${isHidden ? 'text-slate-500' : 'text-indigo-800'}`}>{design}</span>
+                                    {isHidden ? <Square className="w-5 h-5 text-slate-400"/> : <CheckSquare className="w-5 h-5 text-indigo-600"/>}
+                                </button>
+                            )
+                        })
+                    )}
+                </div>
+                
+                <div className="p-4 border-t bg-slate-50 rounded-b-2xl flex justify-between items-center">
+                    <span className="text-xs text-slate-500 font-bold">{filtered.length} designs visibles</span>
+                    <button onClick={onClose} className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition-colors">TERMINER</button>
+                </div>
             </div>
         </div>
     );
@@ -932,7 +997,10 @@ function App() {
                   // 3. Appliquer le prix
                   const pPrice = parseFloat(lens.purchase_price || 0);
                   lens.sellingPrice = manualPrice + calisizeAddon;
-                  lens.margin = lens.sellingPrice - pPrice;
+                  
+                  // Calcul Marge HT (TVA 20%)
+                  const sellingPriceHT = lens.sellingPrice / 1.2;
+                  lens.margin = sellingPriceHT - pPrice;
                   return true;
               });
 
@@ -952,8 +1020,11 @@ function App() {
                   let newSelling = (pPrice * rule.x) + rule.b;
                   newSelling += calisizeAddon; 
     
-                  const newMargin = newSelling - pPrice;
-                  return { ...lens, sellingPrice: Math.round(newSelling), margin: Math.round(newMargin) };
+                  // Calcul Marge HT (TVA 20%)
+                  const newSellingHT = newSelling / 1.2;
+                  const newMargin = newSellingHT - pPrice;
+
+                  return { ...lens, sellingPrice: Math.round(newSelling), margin: newMargin }; 
               });
           }
           workingList.sort((a, b) => b.margin - a.margin);
@@ -964,7 +1035,12 @@ function App() {
            workingList = workingList.map(l => { 
                let sPrice = l[key] ? parseFloat(l[key]) : 0; 
                if (sPrice > 0) sPrice += calisizeAddon; 
-               return { ...l, sellingPrice: sPrice, margin: sPrice - (parseFloat(l.purchase_price)||0) }; 
+               
+               // Calcul Marge HT (TVA 20%)
+               const sPriceHT = sPrice / 1.2;
+               const margin = sPriceHT - (parseFloat(l.purchase_price)||0);
+               
+               return { ...l, sellingPrice: sPrice, margin: margin }; 
             });
            workingList = workingList.filter(l => l.sellingPrice > 0);
            workingList.sort((a, b) => b.margin - a.margin);
