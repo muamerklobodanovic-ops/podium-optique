@@ -2,17 +2,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LayoutDashboard, Search, RefreshCw, Trophy, Shield, Star, 
-  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart, Medal, Filter, Hexagon
+  Glasses, Ruler, ChevronRight, Layers, Sun, Monitor, Sparkles, Tag, Eye, EyeOff, Settings, X, Save, Store, Image as ImageIcon, Upload, Car, ArrowRightLeft, XCircle, Wifi, WifiOff, Server, BoxSelect, ChevronLeft, Sliders, DownloadCloud, Calculator, Info, User, Calendar, Wallet, Coins, FolderOpen, CheckCircle, Lock, Palette, Activity, FileUp, Database, Trash2, Copy, Menu, RotateCcw, LogOut, KeyRound, EyeOff as EyeOffIcon, CheckSquare, Square, AlertTriangle, ScanLine, DollarSign, ToggleLeft, ToggleRight, ListFilter, SunDim, Briefcase, BarChart3, PieChart, Medal, Filter, Hexagon, Factory, Package
 } from 'lucide-react';
 
 // --- VERSION APPLICATION ---
-const APP_VERSION = "5.41"; // Fix: Restauration Préférences au Login
+const APP_VERSION = "5.42"; // Multi-sélection & Filtre RX/Stock
 
 // --- CONFIGURATION ---
 const PROD_API_URL = "https://ecommerce-marilyn-shopping-michelle.trycloudflare.com";
 const DEFAULT_PRICING_CONFIG = { x: 2.5, b: 20 };
 const DEFAULT_SETTINGS = {
-    // shopName retiré des defaults car géré par l'user connecté
     shopLogo: "", 
     themeColor: "blue", 
     bgColor: "bg-slate-50",
@@ -21,7 +20,7 @@ const DEFAULT_SETTINGS = {
     disabledBrands: [],
     disabledNetworks: [], 
     disabledDesigns: [], 
-    disabledMaterials: [], // Liste des matières masquées
+    disabledMaterials: [], 
     pricingMode: 'linear', 
     perLensConfig: {
         disabledAttributes: { designs: [], indices: [], coatings: [] }, 
@@ -1033,8 +1032,8 @@ function App() {
        setAvailableMaterials(distinctMaterials);
 
        // --- 2. FILTRAGE PAR MATIÈRE (Si une sélection existe) ---
-       if (formData.material && formData.material !== '') {
-           workingList = workingList.filter(l => cleanText(l.material) === cleanText(formData.material));
+       if (formData.material && formData.material.length > 0) {
+           workingList = workingList.filter(l => formData.material.includes(cleanText(l.material)));
        }
 
        // --- 3. CALCUL DES INDICES DISPONIBLES (Dynamique) ---
@@ -1045,6 +1044,19 @@ function App() {
        if (formData.materialIndex && formData.materialIndex !== '') {
            workingList = workingList.filter(l => { if(!l.index_mat) return false; const lIdx = String(l.index_mat).replace(',', '.'); const fIdx = String(formData.materialIndex).replace(',', '.'); return Math.abs(parseFloat(lIdx) - parseFloat(fIdx)) < 0.01; });
        }
+       
+       // --- 5. FILTRE RX / STOCK ---
+       if (formData.type === 'UNIFOCAL' && formData.flow && formData.flow.length > 0) {
+           workingList = workingList.filter(l => {
+               const isStock = cleanText(l.commercial_flow).includes('STOCK') || cleanText(l.name).includes(' ST');
+               // Si 'STOCK' sélectionné, on garde si c'est du stock
+               // Si 'FAB' sélectionné, on garde si ce n'est PAS du stock
+               let keep = false;
+               if (formData.flow.includes('STOCK') && isStock) keep = true;
+               if (formData.flow.includes('FAB') && !isStock) keep = true;
+               return keep;
+           });
+       }
 
        const coatings = [...new Set(workingList.map(l => l.coating).filter(Boolean))].sort();
        setAvailableCoatings(coatings);
@@ -1052,8 +1064,12 @@ function App() {
        if (formData.myopiaControl) { workingList = workingList.filter(l => cleanText(l.name).includes("MIYO")); }
        const designs = [...new Set(workingList.map(l => l.design).filter(Boolean))].sort();
        setAvailableDesigns(designs);
-       if (formData.design && formData.design !== '') { setFilteredLenses(workingList.filter(l => cleanText(l.design) === cleanText(formData.design))); } else { setFilteredLenses(workingList); }
+       if (formData.design && formData.design.length > 0) { 
+           workingList = workingList.filter(l => formData.design.includes(cleanText(l.design))); 
+       }
+       
        setStats({ total: lenses.length, filtered: workingList.length });
+       setFilteredLenses(workingList); // Mise à jour finale
     } else { setAvailableDesigns([]); setAvailableCoatings([]); setFilteredLenses([]); setStats({ total: 0, filtered: 0 }); }
   }, [lenses, formData, userSettings.pricing, userSettings.disabledBrands, userSettings.disabledNetworks, userSettings.disabledDesigns, userSettings.disabledMaterials, userSettings.pricingMode, userSettings.perLensConfig]);
 
@@ -1069,29 +1085,17 @@ function App() {
           sessionStorage.clear();
           setClient({ name: '', firstname: '', dob: '', reimbursement: 0 });
           setSecondPairPrice(0);
-          setFormData({ ...formData, material: '', materialIndex: '', calisize: false }); // Reset complet
+          setFormData({ ...formData, material: [], materialIndex: '', design: [], flow: [], calisize: false }); // Reset complet avec tableaux
           setSelectedLens(null);
       }
   };
 
-  const handleLogin = (u) => { 
-      setUser(u); 
-      sessionStorage.setItem("optique_user", JSON.stringify(u)); 
-      
-      // Restauration des préférences sauvegardées si elles existent
+  const handleLogin = (u) => { setUser(u); sessionStorage.setItem("optique_user", JSON.stringify(u)); 
       if (u.settings && Object.keys(u.settings).length > 0) {
-          const mergedSettings = {
-              ...DEFAULT_SETTINGS,
-              ...u.settings,
-              pricing: { ...DEFAULT_SETTINGS.pricing, ...(u.settings.pricing || {}) },
-              perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(u.settings.perLensConfig || {}) }
-          };
-          setUserSettings(mergedSettings);
-          // On force la sauvegarde locale immédiate pour éviter les race conditions
-          localStorage.setItem("optique_user_settings", JSON.stringify(mergedSettings));
+          const mergedSettings = { ...DEFAULT_SETTINGS, ...u.settings, pricing: { ...DEFAULT_SETTINGS.pricing, ...(u.settings.pricing || {}) }, perLensConfig: { ...DEFAULT_SETTINGS.perLensConfig, ...(u.settings.perLensConfig || {}) } };
+          setUserSettings(mergedSettings); localStorage.setItem("optique_user_settings", JSON.stringify(mergedSettings));
       }
   };
-
   const handleLogout = () => { setUser(null); sessionStorage.clear(); localStorage.clear(); window.location.reload(); };
   
   const handlePricingConfigSave = (newConfig) => {
@@ -1177,8 +1181,10 @@ function App() {
   const handleLogoUpload = (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setUserSettings(prev => ({ ...prev, shopLogo: reader.result })); reader.readAsDataURL(file); } };
   const handleSettingChange = (section, field, value) => { if (section === 'branding') { setUserSettings(prev => ({ ...prev, [field]: value })); } else { setUserSettings(prev => ({ ...prev, [section]: { ...prev[section], [field]: parseFloat(value) || 0 } })); } };
   const handlePriceRuleChange = (category, field, value) => { setUserSettings(prev => { const pricing = { ...(prev.pricing || {}) }; if (category === 'calisize') { pricing.calisize = { price: parseFloat(value) || 0 }; } else { pricing[category] = { ...pricing[category], [field]: parseFloat(value) || 0 }; } return { ...prev, pricing }; }); };
-  const handleTypeChange = (newType) => { setFormData(prev => ({ ...prev, type: newType, design: '', coating: '', materialIndex: '', material: '' })); };
-  const handleDesignChange = (newDesign) => { setFormData(prev => ({ ...prev, design: newDesign })); };
+  const handleTypeChange = (newType) => { 
+      // Reset des filtres spécifiques au type lors du changement
+      setFormData(prev => ({ ...prev, type: newType, design: [], coating: '', materialIndex: '', material: [], flow: [] })); 
+  };
   const handleCoatingChange = (newCoating) => { setFormData(prev => ({ ...prev, coating: newCoating })); };
   const handleCompare = (lens) => { setComparisonLens(lens); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -1187,6 +1193,7 @@ function App() {
   
   // --- CHANGEMENT MOT DE PASSE (FRONTEND) ---
   const [passData, setPassData] = useState({ old: '', new: '', confirm: '' });
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   const validateStrongPassword = (pwd) => {
     // Min 8 chars, 1 upper, 1 lower, 1 number, 1 special
@@ -1211,6 +1218,15 @@ function App() {
     } catch (err) {
         alert("❌ Erreur : " + (err.response?.data?.detail || err.message));
     }
+  };
+
+  // Helper pour toggle multi-selection dans formData
+  const toggleFormDataArray = (field, value) => {
+      setFormData(prev => {
+          const current = Array.isArray(prev[field]) ? prev[field] : [];
+          const newSelection = current.includes(value) ? current.filter(i => i !== value) : [...current, value];
+          return { ...prev, [field]: newSelection };
+      });
   };
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
@@ -1336,9 +1352,77 @@ function App() {
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MARQUE</label><div className="grid grid-cols-3 gap-1.5">{activeBrands.map(b => (<button key={b.id} onClick={() => setFormData({...formData, brand: b.id})} className={`flex flex-col items-center justify-center p-1 border rounded-lg transition-all h-20 ${formData.brand === b.id ? 'border-transparent' : `hover:opacity-80 ${isDarkTheme ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50'}`}`} style={formData.brand === b.id ? {backgroundColor: userSettings.customColor} : {}}><div className="w-full h-full flex items-center justify-center p-2 bg-white rounded">{b.id === '' ? <span className="font-bold text-xs text-slate-800">TOUS</span> : <BrandLogo brand={b.id} className="max-h-full max-w-full object-contain"/>}</div></button>))}</div></div>
                 <div className="mb-4"><button onClick={() => setFormData(prev => ({ ...prev, calisize: !prev.calisize }))} className={`w-full py-3 rounded-xl flex items-center justify-between px-4 border transition-all ${formData.calisize ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}><span className="text-xs font-bold flex items-center gap-2"><ScanLine className="w-4 h-4"/> OPTION PRÉCAL (CALISIZE)</span>{formData.calisize ? <CheckCircle className="w-4 h-4"/> : <div className="w-4 h-4 border-2 border-slate-300 rounded-full"></div>}</button></div>
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">GÉOMÉTRIE</label><div className="flex flex-col gap-1">{LENS_TYPES.map(t => (<button key={t.id} onClick={() => handleTypeChange(t.id)} className={`px-3 py-2 rounded-lg text-left text-xs font-bold border transition-colors ${formData.type === t.id ? 'text-white border-transparent' : `border-transparent opacity-70 hover:opacity-100 ${isDarkTheme ? 'hover:bg-slate-700' : 'hover:bg-slate-100 text-slate-500'}`}`} style={formData.type === t.id ? {backgroundColor: userSettings.customColor} : {}}>{t.label}</button>))}</div></div>
-                {availableDesigns.length > 0 && (<div><label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label><div className="flex flex-wrap gap-2"><button onClick={() => handleDesignChange('')} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === '' ? 'text-white border-transparent' : `border-transparent opacity-70`}`} style={formData.design === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableDesigns.map(d => (<button key={d} onClick={() => handleDesignChange(d)} className={`px-2 py-1 rounded border text-[10px] font-bold ${formData.design === d ? 'text-white border-transparent' : `border-transparent opacity-70 ${isDarkTheme ? 'text-gray-300' : 'text-slate-600'}`}`} style={formData.design === d ? {backgroundColor: userSettings.customColor} : {}}>{d}</button>))}</div></div>)}
+                {availableDesigns.length > 0 && (
+                    <div>
+                        <label className="text-[10px] font-bold opacity-50 mb-2 block">DESIGN</label>
+                        <div className="flex flex-col gap-1 max-h-40 overflow-y-auto pr-1">
+                            {availableDesigns.map(d => {
+                                const isSelected = formData.design.includes(cleanText(d));
+                                return (
+                                    <button 
+                                        key={d} 
+                                        onClick={() => toggleFormDataArray('design', cleanText(d))} 
+                                        className={`px-2 py-1.5 rounded border text-[10px] font-bold text-left flex justify-between items-center transition-all ${isSelected ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                                    >
+                                        <span className="truncate pr-2">{d}</span>
+                                        {isSelected && <CheckCircle className="w-3 h-3 text-blue-600 shrink-0"/>}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">INDICE</label><div className="flex gap-1 flex-wrap"><button onClick={() => setFormData({...formData, materialIndex: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.materialIndex === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableIndices.length > 0 ? availableIndices.map(i => (<button key={i} onClick={() => setFormData({...formData, materialIndex: i})} className={`flex-1 min-w-[40px] py-2 rounded border text-[10px] font-bold ${formData.materialIndex === i ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.materialIndex === i ? {backgroundColor: userSettings.customColor} : {}}>{i}</button>)) : <div className="text-[10px] opacity-50 italic px-2">Aucun indice trouvé</div>}</div></div>
-                <div><label className="text-[10px] font-bold opacity-50 mb-2 block">MATIÈRE / TEINTE</label><div className="flex gap-1 flex-wrap"><button onClick={() => setFormData({...formData, material: ''})} className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.material === '' ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.material === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button>{availableMaterials.length > 0 ? availableMaterials.map(m => (<button key={m} onClick={() => setFormData({...formData, material: m})} className={`flex-1 min-w-[60px] py-2 rounded border text-[10px] font-bold ${formData.material === m ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} style={formData.material === m ? {backgroundColor: userSettings.customColor} : {}}>{m}</button>)) : <div className="text-[10px] opacity-50 italic px-2">Aucune matière trouvée</div>}</div></div>
+                
+                {/* MATIÈRE : Multi-sélection */}
+                <div>
+                    <label className="text-[10px] font-bold opacity-50 mb-2 block">MATIÈRE / TEINTE</label>
+                    <div className="flex gap-1 flex-wrap">
+                        {/* Bouton RESET matières */}
+                        <button 
+                            onClick={() => setFormData(prev => ({...prev, material: []}))} 
+                            className={`px-3 py-2 rounded border text-[10px] font-bold ${formData.material.length === 0 ? 'text-white border-transparent' : `border-transparent opacity-60 hover:opacity-100`}`} 
+                            style={formData.material.length === 0 ? {backgroundColor: userSettings.customColor} : {}}
+                        >
+                            TOUS
+                        </button>
+                        {availableMaterials.length > 0 ? availableMaterials.map(m => {
+                            const isSelected = formData.material.includes(cleanText(m));
+                            return (
+                                <button 
+                                    key={m} 
+                                    onClick={() => toggleFormDataArray('material', cleanText(m))} 
+                                    className={`flex-1 min-w-[60px] py-2 rounded border text-[10px] font-bold transition-all ${isSelected ? 'text-white border-transparent shadow-sm' : `border-transparent opacity-60 hover:opacity-100`}`} 
+                                    style={isSelected ? {backgroundColor: userSettings.customColor} : {}}
+                                >
+                                    {m}
+                                </button>
+                            )
+                        }) : <div className="text-[10px] opacity-50 italic px-2">Aucune matière trouvée</div>}
+                    </div>
+                </div>
+
+                {/* FILTRE STOCK/FAB pour Unifocaux */}
+                {formData.type === 'UNIFOCAL' && (
+                    <div className="mt-2 mb-2 p-2 bg-slate-100 rounded-lg">
+                        <label className="text-[10px] font-bold text-slate-400 mb-2 block flex items-center gap-1"><Factory className="w-3 h-3"/> ORIGINE (FLUX)</label>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => toggleFormDataArray('flow', 'STOCK')}
+                                className={`flex-1 py-1.5 rounded text-[10px] font-bold border transition-all flex items-center justify-center gap-1 ${formData.flow.includes('STOCK') ? 'bg-white border-slate-300 text-indigo-600 shadow-sm' : 'text-slate-400 border-transparent'}`}
+                            >
+                                <Package className="w-3 h-3"/> STOCK
+                            </button>
+                            <button 
+                                onClick={() => toggleFormDataArray('flow', 'FAB')}
+                                className={`flex-1 py-1.5 rounded text-[10px] font-bold border transition-all flex items-center justify-center gap-1 ${formData.flow.includes('FAB') ? 'bg-white border-slate-300 text-indigo-600 shadow-sm' : 'text-slate-400 border-transparent'}`}
+                            >
+                                <Factory className="w-3 h-3"/> RX (FAB)
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <div><label className="text-[10px] font-bold opacity-50 mb-2 block">TRAITEMENTS</label><button onClick={() => handleCoatingChange('')} className={`w-full py-2 mb-2 text-[10px] font-bold rounded border ${formData.coating === '' ? 'text-white border-transparent' : 'border-transparent opacity-60'}`} style={formData.coating === '' ? {backgroundColor: userSettings.customColor} : {}}>TOUS</button><div className="flex flex-col gap-1">{availableCoatings.length > 0 ? availableCoatings.map(c => (<button key={c} onClick={() => handleCoatingChange(c)} className={`p-2 rounded border text-left text-[10px] font-bold ${formData.coating === c ? 'bg-blue-50 border-blue-200 text-blue-800' : 'border-transparent opacity-70 hover:opacity-100'}`}>{c}</button>)) : <div className="text-[10px] opacity-50 italic text-center">Aucun traitement spécifique</div>}</div></div>
             </div>
         </aside>
